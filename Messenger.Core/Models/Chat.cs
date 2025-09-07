@@ -9,22 +9,13 @@ namespace Messenger.Core.Models
     /// </summary>
     public class Chat
     {
-        [Key]
-        public Guid ChatId { get; set; }
-
-        [Required, StringLength(100)]
-        public string ChatName { get; set; } = string.Empty;
-
-        [Required, StringLength(20)]
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-
-        [ForeignKey(nameof(User)]
-        public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
-        [Required]
-        public DateTime CreateDate { get; set; }
+        public Guid CreatorId { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public User? Creator { get; set; }
+        public List<ChatParticipant> Participants { get; set; } = new List<ChatParticipant>();
+        public List<Message> Messages { get; set; } = new List<Message>();
     }
 }

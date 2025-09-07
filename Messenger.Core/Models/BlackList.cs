@@ -6,20 +6,12 @@ namespace Messenger.Core.Models
     /// <summary>
     /// Класс модели сущности "Чёрный список"
     /// </summary>
-    public class BlackListEntry
+    public class BlackList
     {
-        [ForeignKey(nameof(User))]
         public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
-        [ForeignKey(nameof(BlockedUser))]
         public Guid BlockedUserId { get; set; }
-
-        [JsonIgnore]
+        public DateTime BlockedAt { get; set; }
+        public User? User { get; set; }
         public User? BlockedUser { get; set; }
-
-        public DateTime BlockedDate { get; set; }
     }
 }

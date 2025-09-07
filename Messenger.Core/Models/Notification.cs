@@ -9,21 +9,11 @@ namespace Messenger.Core.Models
     /// </summary>
     public class Notification
     {
-        [Key]
-        public Guid NotificationId { get; set; }
-
-        [ForeignKey(nameof(User))]
+        public Guid Id { get; set; }
         public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
-        [Required]
         public string Text { get; set; } = string.Empty;
-
-        [Required]
-        public DateTime CreateDate { get; set; }
-
+        public DateTime CreatedAt { get; set; }
         public bool IsRead { get; set; }
+        public User? User { get; set; }
     }
 }

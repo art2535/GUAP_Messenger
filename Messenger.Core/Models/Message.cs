@@ -9,33 +9,18 @@ namespace Messenger.Core.Models
     /// </summary>
     public class Message
     {
-        [Key]
-        public Guid MessageId { get; set; }
-
-        [ForeignKey(nameof(Sender))]
+        public Guid Id { get; set; }
         public Guid SenderId { get; set; }
-
-        [JsonIgnore]
-        public User? Sender { get; set; }
-
-        [ForeignKey(nameof(Recipient))]
-        public Guid RecipientId { get; set; }
-
-        [JsonIgnore]
-        public User? Recipient { get; set; }
-
-        [ForeignKey(nameof(Chat))]
+        public Guid ReceiverId { get; set; }
         public Guid ChatId { get; set; }
-
-        [JsonIgnore]
-        public Chat? Chat { get; set; }
-
-        [Required]
-        public string MessageText { get; set; } = string.Empty;
-
+        public string Text { get; set; } = string.Empty;
         public bool HasAttachments { get; set; }
-
-        [Required]
-        public DateTime SendTime { get; set; }
+        public DateTime SentAt { get; set; }
+        public User? Sender { get; set; }
+        public User? Receiver { get; set; }
+        public Chat? Chat { get; set; }
+        public List<Attachment> Attachments { get; set; } = new List<Attachment>();
+        public List<MessageReaction> Reactions { get; set; } = new List<MessageReaction>();
+        public List<MessageStatus> Statuses { get; set; } = new List<MessageStatus>();
     }
 }

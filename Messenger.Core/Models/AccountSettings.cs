@@ -9,18 +9,10 @@ namespace Messenger.Core.Models
     /// </summary>
     public class AccountSettings
     {
-        [Key]
-        public Guid SettingsId { get; set; }
-
-        [ForeignKey(nameof(User))]
-        public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
+        public Guid Id { get; set; }
+        public Guid AccountId { get; set; }
         public string? Avatar { get; set; }
-
-        [StringLength(15)]
-        public string Theme { get; set; } = "светлая";
+        public string? Theme { get; set; }
+        public User? User { get; set; }
     }
 }

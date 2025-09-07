@@ -9,24 +9,12 @@ namespace Messenger.Core.Models
     /// </summary>
     public class Attachment
     {
-        [Key]
-        public Guid AttachmentId { get; set; }
-
-        [ForeignKey(nameof(Message))]
+        public Guid Id { get; set; }
         public Guid MessageId { get; set; }
-
-        [JsonIgnore]
-        public Message? Message { get; set; }
-
-        [Required, StringLength(255)]
         public string FileName { get; set; } = string.Empty;
-
-        [StringLength(50)]
-        public string? ContentType { get; set; }
-
-        public int? Size { get; set; }
-
-        [Required]
+        public string? FileType { get; set; }
+        public int? FileSize { get; set; }
         public string Url { get; set; } = string.Empty;
+        public Message? Message { get; set; }
     }
 }

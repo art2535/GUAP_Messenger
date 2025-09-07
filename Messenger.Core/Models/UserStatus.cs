@@ -9,14 +9,9 @@ namespace Messenger.Core.Models
     /// </summary>
     public class UserStatus
     {
-        [Key, ForeignKey(nameof(User))]
         public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
         public bool IsOnline { get; set; }
-
-        public DateTime? LastActiveDate { get; set; }
+        public DateTime? LastActivity { get; set; }
+        public User? User { get; set; }
     }
 }

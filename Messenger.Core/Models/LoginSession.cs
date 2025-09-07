@@ -9,26 +9,13 @@ namespace Messenger.Core.Models
     /// </summary>
     public class LoginSession
     {
-        [Key]
-        public Guid SessionId { get; set; }
-
-        [ForeignKey(nameof(User))]
+        public Guid Id { get; set; }
         public Guid UserId { get; set; }
-
-        [JsonIgnore]
-        public User? User { get; set; }
-
-        [Required, StringLength(100)]
         public string Token { get; set; } = string.Empty;
-
-        [Required, StringLength(15)]
-        public string IPAddress { get; set; } = string.Empty;
-
-        [Required]
-        public DateTime EnterTime { get; set; }
-
-        public DateTime? ExitTime { get; set; }
-
+        public string IpAddress { get; set; } = string.Empty;
+        public DateTime LoginTime { get; set; }
+        public DateTime? LogoutTime { get; set; }
         public bool IsActive { get; set; }
+        public User? User { get; set; }
     }
 }
