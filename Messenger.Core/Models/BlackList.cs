@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Messenger.Core.Models
 {
@@ -8,8 +7,13 @@ namespace Messenger.Core.Models
     /// </summary>
     public class BlackList
     {
+        [Key]
         public Guid UserId { get; set; }
+
+        [Key]
         public Guid BlockedUserId { get; set; }
+
+        [Required]
         public DateTime BlockedAt { get; set; }
         public User? User { get; set; }
         public User? BlockedUser { get; set; }

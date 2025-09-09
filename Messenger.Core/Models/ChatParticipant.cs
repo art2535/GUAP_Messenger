@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models
 {
@@ -9,9 +7,17 @@ namespace Messenger.Core.Models
     /// </summary>
     public class ChatParticipant
     {
+        [Key]
         public Guid ChatId { get; set; }
+
+        [Key]
         public Guid UserId { get; set; }
+
+        [Required]
+        [MaxLength(20)]
         public string Role { get; set; } = string.Empty;
+
+        [Required]
         public DateTime JoinedAt { get; set; }
         public Chat? Chat { get; set; }
         public User? User { get; set; }

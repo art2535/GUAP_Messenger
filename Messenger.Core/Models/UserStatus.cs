@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models
 {
@@ -9,7 +7,10 @@ namespace Messenger.Core.Models
     /// </summary>
     public class UserStatus
     {
+        [Key]
         public Guid UserId { get; set; }
+
+        [Required]
         public bool IsOnline { get; set; }
         public DateTime? LastActivity { get; set; }
         public User? User { get; set; }

@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models
 {
@@ -9,9 +7,17 @@ namespace Messenger.Core.Models
     /// </summary>
     public class MessageReaction
     {
+        [Key]
         public Guid Id { get; set; }
+
+        [Required]
         public Guid MessageId { get; set; }
+
+        [Required]
         public Guid UserId { get; set; }
+
+        [Required]
+        [MaxLength(30)]
         public string ReactionType { get; set; } = string.Empty;
         public Message? Message { get; set; }
         public User? User { get; set; }

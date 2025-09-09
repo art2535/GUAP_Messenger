@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models
 {
@@ -9,12 +7,25 @@ namespace Messenger.Core.Models
     /// </summary>
     public class LoginSession
     {
+        [Key]
         public Guid Id { get; set; }
+
+        [Required]
         public Guid UserId { get; set; }
+
+        [Required]
+        [MaxLength(100)]
         public string Token { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(15)]
         public string IpAddress { get; set; } = string.Empty;
+
+        [Required]
         public DateTime LoginTime { get; set; }
         public DateTime? LogoutTime { get; set; }
+
+        [Required]
         public bool IsActive { get; set; }
         public User? User { get; set; }
     }

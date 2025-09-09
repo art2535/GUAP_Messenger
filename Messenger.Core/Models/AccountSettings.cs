@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models
 {
@@ -9,7 +7,10 @@ namespace Messenger.Core.Models
     /// </summary>
     public class AccountSettings
     {
+        [Key]
         public Guid Id { get; set; }
+
+        [Required]
         public Guid AccountId { get; set; }
         public string? Avatar { get; set; }
         public string? Theme { get; set; }
