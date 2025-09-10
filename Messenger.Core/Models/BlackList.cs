@@ -1,21 +1,29 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Core.Models
+namespace Messenger.Core.Models;
+
+[PrimaryKey("UserId", "BlockedUserId")]
+[Table("Blacklist")]
+public partial class Blacklist
 {
-    /// <summary>
-    /// Класс модели сущности "Чёрный список"
-    /// </summary>
-    public class BlackList
-    {
-        [Key]
-        public Guid UserId { get; set; }
+    [Key]
+    [Column("User_ID")]
+    public Guid UserId { get; set; }
 
-        [Key]
-        public Guid BlockedUserId { get; set; }
+    [Key]
+    [Column("Blocked_User_ID")]
+    public Guid BlockedUserId { get; set; }
 
-        [Required]
-        public DateTime BlockedAt { get; set; }
-        public User? User { get; set; }
-        public User? BlockedUser { get; set; }
-    }
+    [Column("Block_Date", TypeName = "timestamp without time zone")]
+    public DateTime? BlockDate { get; set; }
+
+    [ForeignKey("BlockedUserId")]
+    [InverseProperty("BlacklistBlockedUsers")]
+    public virtual User BlockedUser { get; set; } = null!;
+
+    [ForeignKey("UserId")]
+    [InverseProperty("BlacklistUsers")]
+    public virtual User User { get; set; } = null!;
 }

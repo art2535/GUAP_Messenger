@@ -1,28 +1,32 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Messenger.Core.Models
+namespace Messenger.Core.Models;
+
+public partial class Attachment
 {
-    /// <summary>
-    /// Класс модели сущности "Вложения"
-    /// </summary>
-    public class Attachment
-    {
-        [Key]
-        public Guid Id { get; set; }
+    [Key]
+    [Column("Attachment_ID")]
+    public Guid AttachmentId { get; set; }
 
-        [Required]
-        public Guid MessageId { get; set; }
+    [Column("Message_ID")]
+    public Guid MessageId { get; set; }
 
-        [Required]
-        [MaxLength(255)]
-        public string FileName { get; set; } = string.Empty;
+    [Column("File_Name")]
+    [StringLength(255)]
+    public string FileName { get; set; } = null!;
 
-        [MaxLength(100)]
-        public string? FileType { get; set; }
-        public int? FileSize { get; set; }
+    [Column("File_Type")]
+    [StringLength(100)]
+    public string? FileType { get; set; }
 
-        [Required]
-        public string Url { get; set; } = string.Empty;
-        public Message? Message { get; set; }
-    }
+    [Column("Size_in_Bytes")]
+    public int? SizeInBytes { get; set; }
+
+    [Column("URL")]
+    public string Url { get; set; } = null!;
+
+    [ForeignKey("MessageId")]
+    [InverseProperty("Attachments")]
+    public virtual Message Message { get; set; } = null!;
 }

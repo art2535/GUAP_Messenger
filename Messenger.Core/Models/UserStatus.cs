@@ -1,18 +1,23 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Messenger.Core.Models
+namespace Messenger.Core.Models;
+
+[Table("User_Statuses")]
+public partial class UserStatus
 {
-    /// <summary>
-    /// Класс модели сущности "Статусы пользователей"
-    /// </summary>
-    public class UserStatus
-    {
-        [Key]
-        public Guid UserId { get; set; }
+    [Key]
+    [Column("User_ID")]
+    public Guid UserId { get; set; }
 
-        [Required]
-        public bool IsOnline { get; set; }
-        public DateTime? LastActivity { get; set; }
-        public User? User { get; set; }
-    }
+    public bool Online { get; set; }
+
+    [Column("Last_Activity", TypeName = "timestamp without time zone")]
+    public DateTime? LastActivity { get; set; }
+
+    [ForeignKey("UserId")]
+    [InverseProperty("UserStatus")]
+    public virtual User User { get; set; } = null!;
 }

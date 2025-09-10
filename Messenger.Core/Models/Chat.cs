@@ -1,30 +1,33 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Messenger.Core.Models
+namespace Messenger.Core.Models;
+
+public partial class Chat
 {
-    /// <summary>
-    /// Класс модели сущности "Чаты"
-    /// </summary>
-    public class Chat
-    {
-        [Key]
-        public Guid Id { get; set; }
+    [Key]
+    [Column("Chat_ID")]
+    public Guid ChatId { get; set; }
 
-        [Required]
-        [MaxLength(100)]
-        public string Name { get; set; } = string.Empty;
+    [StringLength(100)]
+    public string Name { get; set; } = null!;
 
-        [Required]
-        [MaxLength(20)]
-        public string Type { get; set; } = string.Empty;
+    [StringLength(20)]
+    public string Type { get; set; } = null!;
 
-        [Required]
-        public Guid CreatorId { get; set; }
+    [Column("User_ID")]
+    public Guid UserId { get; set; }
 
-        [Required]
-        public DateTime CreatedAt { get; set; }
-        public User? Creator { get; set; }
-        public List<ChatParticipant> Participants { get; set; } = new List<ChatParticipant>();
-        public List<Message> Messages { get; set; } = new List<Message>();
-    }
+    [Column("Creation_Date", TypeName = "timestamp without time zone")]
+    public DateTime CreationDate { get; set; }
+
+    [InverseProperty("Chat")]
+    public virtual ICollection<ChatParticipant> ChatParticipants { get; set; } = new List<ChatParticipant>();
+
+    [InverseProperty("Chat")]
+    public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
+
+    [ForeignKey("UserId")]
+    [InverseProperty("Chats")]
+    public virtual User User { get; set; } = null!;
 }

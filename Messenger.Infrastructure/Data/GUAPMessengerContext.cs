@@ -1,64 +1,178 @@
 ﻿using Messenger.Core.Models;
-using Messenger.Infrastructure.Configurations;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Data
+namespace Messenger.Infrastructure.Data;
+
+public partial class GuapMessengerContext : DbContext
 {
-    public class GUAPMessengerContext : DbContext
+    public GuapMessengerContext()
     {
-        public DbSet<AccountSettings> AccountSettings { get; set; }
-        public DbSet<Attachment> Attachments { get; set; }
-        public DbSet<BlackList> BlackLists { get; set; }
-        public DbSet<Chat> Chats { get; set; }
-        public DbSet<ChatParticipant> ChatParticipants { get; set; }
-        public DbSet<LoginSession> LoginSessions { get; set; }
-        public DbSet<Message> Message { get; set; }
-        public DbSet<MessageReaction> MessageReactions { get; set; }
-        public DbSet<MessageStatus> MessageStatuses { get; set; }
-        public DbSet<Notification> Notifications { get; set; }
-        public DbSet<User> Users { get; set; }
-        public DbSet<UserStatus> UserStatuses { get; set; }
-
-        public GUAPMessengerContext() { }
-
-        public GUAPMessengerContext(DbContextOptions<GUAPMessengerContext> options) : base(options) { }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreating(modelBuilder);
-
-            modelBuilder.ApplyConfiguration(new UserConfiguration());
-            modelBuilder.ApplyConfiguration(new AccountSettingsConfiguration());
-            modelBuilder.ApplyConfiguration(new AttachmentConfiguration());
-            modelBuilder.ApplyConfiguration(new MessageConfiguration());
-            modelBuilder.ApplyConfiguration(new BlackListConfiguration());
-            modelBuilder.ApplyConfiguration(new ChatConfiguration());
-            modelBuilder.ApplyConfiguration(new ChatParticipantConfiguration());
-            modelBuilder.ApplyConfiguration(new LoginSessionConfiguration());
-            modelBuilder.ApplyConfiguration(new MessageReactionConfiguration());
-            modelBuilder.ApplyConfiguration(new NotificationConfiguration());
-            modelBuilder.ApplyConfiguration(new UserStatusConfiguration());
-
-            modelBuilder.Entity<AccountSettings>().ToTable("Настройки_аккаунта");
-            modelBuilder.Entity<User>().ToTable("Пользователи");
-            modelBuilder.Entity<LoginSession>().ToTable("Входы");
-            modelBuilder.Entity<Attachment>().ToTable("Вложения");
-            modelBuilder.Entity<MessageReaction>().ToTable("Реакции");
-            modelBuilder.Entity<Message>().ToTable("Сообщения");
-            modelBuilder.Entity<UserStatus>().ToTable("Статусы_пользователей");
-            modelBuilder.Entity<MessageStatus>().ToTable("Статусы_сообщений");
-            modelBuilder.Entity<Notification>().ToTable("Уведомления");
-            modelBuilder.Entity<Chat>().ToTable("Чаты");
-            modelBuilder.Entity<ChatParticipant>().ToTable("Участники_чата");
-            modelBuilder.Entity<BlackList>().ToTable("Черный_список");
-        }
-
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            if (!optionsBuilder.IsConfigured)
-            {
-                optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=12345;");
-            }
-        }
     }
+
+    public GuapMessengerContext(DbContextOptions<GuapMessengerContext> options)
+        : base(options)
+    {
+    }
+
+    public virtual DbSet<AccountSetting> AccountSettings { get; set; }
+
+    public virtual DbSet<Attachment> Attachments { get; set; }
+
+    public virtual DbSet<Blacklist> Blacklists { get; set; }
+
+    public virtual DbSet<Chat> Chats { get; set; }
+
+    public virtual DbSet<ChatParticipant> ChatParticipants { get; set; }
+
+    public virtual DbSet<Login> Logins { get; set; }
+
+    public virtual DbSet<Message> Messages { get; set; }
+
+    public virtual DbSet<MessageStatus> MessageStatuses { get; set; }
+
+    public virtual DbSet<Notification> Notifications { get; set; }
+
+    public virtual DbSet<Reaction> Reactions { get; set; }
+
+    public virtual DbSet<User> Users { get; set; }
+
+    public virtual DbSet<UserStatus> UserStatuses { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234");
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasPostgresExtension("uuid-ossp");
+
+        modelBuilder.Entity<AccountSetting>(entity =>
+        {
+            entity.HasKey(e => e.SettingId).HasName("Account_Settings_pkey");
+
+            entity.Property(e => e.SettingId).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<Attachment>(entity =>
+        {
+            entity.HasKey(e => e.AttachmentId).HasName("Attachments_pkey");
+
+            entity.Property(e => e.AttachmentId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.Message).WithMany(p => p.Attachments).HasConstraintName("fk_attachment_message");
+        });
+
+        modelBuilder.Entity<Blacklist>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.BlockedUserId }).HasName("Blacklist_pkey");
+
+            entity.Property(e => e.BlockDate).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.BlockedUser).WithMany(p => p.BlacklistBlockedUsers).HasConstraintName("fk_blocked_to");
+
+            entity.HasOne(d => d.User).WithMany(p => p.BlacklistUsers).HasConstraintName("fk_blocked_by");
+        });
+
+        modelBuilder.Entity<Chat>(entity =>
+        {
+            entity.HasKey(e => e.ChatId).HasName("Chats_pkey");
+
+            entity.Property(e => e.ChatId).ValueGeneratedNever();
+            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.User).WithMany(p => p.Chats).HasConstraintName("fk_chat_creator");
+        });
+
+        modelBuilder.Entity<ChatParticipant>(entity =>
+        {
+            entity.HasKey(e => new { e.ChatId, e.UserId }).HasName("Chat_Participants_pkey");
+
+            entity.Property(e => e.JoinDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.Role).HasDefaultValueSql("'participant'::character varying");
+
+            entity.HasOne(d => d.Chat).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_chat");
+
+            entity.HasOne(d => d.User).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_user");
+        });
+
+        modelBuilder.Entity<Login>(entity =>
+        {
+            entity.HasKey(e => e.LoginId).HasName("Logins_pkey");
+
+            entity.Property(e => e.LoginId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.User).WithMany(p => p.Logins).HasConstraintName("fk_login_user");
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasKey(e => e.MessageId).HasName("Messages_pkey");
+
+            entity.Property(e => e.MessageId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
+
+            entity.HasOne(d => d.Recipient).WithMany(p => p.MessageRecipients).HasConstraintName("fk_recipient");
+
+            entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
+        });
+
+        modelBuilder.Entity<MessageStatus>(entity =>
+        {
+            entity.HasKey(e => new { e.MessageId, e.UserId }).HasName("Message_Statuses_pkey");
+
+            entity.Property(e => e.ChangeDate).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Message).WithMany(p => p.MessageStatuses).HasConstraintName("fk_status_message");
+
+            entity.HasOne(d => d.User).WithMany(p => p.MessageStatuses).HasConstraintName("fk_status_user2");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId).HasName("Notifications_pkey");
+
+            entity.Property(e => e.NotificationId).ValueGeneratedNever();
+            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.Read).HasDefaultValue(false);
+
+            entity.HasOne(d => d.User).WithMany(p => p.Notifications).HasConstraintName("fk_notification_user");
+        });
+
+        modelBuilder.Entity<Reaction>(entity =>
+        {
+            entity.HasKey(e => e.ReactionId).HasName("Reactions_pkey");
+
+            entity.Property(e => e.ReactionId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.Message).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_message");
+
+            entity.HasOne(d => d.User).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_user");
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.UserId).HasName("Users_pkey");
+
+            entity.Property(e => e.UserId).ValueGeneratedNever();
+            entity.Property(e => e.Phone).IsFixedLength();
+
+            entity.HasOne(d => d.Account).WithMany(p => p.Users)
+                .HasPrincipalKey(p => p.AccountId)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_account");
+        });
+
+        modelBuilder.Entity<UserStatus>(entity =>
+        {
+            entity.HasKey(e => e.UserId).HasName("User_Statuses_pkey");
+
+            entity.Property(e => e.UserId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.User).WithOne(p => p.UserStatus).HasConstraintName("fk_status_user");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }

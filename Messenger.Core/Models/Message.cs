@@ -1,37 +1,50 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Messenger.Core.Models
+namespace Messenger.Core.Models;
+
+public partial class Message
 {
-    /// <summary>
-    /// Класс модели сущности "Сообщения"
-    /// </summary>
-    public class Message
-    {
-        [Key]
-        public Guid Id { get; set; }
+    [Key]
+    [Column("Message_ID")]
+    public Guid MessageId { get; set; }
 
-        [Required]
-        public Guid SenderId { get; set; }
+    [Column("Sender_ID")]
+    public Guid SenderId { get; set; }
 
-        [Required]
-        public Guid ReceiverId { get; set; }
+    [Column("Recipient_ID")]
+    public Guid RecipientId { get; set; }
 
-        [Required]
-        public Guid ChatId { get; set; }
+    [Column("Chat_ID")]
+    public Guid ChatId { get; set; }
 
-        [Required]
-        public string Text { get; set; } = string.Empty;
+    [Column("Message_Text")]
+    public string MessageText { get; set; } = null!;
 
-        [Required]
-        public bool HasAttachments { get; set; }
+    [Column("Has_Attachments")]
+    public bool HasAttachments { get; set; }
 
-        [Required]
-        public DateTime SentAt { get; set; }
-        public User? Sender { get; set; }
-        public User? Receiver { get; set; }
-        public Chat? Chat { get; set; }
-        public List<Attachment> Attachments { get; set; } = new List<Attachment>();
-        public List<MessageReaction> Reactions { get; set; } = new List<MessageReaction>();
-        public List<MessageStatus> Statuses { get; set; } = new List<MessageStatus>();
-    }
+    [Column("Send_Time", TypeName = "timestamp without time zone")]
+    public DateTime SendTime { get; set; }
+
+    [InverseProperty("Message")]
+    public virtual ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+
+    [ForeignKey("ChatId")]
+    [InverseProperty("Messages")]
+    public virtual Chat Chat { get; set; } = null!;
+
+    [InverseProperty("Message")]
+    public virtual ICollection<MessageStatus> MessageStatuses { get; set; } = new List<MessageStatus>();
+
+    [InverseProperty("Message")]
+    public virtual ICollection<Reaction> Reactions { get; set; } = new List<Reaction>();
+
+    [ForeignKey("RecipientId")]
+    [InverseProperty("MessageRecipients")]
+    public virtual User Recipient { get; set; } = null!;
+
+    [ForeignKey("SenderId")]
+    [InverseProperty("MessageSenders")]
+    public virtual User Sender { get; set; } = null!;
 }
