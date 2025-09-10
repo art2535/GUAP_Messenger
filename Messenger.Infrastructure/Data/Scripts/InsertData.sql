@@ -1,6 +1,6 @@
 ﻿-- Insert into tables with no foreign key dependencies first
--- Insert into Настройки_аккаунта
-INSERT INTO public."Настройки_аккаунта" ("ID_настройки", "ID_аккаунта", "Аватар", "Тема")
+-- Insert into Account_Settings
+INSERT INTO public."Account_Settings" ("Setting_ID", "Account_ID", "Avatar", "Theme")
 VALUES
 ('a1b2c3d4-e5f6-7890-abcd-123456789001', 'b2c3d4e5-f6a7-8901-bcde-234567890001', 'https://example.com/avatar1.png', 'light'),
 ('a1b2c3d4-e5f6-7890-abcd-123456789002', 'b2c3d4e5-f6a7-8901-bcde-234567890002', 'https://example.com/avatar2.png', 'dark'),
@@ -23,8 +23,8 @@ VALUES
 ('a1b2c3d4-e5f6-7890-abcd-123456789019', 'b2c3d4e5-f6a7-8901-bcde-234567890019', NULL, 'light'),
 ('a1b2c3d4-e5f6-7890-abcd-123456789020', 'b2c3d4e5-f6a7-8901-bcde-234567890020', 'https://example.com/avatar20.png', 'dark');
 
--- Insert into Пользователи (depends on Настройки_аккаунта)
-INSERT INTO public."Пользователи" ("ID_пользователя", "ID_аккаунта", "Фамилия", "Имя", "Отчество", "Дата_рождения", "Дата_регистрации", "Логин", "Пароль", "Телефон")
+-- Insert into Users (depends on Account_Settings)
+INSERT INTO public."Users" ("User_ID", "Account_ID", "Last_Name", "First_Name", "Middle_Name", "Birth_Date", "Registration_Date", "Login", "Password", "Phone")
 VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900001', 'b2c3d4e5-f6a7-8901-bcde-234567890001', 'Иванов', 'Иван', 'Иванович', '1990-01-01', '2025-01-01', 'ivanov1', 'hashed_password1', '+79991234501'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900002', 'b2c3d4e5-f6a7-8901-bcde-234567890002', 'Петров', 'Петр', 'Петрович', '1991-02-02', '2025-01-02', 'petrov2', 'hashed_password2', '+79991234502'),
@@ -47,8 +47,8 @@ VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900019', 'b2c3d4e5-f6a7-8901-bcde-234567890019', 'Андреев', 'Владимир', NULL, '1998-07-19', '2025-01-19', 'andreev19', 'hashed_password19', '+79991234519'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900020', 'b2c3d4e5-f6a7-8901-bcde-234567890020', 'Ковалев', 'Николай', 'Николаевич', '1999-08-20', '2025-01-20', 'kovalev20', 'hashed_password20', '+79991234520');
 
--- Insert into Входы (depends on Пользователи)
-INSERT INTO public."Входы" ("ID_входа", "ID_пользователя", "Токен", "IP_адрес", "Время_захода", "Время_выхода", "Активен")
+-- Insert into Logins (depends on Users)
+INSERT INTO public."Logins" ("Login_ID", "User_ID", "Token", "IP_Address", "Login_Time", "Logout_Time", "Active")
 VALUES
 ('d4e5f6a7-b8c9-0123-def0-456789000001', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'token_001', '192.168.1.1', '2025-09-01 10:00:00', NULL, true),
 ('d4e5f6a7-b8c9-0123-def0-456789000002', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'token_002', '192.168.1.2', '2025-09-01 10:01:00', '2025-09-01 10:30:00', false),
@@ -71,8 +71,8 @@ VALUES
 ('d4e5f6a7-b8c9-0123-def0-456789000019', 'c3d4e5f6-a7b8-9012-cdef-345678900019', 'token_019', '192.168.1.19', '2025-09-01 10:18:00', NULL, true),
 ('d4e5f6a7-b8c9-0123-def0-456789000020', 'c3d4e5f6-a7b8-9012-cdef-345678900020', 'token_020', '192.168.1.20', '2025-09-01 10:19:00', '2025-09-01 11:30:00', false);
 
--- Insert into Статусы_пользователей (depends on Пользователи)
-INSERT INTO public."Статусы_пользователей" ("ID_пользователя", "Онлайн", "Последняя_активность")
+-- Insert into User_Statuses (depends on Users)
+INSERT INTO public."User_Statuses" ("User_ID", "Online", "Last_Activity")
 VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900001', true, '2025-09-01 10:00:00'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900002', false, '2025-09-01 10:30:00'),
@@ -95,8 +95,8 @@ VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900019', true, '2025-09-01 10:18:00'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900020', false, '2025-09-01 11:30:00');
 
--- Insert into Уведомления (depends on Пользователи)
-INSERT INTO public."Уведомления" ("ID_уведомления", "ID_пользователя", "Текст", "Дата_создания", "Прочитано")
+-- Insert into Notifications (depends on Users)
+INSERT INTO public."Notifications" ("Notification_ID", "User_ID", "Text", "Creation_Date", "Read")
 VALUES
 ('e5f6a7b8-c9d0-1234-ef01-567890000001', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'Новое сообщение в чате', '2025-09-01 10:00:00', false),
 ('e5f6a7b8-c9d0-1234-ef01-567890000002', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'Вас добавили в чат', '2025-09-01 10:01:00', true),
@@ -119,8 +119,8 @@ VALUES
 ('e5f6a7b8-c9d0-1234-ef01-567890000019', 'c3d4e5f6-a7b8-9012-cdef-345678900019', 'Новое сообщение в чате', '2025-09-01 10:18:00', false),
 ('e5f6a7b8-c9d0-1234-ef01-567890000020', 'c3d4e5f6-a7b8-9012-cdef-345678900020', 'Вас добавили в чат', '2025-09-01 10:19:00', true);
 
--- Insert into Черный_список (depends on Пользователи)
-INSERT INTO public."Черный_список" ("ID_пользователя", "ID_заблокированного", "Дата_блокировки")
+-- Insert into Blacklist (depends on Users)
+INSERT INTO public."Blacklist" ("User_ID", "Blocked_User_ID", "Block_Date")
 VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900001', 'c3d4e5f6-a7b8-9012-cdef-345678900002', '2025-09-01 10:00:00'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900002', 'c3d4e5f6-a7b8-9012-cdef-345678900003', '2025-09-01 10:01:00'),
@@ -143,8 +143,8 @@ VALUES
 ('c3d4e5f6-a7b8-9012-cdef-345678900019', 'c3d4e5f6-a7b8-9012-cdef-345678900020', '2025-09-01 10:18:00'),
 ('c3d4e5f6-a7b8-9012-cdef-345678900020', 'c3d4e5f6-a7b8-9012-cdef-345678900001', '2025-09-01 10:19:00');
 
--- Insert into Чаты (depends on Пользователи)
-INSERT INTO public."Чаты" ("ID_чата", "Название", "Тип", "ID_пользователя", "Дата_создания")
+-- Insert into Chats (depends on Users)
+INSERT INTO public."Chats" ("Chat_ID", "Name", "Type", "User_ID", "Creation_Date")
 VALUES
 ('f6a7b8c9-d0e1-2345-f012-678900000001', 'Общий чат 1', 'group', 'c3d4e5f6-a7b8-9012-cdef-345678900001', '2025-09-01 10:00:00'),
 ('f6a7b8c9-d0e1-2345-f012-678900000002', 'Личный чат 1', 'private', 'c3d4e5f6-a7b8-9012-cdef-345678900002', '2025-09-01 10:01:00'),
@@ -167,8 +167,8 @@ VALUES
 ('f6a7b8c9-d0e1-2345-f012-678900000019', 'Общий чат 10', 'group', 'c3d4e5f6-a7b8-9012-cdef-345678900019', '2025-09-01 10:18:00'),
 ('f6a7b8c9-d0e1-2345-f012-678900000020', 'Личный чат 10', 'private', 'c3d4e5f6-a7b8-9012-cdef-345678900020', '2025-09-01 10:19:00');
 
--- Insert into Участники_чата (depends on Пользователи and Чаты)
-INSERT INTO public."Участники_чата" ("ID_чата", "ID_пользователя", "Роль", "Дата_вступления")
+-- Insert into Chat_Participants (depends on Users and Chats)
+INSERT INTO public."Chat_Participants" ("Chat_ID", "User_ID", "Role", "Join_Date")
 VALUES
 ('f6a7b8c9-d0e1-2345-f012-678900000001', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'admin', '2025-09-01 10:00:00'),
 ('f6a7b8c9-d0e1-2345-f012-678900000001', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'участник', '2025-09-01 10:01:00'),
@@ -191,8 +191,8 @@ VALUES
 ('f6a7b8c9-d0e1-2345-f012-678900000010', 'c3d4e5f6-a7b8-9012-cdef-345678900010', 'участник', '2025-09-01 10:18:00'),
 ('f6a7b8c9-d0e1-2345-f012-678900000010', 'c3d4e5f6-a7b8-9012-cdef-345678900011', 'участник', '2025-09-01 10:19:00');
 
--- Insert into Сообщения (depends on Пользователи and Чаты)
-INSERT INTO public."Сообщения" ("ID_сообщения", "ID_отправителя", "ID_получателя", "ID_чата", "Текст_сообщения", "Наличие_приложений", "Время_отправки")
+-- Insert into Messages (depends on Users and Chats)
+INSERT INTO public."Messages" ("Message_ID", "Sender_ID", "Recipient_ID", "Chat_ID", "Message_Text", "Has_Attachments", "Send_Time")
 VALUES
 ('a7b8c9d0-e1f2-3456-0123-789000000001', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'f6a7b8c9-d0e1-2345-f012-678900000001', 'Привет, как дела?', false, '2025-09-01 10:00:00'),
 ('a7b8c9d0-e1f2-3456-0123-789000000002', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'f6a7b8c9-d0e1-2345-f012-678900000001', 'Отлично, а у тебя?', false, '2025-09-01 10:01:00'),
@@ -215,8 +215,8 @@ VALUES
 ('a7b8c9d0-e1f2-3456-0123-789000000019', 'c3d4e5f6-a7b8-9012-cdef-345678900019', 'c3d4e5f6-a7b8-9012-cdef-345678900020', 'f6a7b8c9-d0e1-2345-f012-678900000010', 'Где ты?', false, '2025-09-01 10:18:00'),
 ('a7b8c9d0-e1f2-3456-0123-789000000020', 'c3d4e5f6-a7b8-9012-cdef-345678900020', 'c3d4e5f6-a7b8-9012-cdef-345678900019', 'f6a7b8c9-d0e1-2345-f012-678900000010', 'Еду в офис', false, '2025-09-01 10:19:00');
 
--- Insert into Вложения (depends on Сообщения)
-INSERT INTO public."Вложения" ("ID_вложения", "ID_сообщения", "Имя_файла", "Тип_файла", "Размер_в_байтах", "URL")
+-- Insert into Attachments (depends on Messages)
+INSERT INTO public."Attachments" ("Attachment_ID", "Message_ID", "File_Name", "File_Type", "Size_in_Bytes", "URL")
 VALUES
 ('b8c9d0e1-f2a3-4567-1234-890000000001', 'a7b8c9d0-e1f2-3456-0123-789000000007', 'report.pdf', 'application/pdf', 1048576, 'https://example.com/files/report.pdf'),
 ('b8c9d0e1-f2a3-4567-1234-890000000002', 'a7b8c9d0-e1f2-3456-0123-789000000013', 'data.xlsx', 'application/vnd.ms-excel', 524288, 'https://example.com/files/data.xlsx'),
@@ -239,8 +239,8 @@ VALUES
 ('b8c9d0e1-f2a3-4567-1234-890000000019', 'a7b8c9d0-e1f2-3456-0123-789000000007', 'text2.txt', 'text/plain', 1024, 'https://example.com/files/text2.txt'),
 ('b8c9d0e1-f2a3-4567-1234-890000000020', 'a7b8c9d0-e1f2-3456-0123-789000000013', 'code2.py', 'text/x-python', 2048, 'https://example.com/files/code2.py');
 
--- Insert into Реакции (depends on Пользователи and Сообщения)
-INSERT INTO public."Реакции" ("ID_реакции", "ID_сообщения", "ID_пользователя", "Тип_реакции")
+-- Insert into Reactions (depends on Users and Messages)
+INSERT INTO public."Reactions" ("Reaction_ID", "Message_ID", "User_ID", "Reaction_Type")
 VALUES
 ('c9d0e1f2-a3b4-5678-2345-900000000001', 'a7b8c9d0-e1f2-3456-0123-789000000001', 'c3d4e5f6-a7b8-9012-cdef-345678900002', 'like'),
 ('c9d0e1f2-a3b4-5678-2345-900000000002', 'a7b8c9d0-e1f2-3456-0123-789000000002', 'c3d4e5f6-a7b8-9012-cdef-345678900001', 'smile'),
