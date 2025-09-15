@@ -1,0 +1,25 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Messenger.Core.Models;
+
+public partial class Notification
+{
+    [Key]
+    [Column("Notification_ID")]
+    public Guid NotificationId { get; set; }
+
+    [Column("User_ID")]
+    public Guid UserId { get; set; }
+
+    public string Text { get; set; } = null!;
+
+    [Column("Creation_Date", TypeName = "timestamp without time zone")]
+    public DateTime CreationDate { get; set; }
+
+    public bool Read { get; set; }
+
+    [ForeignKey("UserId")]
+    [InverseProperty("Notifications")]
+    public virtual User User { get; set; } = null!;
+}
