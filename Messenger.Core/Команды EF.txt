@@ -1,29 +1,5 @@
-﻿1. Обратная разработка базы данных
-Выполните указанную вами команду для генерации классов моделей и контекста:
-```
-cd Messenger.Infrastructure
-dotnet ef dbcontext scaffold "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" Npgsql.EntityFrameworkCore.PostgreSQL --output-dir ../Messenger.Core/Models --context-dir Data --context GuapMessengerDbContext --schema public --data-annotations --project Messenger.Infrastructure.csproj
-```
-или
-```
+﻿PS D:\IDE Projects\Visual Studio\Диплом\GUAP_Messenger> cd Messenger.Infrastructure
+PS D:\IDE Projects\Visual Studio\Диплом\GUAP_Messenger\Messenger.Infrastructure> 
 dotnet ef dbcontext scaffold "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" Npgsql.EntityFrameworkCore.PostgreSQL --output-dir ../Messenger.Core/Models --context-dir Data --context GuapMessengerContext --schema public --data-annotations --force --namespace Messenger.Core.Models --context-namespace Messenger.Infrastructure.Data
-```
-Параметры команды:
-1) "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" — строка подключения.
-2) Npgsql.EntityFrameworkCore.PostgreSQL — провайдер для PostgreSQL.
-3) --output-dir ../Messenger.Core/Models — папка для классов моделей в проекте Messenger.Core.
-4) --context-dir Data — папка для контекста в проекте Messenger.Infrastructure.
-5) --context GuapMessengerDbContext — имя класса контекста.
-6) --schema public — схема базы данных (public).
-7) --data-annotations — использование атрибутов Data Annotations для моделей.
-8) --project Messenger.Infrastructure.csproj — проект, где выполняется команда.
-
-2. Дополнительные команды
-2.1. Обновление моделей при изменении базы данных:
-Если структура базы данных изменилась, используйте --force для перезаписи:
-cd Messenger.Infrastructure
-dotnet ef dbcontext scaffold "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" Npgsql.EntityFrameworkCore.PostgreSQL --output-dir ../Messenger.Core/Models --context-dir Data --context GuapMessengerDbContext --schema public --data-annotations --force --project Messenger.Infrastructure.csproj
-
-2.2. Генерация только для определённых таблиц:
-Если нужны конкретные таблицы (например, Messages и Users):
-dotnet ef dbcontext scaffold "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" Npgsql.EntityFrameworkCore.PostgreSQL --output-dir ../Messenger.Core/Models --context-dir Data --context GuapMessengerDbContext --schema public --data-annotations --table Messages --table Users --project Messenger.Infrastructure.csproj
+Build started...
+Build succeeded.
