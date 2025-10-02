@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Core.Models;
@@ -21,5 +22,6 @@ public partial class AccountSetting
     public string? Theme { get; set; }
 
     [InverseProperty("Account")]
+    [JsonIgnore]
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

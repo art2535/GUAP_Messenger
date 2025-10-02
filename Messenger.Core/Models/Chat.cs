@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -22,12 +23,15 @@ public partial class Chat
     public DateTime CreationDate { get; set; }
 
     [InverseProperty("Chat")]
+    [JsonIgnore]
     public virtual ICollection<ChatParticipant> ChatParticipants { get; set; } = new List<ChatParticipant>();
 
     [InverseProperty("Chat")]
+    [JsonIgnore]
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
     [ForeignKey("UserId")]
     [InverseProperty("Chats")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

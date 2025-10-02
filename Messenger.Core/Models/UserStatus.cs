@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -17,5 +18,6 @@ public partial class UserStatus
 
     [ForeignKey("UserId")]
     [InverseProperty("UserStatus")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

@@ -1,6 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -24,9 +25,11 @@ public partial class ChatParticipant
 
     [ForeignKey("ChatId")]
     [InverseProperty("ChatParticipants")]
+    [JsonIgnore]
     public virtual Chat Chat { get; set; } = null!;
 
     [ForeignKey("UserId")]
     [InverseProperty("ChatParticipants")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -21,5 +22,6 @@ public partial class Notification
 
     [ForeignKey("UserId")]
     [InverseProperty("Notifications")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

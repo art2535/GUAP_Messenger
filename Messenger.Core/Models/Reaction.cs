@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -21,9 +22,11 @@ public partial class Reaction
 
     [ForeignKey("MessageId")]
     [InverseProperty("Reactions")]
+    [JsonIgnore]
     public virtual Message Message { get; set; } = null!;
 
     [ForeignKey("UserId")]
     [InverseProperty("Reactions")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

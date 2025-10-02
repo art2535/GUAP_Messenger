@@ -1,6 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -21,9 +22,11 @@ public partial class Blacklist
 
     [ForeignKey("BlockedUserId")]
     [InverseProperty("BlacklistBlockedUsers")]
+    [JsonIgnore]
     public virtual User BlockedUser { get; set; } = null!;
 
     [ForeignKey("UserId")]
     [InverseProperty("BlacklistUsers")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

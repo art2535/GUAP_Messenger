@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -28,5 +29,6 @@ public partial class Attachment
 
     [ForeignKey("MessageId")]
     [InverseProperty("Attachments")]
+    [JsonIgnore]
     public virtual Message Message { get; set; } = null!;
 }

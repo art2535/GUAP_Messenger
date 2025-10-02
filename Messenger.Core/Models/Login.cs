@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -29,5 +30,6 @@ public partial class Login
 
     [ForeignKey("UserId")]
     [InverseProperty("Logins")]
+    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }
