@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS public."Users"
     "Middle_Name" character varying(50),
     "Birth_Date" date NOT NULL,
     "Registration_Date" date NOT NULL,
-    "Login" character varying(20) NOT NULL,
+    "Login" character varying(50) NOT NULL,
     "Password" character varying(255) NOT NULL,
     "Phone" character(18) NOT NULL,
     CONSTRAINT "Users_pkey" PRIMARY KEY ("User_ID")
