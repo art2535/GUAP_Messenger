@@ -9,7 +9,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Threading;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -75,85 +74,97 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> LoginAsync(string login, string password, CancellationToken token = default)
         {
-            var identityUser = await _userManager.FindByNameAsync(login);
-            if (identityUser != null && await _userManager.CheckPasswordAsync(identityUser, password))
+            try
             {
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Login == login, token);
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token);
 
-                var claims = new List<Claim>
+                if (user == null)
                 {
-                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                    new Claim(ClaimTypes.Name, login)
-                };
-
-                var userRoles = await _context.Users
-                    .Where(u => u.UserId == user.UserId)
-                    .SelectMany(u => u.Roles)
-                    .ToListAsync(token);
-                foreach (var role in userRoles)
-                {
-                    claims.Add(new Claim(ClaimTypes.Role, role.Name));
+                    throw new Exception("Авторизация не прошла");
                 }
 
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-                var jwtToken = new JwtSecurityToken(
-                    issuer: _configuration["Jwt:Issuer"],
-                    audience: _configuration["Jwt:Audience"],
-                    claims: claims,
-                    expires: DateTime.Now.AddMinutes(30),
-                    signingCredentials: creds);
-
-                return new JwtSecurityTokenHandler().WriteToken(jwtToken);
+                return await GenerateJwtToken(user, token);
             }
-            throw new Exception("Авторизация не прошла");
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
         }
 
-        public async Task<User> RegisterAsync(string login, string password, string firstName, string lastName, 
-            string phone, DateTime birthDate, Guid? roleId = null, CancellationToken token = default)
+        private async Task<string> GenerateJwtToken(User user, CancellationToken token = default)
         {
-            var identityUser = new IdentityUser
+            var claims = new List<Claim>
             {
-                UserName = login,
-                Email = login
+                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                new Claim(ClaimTypes.Name, user.Login)
             };
 
-            var result = await _userManager.CreateAsync(identityUser, password);
-            if (!result.Succeeded)
+            var userRoles = await _context.Users
+                .Where(u => u.UserId == user.UserId)
+                .SelectMany(u => u.Roles)
+                .ToListAsync(token);
+            foreach (var role in userRoles)
             {
-                throw new Exception("Регистрация не прошла");
+                claims.Add(new Claim(ClaimTypes.Role, role.Name));
             }
 
-            var user = new User
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var jwtToken = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.Now.AddHours(2),
+                signingCredentials: creds);
+
+            return new JwtSecurityTokenHandler().WriteToken(jwtToken);
+        }
+
+        public async Task<(User? user, string? token)> RegisterAsync(string login, string password, string firstName, 
+            string? middleName, string lastName, string phone, DateTime birthDate, Guid? roleId = null, 
+            CancellationToken token = default)
+        {
+            var registerUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token);
+            
+            if (registerUser == null)
             {
-                UserId = Guid.NewGuid(),
-                Login = login,
-                Password = identityUser.PasswordHash,
-                FirstName = firstName,
-                LastName = lastName,
-                Phone = phone,
-                BirthDate = DateOnly.FromDateTime(birthDate),
-                RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Account = new AccountSetting 
-                { 
-                    SettingId = Guid.NewGuid(), 
-                    AccountId = Guid.NewGuid() 
-                },
-                UserStatus = new UserStatus 
-                { 
-                    UserId = Guid.NewGuid(), 
-                    Online = false 
+                var user = new User
+                {
+                    UserId = Guid.NewGuid(),
+                    Login = login,
+                    Password = password,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Phone = phone,
+                    BirthDate = DateOnly.FromDateTime(birthDate),
+                    RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Account = new AccountSetting
+                    {
+                        SettingId = Guid.NewGuid(),
+                        AccountId = Guid.NewGuid()
+                    },
+                    UserStatus = new UserStatus
+                    {
+                        UserId = Guid.NewGuid(),
+                        Online = false
+                    }
+                };
+
+                await _userRepository.AddUserAsync(user, token);
+                if (roleId.HasValue)
+                {
+                    await _userRepository.AssignUserRoleAsync(user.UserId, roleId.Value, token);
                 }
-            };
 
-            await _userRepository.AddUserAsync(user, token);
-            if (roleId.HasValue)
-            {
-                await _userRepository.AssignUserRoleAsync(user.UserId, roleId.Value, token);
+                string jwtToken = await GenerateJwtToken(user, token);
+
+                return (user, jwtToken);
             }
 
-            return user;
+            return (registerUser, null);
         }
 
         public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
@@ -168,6 +179,12 @@ namespace Messenger.Infrastructure.Services
                 user.Account.Avatar = avatarUrl;
             }
             await _userRepository.UpdateUserAsync(user, token);
+        }
+
+        public async Task<User?> LogoutAsync(string login, string password, CancellationToken cancellationToken = default)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, cancellationToken);
         }
     }
 }
