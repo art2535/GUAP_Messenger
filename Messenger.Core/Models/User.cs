@@ -31,7 +31,7 @@ public partial class User
     [Column("Registration_Date")]
     public DateOnly RegistrationDate { get; set; }
 
-    [StringLength(20)]
+    [StringLength(50)]
     public string Login { get; set; } = null!;
 
     [StringLength(255)]
