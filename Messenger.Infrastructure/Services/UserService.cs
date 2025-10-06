@@ -74,22 +74,11 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> LoginAsync(string login, string password, CancellationToken token = default)
         {
-            try
-            {
-                var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token);
+            var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token)
+                    ?? throw new Exception("Авторизация не прошла");
 
-                if (user == null)
-                {
-                    throw new Exception("Авторизация не прошла");
-                }
-
-                return await GenerateJwtToken(user, token);
-            }
-            catch (Exception ex)
-            {
-                return ex.Message;
-            }
+            return await GenerateJwtToken(user, token);
         }
 
         private async Task<string> GenerateJwtToken(User user, CancellationToken token = default)
