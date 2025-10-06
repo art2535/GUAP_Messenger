@@ -1,5 +1,6 @@
 ﻿using Messenger.API.DTOs;
 using Messenger.Core.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -88,24 +89,25 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [Authorize]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpPost("logout")]
         [SwaggerOperation(
             Summary = "Выход пользователя из системы",
             Description = "Инвалидация JWT-токена")]
         public async Task<IActionResult> LogoutUserAsync([FromBody] LogoutRequest logoutRequest,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var token = Request.Headers.Authorization.ToString().Replace("Bearer ", "");
+                var token = Request.Cookies["JWT_SECRET"];
 
                 if (string.IsNullOrEmpty(token))
                 {
                     return Unauthorized("JWT токен не найден");
                 }
 
-                var logoutUser = await _userService.LogoutAsync(logoutRequest.Login, logoutRequest.Password)
+                var logoutUser = await _userService.LogoutAsync(logoutRequest.Login, logoutRequest.Password,
+                    cancellationToken)
                     ?? throw new Exception($"Пользователя с email {logoutRequest.Login} не существует");
 
                 Response.Cookies.Delete("JWT_SECRET", new CookieOptions
