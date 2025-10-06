@@ -37,6 +37,14 @@ namespace Messenger.API.Controllers
                     throw new Exception($"Пользователь с email {user.Login} уже существует");
                 }
 
+                Response.Cookies.Append("JWT_SECRET", token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddHours(2)
+                });
+
                 return Ok(new
                 {
                     IsSuccess = true,
