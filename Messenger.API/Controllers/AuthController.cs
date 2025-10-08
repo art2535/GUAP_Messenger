@@ -1,4 +1,4 @@
-﻿using Messenger.Core.DTOs;
+﻿using Messenger.Core.DTOs.Auth;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -111,23 +111,12 @@ namespace Messenger.API.Controllers
             Description = "Инвалидация JWT-токена")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> LogoutUserAsync([FromBody] LogoutRequest logoutRequest,
-            CancellationToken cancellationToken = default)
+        public IActionResult LogoutUserAsync()
         {
             try
             {
-                var token = Request.Cookies["JWT_SECRET"];
-
-                if (string.IsNullOrEmpty(token))
-                {
-                    return Unauthorized("JWT токен не найден");
-                }
-
-                var logoutUser = await _userService.LogoutAsync(logoutRequest.Login, logoutRequest.Password,
-                    cancellationToken)
-                    ?? throw new Exception($"Пользователя с email {logoutRequest.Login} не существует");
-
                 Response.Cookies.Delete("JWT_SECRET", new CookieOptions
                 {
                     HttpOnly = true,
