@@ -2,7 +2,7 @@
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Repositories;
-using Microsoft.AspNetCore.Identity;
+using Messenger.Core.DTOs.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -17,15 +17,13 @@ namespace Messenger.Infrastructure.Services
         private readonly UserRepository _userRepository;
         private readonly GuapMessengerContext _context;
         private readonly IConfiguration _configuration;
-        private readonly UserManager<IdentityUser> _userManager;
 
         public UserService(UserRepository userRepository, GuapMessengerContext context, 
-            IConfiguration configuration, UserManager<IdentityUser> userManager)
+            IConfiguration configuration)
         {
             _userRepository = userRepository;
             _context = context;
             _configuration = configuration;
-            _userManager = userManager;
         }
 
         public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken token = default)
@@ -38,22 +36,25 @@ namespace Messenger.Infrastructure.Services
             await _userRepository.AddUserToBlacklistAsync(userId, blockedUserId, token);
         }
 
-        public async Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword, CancellationToken token = default)
+        public async Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword, 
+            CancellationToken token = default)
         {
-            var identityUser = await _userManager.FindByIdAsync(userId.ToString());
-            var result = await _userManager.ChangePasswordAsync(identityUser, oldPassword, newPassword);
+            var user = await _userRepository.GetUserByIdAsync(userId, token)
+                ?? throw new UnauthorizedAccessException("Пользователь не найден");
 
-            if (!result.Succeeded)
+            if (!ValidationService.VerifyPassword(oldPassword, user.Password))
             {
-                throw new Exception("Пароль не изменен!");
+                throw new Exception("Старый пароль указан неверно");
             }
+
+            newPassword = ValidationService.ValidatePassword(newPassword);
+            user.Password = ValidationService.HashPassword(newPassword);
+
+            await _userRepository.UpdateUserAsync(user, token);
         }
 
         public async Task DeleteAccountAsync(Guid userId, CancellationToken token = default)
         {
-            var identityUser = await _userManager.FindByIdAsync(userId.ToString());
-
-            await _userManager.DeleteAsync(identityUser);
             await _userRepository.DeleteUserAsync(userId, token);
         }
 
@@ -75,8 +76,15 @@ namespace Messenger.Infrastructure.Services
         public async Task<string> LoginAsync(string login, string password, CancellationToken token = default)
         {
             var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token)
-                    ?? throw new Exception("Авторизация не прошла");
+                    .FirstOrDefaultAsync(u => u.Login == login, token)
+                    ?? throw new UnauthorizedAccessException($"Пользователь с email {login} не найден");
+
+            bool isPasswordValid = ValidationService.VerifyPassword(password, user.Password);
+
+            if (!isPasswordValid)
+            {
+                throw new UnauthorizedAccessException("Неверный логин или пароль");
+            }
 
             return await GenerateJwtToken(user, token);
         }
@@ -120,15 +128,20 @@ namespace Messenger.Infrastructure.Services
             
             if (registerUser == null)
             {
+                login = ValidationService.ValidateEmail(login);
+                var birthDateOnly = ValidationService.ValidateBirthdate(birthDate);
+                password = ValidationService.ValidatePassword(password);
+                
                 var user = new User
                 {
                     UserId = Guid.NewGuid(),
                     Login = login,
-                    Password = password,
+                    Password = ValidationService.HashPassword(password),
                     FirstName = firstName,
+                    MiddleName = middleName,
                     LastName = lastName,
                     Phone = phone,
-                    BirthDate = DateOnly.FromDateTime(birthDate),
+                    BirthDate = birthDateOnly,
                     RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     Account = new AccountSetting
                     {
@@ -138,7 +151,7 @@ namespace Messenger.Infrastructure.Services
                     UserStatus = new UserStatus
                     {
                         UserId = Guid.NewGuid(),
-                        Online = false
+                        Online = true
                     }
                 };
 
@@ -161,19 +174,30 @@ namespace Messenger.Infrastructure.Services
             await _userRepository.RemoveUserFromBlacklistAsync(userId, blockedUserId, token);
         }
 
-        public async Task UpdateProfileAsync(User user, string? avatarUrl = null, CancellationToken token = default)
+        public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, 
+            string? avatarUrl = null, CancellationToken token = default)
         {
-            if (!string.IsNullOrEmpty(avatarUrl))
-            {
-                user.Account.Avatar = avatarUrl;
-            }
-            await _userRepository.UpdateUserAsync(user, token);
-        }
+            var user = await _context.Users
+                .Include(u => u.Account)
+                .FirstOrDefaultAsync(u => u.UserId == userId, token);
 
-        public async Task<User?> LogoutAsync(string login, string password, CancellationToken cancellationToken = default)
-        {
-            return await _context.Users
-                .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, cancellationToken);
+            if (user == null)
+                throw new UnauthorizedAccessException("Пользователь не найден");
+
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+            user.MiddleName = request.MiddleName;
+            user.Login = request.Login;
+            user.Phone = request.Phone;
+
+            if (!string.IsNullOrEmpty(request.Theme) && user.Account != null)
+                user.Account.Theme = request.Theme;
+
+            if (!string.IsNullOrEmpty(avatarUrl) && user.Account != null)
+                user.Account.Avatar = avatarUrl;
+
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync(token);
         }
     }
 }
