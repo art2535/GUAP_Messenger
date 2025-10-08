@@ -1,4 +1,4 @@
-﻿using Messenger.API.DTOs;
+﻿using Messenger.Core.DTOs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +23,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Регистрация пользователя в системе",
             Description = "Регистрирует нового пользователя по его данным")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> RegisterUserAsync([FromBody] RegisterRequest registerRequest,
             CancellationToken cancellationToken = default)
         {
@@ -66,6 +70,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Авторизация и аутентификация пользователя",
             Description = "Авторизация и аутентификация пользователя с выдачей JWT-токена")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> LoginUserAsync([FromBody] LoginRequest loginRequest,
             CancellationToken cancellationToken = default)
         {
@@ -102,6 +109,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Выход пользователя из системы",
             Description = "Инвалидация JWT-токена")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> LogoutUserAsync([FromBody] LogoutRequest logoutRequest,
             CancellationToken cancellationToken = default)
         {
