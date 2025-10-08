@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Messenger.API.DTOs
+namespace Messenger.Core.DTOs
 {
     public class LoginRequest
     {
