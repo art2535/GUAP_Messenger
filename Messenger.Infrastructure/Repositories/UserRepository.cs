@@ -68,13 +68,22 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default)
         {
-            return await _context.Users
-                .Include(user => user.Account)
-                .Include(user => user.UserStatus)
-                .Include(user => user.BlacklistBlockedUsers)
-                    .ThenInclude(blocked => blocked.BlockedUser)
-                .Include(user => user.Roles)
-                .FirstOrDefaultAsync(user => user.UserId == id, token);
+            var user = await _context.Users
+                .Include(u => u.Account)
+                .Include(u => u.UserStatus)
+                .Include(u => u.Roles)
+                .Include(u => u.BlacklistBlockedUsers)
+                .FirstOrDefaultAsync(u => u.UserId == id, token);
+
+            if (user != null)
+            {
+                foreach (var bl in user.BlacklistBlockedUsers)
+                {
+                    await _context.Entry(bl).Reference(b => b.BlockedUser).LoadAsync(token);
+                }
+            }
+
+            return user;
         }
 
         public async Task RemoveUserFromBlacklistAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
