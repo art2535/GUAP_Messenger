@@ -1,5 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
-using Messenger.Core.DTOs;
+using Messenger.Core.DTOs.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +27,7 @@ namespace Messenger.API.Controllers
             Description = "Возвращает список всех зарегистрированных пользователей")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllUsersAsync(CancellationToken token = default)
         {
@@ -56,6 +57,7 @@ namespace Messenger.API.Controllers
             Description = "Возвращает список всех доступных ролей в системе")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllRolesAsync(CancellationToken token = default)
         {
@@ -85,6 +87,7 @@ namespace Messenger.API.Controllers
             Description = "Возвращает информацию о пользователе по его идентификатору")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserByIdAsync(CancellationToken token = default)
         {
@@ -114,6 +117,7 @@ namespace Messenger.API.Controllers
             Summary = "Обновить профиль текущего пользователя",
             Description = "Позволяет обновить личные данные и тему аккаунта текущего пользователя")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateUserProfileByIdAsync([FromBody] UpdateUserProfileRequest request,
             [FromQuery] string? avatarUrl = null, CancellationToken token = default)
@@ -145,6 +149,8 @@ namespace Messenger.API.Controllers
             Summary = "Заблокировать пользователя",
             Description = "Добавляет пользователя в список заблокированных текущего пользователя")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> BlockUserAsync(Guid blockedUserId, CancellationToken token = default)
         {
@@ -175,6 +181,8 @@ namespace Messenger.API.Controllers
             Description = "Удаляет пользователя из списка заблокированных текущего пользователя"
         )]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UnblockUserAsync(Guid blockedUserId, CancellationToken token = default)
         {
@@ -204,6 +212,7 @@ namespace Messenger.API.Controllers
             Summary = "Сменить пароль пользователя",
             Description = "Позволяет пользователю сменить текущий пароль, указав старый и новый")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordRequest request,
             CancellationToken token = default)
@@ -234,6 +243,7 @@ namespace Messenger.API.Controllers
             Summary = "Назначить роль пользователю",
             Description = "Назначает текущему пользователю указанную роль по её идентификатору")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> AssignRoleAsync(Guid roleId, CancellationToken token = default)
         {
@@ -263,6 +273,7 @@ namespace Messenger.API.Controllers
             Summary = "Удалить аккаунт пользователя",
             Description = "Удаляет аккаунт текущего пользователя из системы")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteAccountAsync(CancellationToken token = default)
         {
