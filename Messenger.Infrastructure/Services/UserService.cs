@@ -5,10 +5,6 @@ using Messenger.Infrastructure.Repositories;
 using Messenger.Core.DTOs.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -86,37 +82,7 @@ namespace Messenger.Infrastructure.Services
                 throw new UnauthorizedAccessException("Неверный логин или пароль");
             }
 
-            return await GenerateJwtToken(user, token);
-        }
-
-        private async Task<string> GenerateJwtToken(User user, CancellationToken token = default)
-        {
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new Claim(ClaimTypes.Name, user.Login)
-            };
-
-            var userRoles = await _context.Users
-                .Where(u => u.UserId == user.UserId)
-                .SelectMany(u => u.Roles)
-                .ToListAsync(token);
-            foreach (var role in userRoles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role.Name));
-            }
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var jwtToken = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.Now.AddHours(2),
-                signingCredentials: creds);
-
-            return new JwtSecurityTokenHandler().WriteToken(jwtToken);
+            return await new JwtService(_configuration, _context).GenerateJwtTokenAsync(user, token);
         }
 
         public async Task<(User? user, string? token)> RegisterAsync(string login, string password, string firstName, 
@@ -161,7 +127,7 @@ namespace Messenger.Infrastructure.Services
                     await _userRepository.AssignUserRoleAsync(user.UserId, roleId.Value, token);
                 }
 
-                string jwtToken = await GenerateJwtToken(user, token);
+                string jwtToken = await new JwtService(_configuration, _context).GenerateJwtTokenAsync(user, token);
 
                 return (user, jwtToken);
             }
