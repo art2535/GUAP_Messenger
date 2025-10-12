@@ -30,6 +30,13 @@ namespace Messenger.Infrastructure.Repositories
                 .ToListAsync(token);
         }
 
+        public async Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, 
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Messages
+                .FirstOrDefaultAsync(m => m.ChatId == chatId && m.MessageId == messageId, cancellationToken);
+        }
+
         public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
         {
             _context.Messages.Update(message);

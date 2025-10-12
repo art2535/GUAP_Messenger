@@ -17,7 +17,8 @@ namespace Messenger.Infrastructure.Repositories
             CancellationToken cancellationToken = default)
         {
             var existing = await _context.MessageStatuses
-                .FirstOrDefaultAsync(ms => ms.MessageId == messageStatus.MessageId && ms.UserId == messageStatus.UserId, cancellationToken);
+                .FirstOrDefaultAsync(ms => ms.MessageId == messageStatus.MessageId 
+                && ms.UserId == messageStatus.UserId, cancellationToken);
 
             if (existing != null)
             {
