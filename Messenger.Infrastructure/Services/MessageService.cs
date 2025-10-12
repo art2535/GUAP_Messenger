@@ -34,5 +34,20 @@ namespace Messenger.Infrastructure.Services
 
             await _repository.AddMessageAsync(message, token);
         }
+
+        public async Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
+        {
+            return await _repository.GetMessageByIdAsync(chatId, messageId, token);
+        }
+
+        public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
+        {
+            await _repository.DeleteMessageAsync(messageId, token);
+        }
+
+        public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
+        {
+            await _repository.UpdateMessageAsync(message, token);
+        }
     }
 }
