@@ -25,10 +25,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Получить список всех пользователей",
             Description = "Возвращает список всех зарегистрированных пользователей")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> GetAllUsersAsync(CancellationToken token = default)
         {
             try
@@ -55,10 +55,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Получить список всех ролей",
             Description = "Возвращает список всех доступных ролей в системе")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> GetAllRolesAsync(CancellationToken token = default)
         {
             try
@@ -85,10 +85,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Получить пользователя по ID",
             Description = "Возвращает информацию о пользователе по его идентификатору")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> GetUserByIdAsync(CancellationToken token = default)
         {
             try
@@ -116,9 +116,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Обновить профиль текущего пользователя",
             Description = "Позволяет обновить личные данные и тему аккаунта текущего пользователя")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> UpdateUserProfileByIdAsync([FromBody] UpdateUserProfileRequest request,
             [FromQuery] string? avatarUrl = null, CancellationToken token = default)
         {
@@ -148,10 +148,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Заблокировать пользователя",
             Description = "Добавляет пользователя в список заблокированных текущего пользователя")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 404)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> BlockUserAsync(Guid blockedUserId, CancellationToken token = default)
         {
             try
@@ -180,10 +180,10 @@ namespace Messenger.API.Controllers
             Summary = "Разблокировать пользователя",
             Description = "Удаляет пользователя из списка заблокированных текущего пользователя"
         )]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 404)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> UnblockUserAsync(Guid blockedUserId, CancellationToken token = default)
         {
             try
@@ -211,9 +211,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Сменить пароль пользователя",
             Description = "Позволяет пользователю сменить текущий пароль, указав старый и новый")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> ChangePasswordAsync([FromBody] ChangePasswordRequest request,
             CancellationToken token = default)
         {
@@ -242,9 +242,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Назначить роль пользователю",
             Description = "Назначает текущему пользователю указанную роль по её идентификатору")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> AssignRoleAsync(Guid roleId, CancellationToken token = default)
         {
             try
@@ -272,9 +272,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Удалить аккаунт пользователя",
             Description = "Удаляет аккаунт текущего пользователя из системы")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> DeleteAccountAsync(CancellationToken token = default)
         {
             try

@@ -23,10 +23,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Регистрация пользователя в системе",
             Description = "Регистрирует нового пользователя по его данным")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 201)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> RegisterUserAsync([FromBody] RegisterRequest registerRequest,
             CancellationToken cancellationToken = default)
         {
@@ -70,9 +70,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Авторизация и аутентификация пользователя",
             Description = "Авторизация и аутентификация пользователя с выдачей JWT-токена")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 500)]
         public async Task<IActionResult> LoginUserAsync([FromBody] LoginRequest loginRequest,
             CancellationToken cancellationToken = default)
         {
@@ -109,10 +109,10 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Выход пользователя из системы",
             Description = "Инвалидация JWT-токена")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
         public IActionResult LogoutUserAsync()
         {
             try
