@@ -37,6 +37,18 @@ namespace Messenger.Infrastructure.Repositories
             await _context.SaveChangesAsync(token);
         }
 
+        public async Task DeleteChatAsync(Chat chat, CancellationToken token = default)
+        {
+            _context.Chats.Remove(chat);
+            await _context.SaveChangesAsync(token);
+        }
+
+        public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _context.Chats
+                .FirstOrDefaultAsync(c => c.ChatId == chatId, token);
+        }
+
         public async Task<IEnumerable<Chat>> GetChatsByUserIdAsync(Guid userId, CancellationToken token = default)
         {
             return await _context.Chats
