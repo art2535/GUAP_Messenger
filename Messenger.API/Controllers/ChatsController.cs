@@ -11,6 +11,7 @@ namespace Messenger.API.Controllers
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     [Route("api/[controller]")]
+    [SwaggerTag("Контроллер для управления чатами")]
     public class ChatsController : ControllerBase
     {
         private readonly IChatService _chatService;
