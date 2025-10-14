@@ -10,5 +10,7 @@ namespace Messenger.Core.Interfaces
         Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default);
         Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId, CancellationToken token = default);
         Task UpdateChatAsync(Chat chat, CancellationToken token = default);
+        Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default);
+        Task DeleteChatAsync(Chat chat, CancellationToken token = default);
     }
 }

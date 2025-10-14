@@ -21,7 +21,7 @@ namespace Messenger.Infrastructure.Services
                 Name = name,
                 Type = type,
                 UserId = creatorId,
-                CreationDate = DateTime.UtcNow
+                CreationDate = DateTime.Now
             };
             await _repository.AddChatAsync(chat, token);
 
@@ -30,7 +30,7 @@ namespace Messenger.Infrastructure.Services
                 ChatId = chat.ChatId,
                 UserId = creatorId,
                 Role = "владелец",
-                JoinDate = DateTime.UtcNow
+                JoinDate = DateTime.Now
             };
             await _repository.AddParticipantAsync(participant, token);
         }
@@ -60,6 +60,16 @@ namespace Messenger.Infrastructure.Services
             {
                 await _repository.DeleteParticipantAsync(deleteParticipant, token);
             }
+        }
+
+        public async Task DeleteChatAsync(Chat chat, CancellationToken token = default)
+        {
+            await _repository.DeleteChatAsync(chat, token);
+        }
+
+        public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _repository.GetChatByIdAsync(chatId, token);
         }
 
         public async Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId, 
