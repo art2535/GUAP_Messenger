@@ -22,5 +22,10 @@ namespace Messenger.Infrastructure.Services
         {
             return await _reactionRepository.GetByMessageIdAsync(messageId, cancellationToken);
         }
+
+        public async Task DeleteReactionAsync(Guid messageId, CancellationToken cancellationToken = default)
+        {
+            await _reactionRepository.DeleteReactionAsync(messageId, cancellationToken);
+        }
     }
 }
