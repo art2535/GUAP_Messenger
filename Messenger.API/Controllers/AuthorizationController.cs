@@ -10,11 +10,11 @@ namespace Messenger.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [SwaggerTag("Контроллер для авторизации и регистрации пользователей")]
-    public class AuthController : ControllerBase
+    public class AuthorizationController : ControllerBase
     {
         private readonly IUserService _userService;
 
-        public AuthController(IUserService userService)
+        public AuthorizationController(IUserService userService)
         {
             _userService = userService;
         }
