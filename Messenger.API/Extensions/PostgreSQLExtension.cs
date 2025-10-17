@@ -1,17 +1,11 @@
 ﻿using Messenger.Infrastructure.Data;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 
 namespace Messenger.API.Extensions
 {
-    /// <summary>
-    /// Класс-расширение для подключения к СУБД PostgreSQL
-    /// </summary>
     public static class PostgreSQLExtension
     {
-        /// <summary>
-        /// Регистрирует подключение к СУБД PostgreSQL
-        /// </summary>
         public static void AddPostgreSQL(this IServiceCollection services, IConfiguration? configuration = null)
         {
             var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString",
@@ -19,21 +13,43 @@ namespace Messenger.API.Extensions
 
             if (string.IsNullOrEmpty(connectionString))
             {
-                if (configuration != null)
+                if (configuration is null)
                 {
-                    services.AddDbContext<GuapMessengerContext>(options =>
-                        options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+                    throw new InvalidOperationException(
+                        "Не указана строка подключения к PostgreSQL. " +
+                        "Добавьте переменную окружения 'PostgresConnectionString' " +
+                        "или настройте 'DefaultConnection' в appsettings.json."
+                    );
                 }
-            }
-            else
-            {
-                services.AddDbContext<GuapMessengerContext>(options =>
-                    options.UseNpgsql(connectionString));
+
+                connectionString = configuration.GetConnectionString("DefaultConnection");
             }
 
-            services.AddIdentity<IdentityUser, IdentityRole>()
-                .AddEntityFrameworkStores<GuapMessengerContext>()
-                .AddDefaultTokenProviders();
+            services.AddDbContext<GuapMessengerContext>(options =>
+                options.UseNpgsql(connectionString));
+        }
+
+        public static void SetTheEnvironmentVariable(bool forMachine = true)
+        {
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Не удалось найти строку подключения 'DefaultConnection' в secrets.json или appsettings.json."
+                );
+            }
+
+            var target = forMachine ? EnvironmentVariableTarget.Machine : EnvironmentVariableTarget.User;
+
+            Environment.SetEnvironmentVariable("PostgresConnectionString", connectionString, target);
         }
     }
 }
