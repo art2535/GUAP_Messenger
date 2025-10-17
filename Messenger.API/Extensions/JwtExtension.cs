@@ -1,35 +1,62 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.Reflection;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace Messenger.API.Extensions
 {
-    /// <summary>
-    /// Класс-расширение для JWT-аутентификации
-    /// </summary>
     public static class JwtExtension
     {
-        /// <summary>
-        /// Регистрирует JWT-аутентификацию с использованием переменной окружения или конфигурационного файла.
-        /// </summary>
         public static void AddJwtService(this IServiceCollection services, IConfiguration? configuration = null)
         {
-            ArgumentNullException.ThrowIfNull(configuration);
+            string? envKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.User)
+                ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.Machine);
 
-            var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.User);
+            byte[] rawKey;
+            string selectedKey;
 
-            if (string.IsNullOrEmpty(jwtSecretKey))
+            if (!string.IsNullOrEmpty(envKey))
             {
-                jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.Machine);
+                try
+                {
+                    rawKey = Convert.FromBase64String(envKey);
+                    selectedKey = envKey;
+                    Console.WriteLine($"AddJwtService: JWT ключ успешно получен из переменной окружения: " +
+                        $"{envKey} (длина: {rawKey.Length} байт)");
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("JWT_SECRET_KEY из переменной окружения " +
+                        "не является корректной Base64 строкой.");
+                }
+            }
+            else if (configuration != null && !string.IsNullOrEmpty(configuration["Jwt:Key"]))
+            {
+                try
+                {
+                    rawKey = Convert.FromBase64String(configuration["Jwt:Key"]);
+                    selectedKey = configuration["Jwt:Key"];
+                    Console.WriteLine($"AddJwtService: JWT ключ успешно получен из конфигурации: " +
+                        $"{selectedKey} (длина: {rawKey.Length} байт)");
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("Jwt:Key из конфигурации не является корректной Base64 строкой.");
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("JWT ключ не найден. Настройте переменную окружения " +
+                    "JWT_SECRET_KEY или параметр Jwt:Key в secrets.json / appsettings.json.");
             }
 
-            var rawKey = !string.IsNullOrEmpty(jwtSecretKey)
-                ? Convert.FromBase64String(jwtSecretKey)
-                : Encoding.UTF8.GetBytes(configuration["Jwt:Key"]);
+            if (rawKey.Length < 32)
+            {
+                throw new InvalidOperationException("JWT ключ слишком короткий. Минимальная длина для HMAC-SHA256 — 32 байта.");
+            }
 
-            var issuer = configuration["Jwt:Issuer"];
-            var audience = configuration["Jwt:Audience"];
+            var issuer = configuration?["Jwt:Issuer"];
+            var audience = configuration?["Jwt:Audience"];
 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -52,42 +79,48 @@ namespace Messenger.API.Extensions
                             var token = context.Request.Cookies["JWT_SECRET"];
                             if (!string.IsNullOrEmpty(token))
                             {
+                                Console.WriteLine($"AddJwtService: Токен получен из куки: " +
+                                    $"{token.Substring(0, Math.Min(token.Length, 50))}...");
                                 context.Token = token;
                             }
-
+                            else
+                            {
+                                Console.WriteLine("AddJwtService: Токен не найден в куки JWT_SECRET.");
+                            }
                             return Task.CompletedTask;
                         }
                     };
                 });
         }
 
-        /// <summary>
-        /// Генерирует новый JWT-секрет и сохраняет его в переменную окружения (на уровне пользователя/машины).
-        /// </summary>
-        /// <param name="forMachine">Установка переменной на уровне машины</param>
         public static void SetTheEnvironmentVariable(bool forMachine = true)
         {
-            var jwtSecretKey = GenerateJwtSecretKey();
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            var jwtSecretKey = configuration["Jwt:Key"];
+
+            if (string.IsNullOrWhiteSpace(jwtSecretKey))
+            {
+                jwtSecretKey = GenerateJwtSecretKey();
+                Console.WriteLine("JWT ключ не найден в конфигурации. Сгенерирован временный ключ.");
+            }
 
             var target = forMachine ? EnvironmentVariableTarget.Machine : EnvironmentVariableTarget.User;
-
             Environment.SetEnvironmentVariable("JWT_SECRET_KEY", jwtSecretKey, target);
+            Console.WriteLine($"JWT_SECRET_KEY установлен в переменную окружения ({target}).");
         }
 
-        /// <summary>
-        /// Генерирует криптографически стойкий ключ длиной 32 байта (по умолчанию).
-        /// </summary>
-        /// <param name="length">Длина ключа в байтах</param>
-        /// <returns></returns>
-        private static string GenerateJwtSecretKey(int length = 32)
+        private static string GenerateJwtSecretKey(int length = 64)
         {
             byte[] bytes = new byte[length];
-
             using (var rng = RandomNumberGenerator.Create())
             {
                 rng.GetBytes(bytes);
             }
-
             return Convert.ToBase64String(bytes);
         }
     }

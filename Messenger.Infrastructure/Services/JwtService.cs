@@ -5,7 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -22,6 +21,25 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> GenerateJwtTokenAsync(User user, CancellationToken token = default)
         {
+            string? key = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.User)
+                ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.Machine)
+                ?? _configuration["Jwt:Key"];
+
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new InvalidOperationException("JWT ключ не найден для создания токена.");
+            }
+
+            try
+            {
+                var keyBytes = Convert.FromBase64String(key);
+                Console.WriteLine($"JwtService: Ключ для создания токена: {key} (длина: {keyBytes.Length} байт)");
+            }
+            catch (FormatException)
+            {
+                throw new InvalidOperationException("JWT ключ не является корректной Base64 строкой.");
+            }
+
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
@@ -37,8 +55,9 @@ namespace Messenger.Infrastructure.Services
                 claims.Add(new Claim(ClaimTypes.Role, role.Name));
             }
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var creds = new SigningCredentials(
+                new SymmetricSecurityKey(Convert.FromBase64String(key)),
+                SecurityAlgorithms.HmacSha256);
 
             var jwtToken = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
