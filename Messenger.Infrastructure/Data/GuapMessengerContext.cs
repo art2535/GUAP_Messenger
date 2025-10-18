@@ -40,9 +40,6 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<UserStatus> UserStatuses { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234");
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("uuid-ossp");
