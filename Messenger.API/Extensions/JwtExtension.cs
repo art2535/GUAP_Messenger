@@ -71,25 +71,6 @@ namespace Messenger.API.Extensions
                         ValidAudience = audience,
                         IssuerSigningKey = new SymmetricSecurityKey(rawKey)
                     };
-
-                    options.Events = new JwtBearerEvents
-                    {
-                        OnMessageReceived = context =>
-                        {
-                            var token = context.Request.Cookies["JWT_SECRET"];
-                            if (!string.IsNullOrEmpty(token))
-                            {
-                                Console.WriteLine($"AddJwtService: Токен получен из куки: " +
-                                    $"{token.Substring(0, Math.Min(token.Length, 50))}...");
-                                context.Token = token;
-                            }
-                            else
-                            {
-                                Console.WriteLine("AddJwtService: Токен не найден в куки JWT_SECRET.");
-                            }
-                            return Task.CompletedTask;
-                        }
-                    };
                 });
         }
 
