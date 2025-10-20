@@ -19,7 +19,7 @@ namespace Messenger.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Служба Messenger запускается в: {time}", DateTimeOffset.Now);
+            _logger.LogInformation("The Messenger service is started in: {time}", DateTimeOffset.Now);
 
             try
             {
@@ -47,6 +47,16 @@ namespace Messenger.Service
                 builder.Services.AddServices();
                 builder.Services.AddJwtService(builder.Configuration);
 
+                builder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("AllowWebApp", policy =>
+                    {
+                        policy.WithOrigins("https://localhost:7128")
+                            .AllowAnyHeader()
+                            .AllowAnyMethod();
+                    });
+                });
+
                 var app = builder.Build();
 
                 if (app.Environment.IsDevelopment())
@@ -54,6 +64,7 @@ namespace Messenger.Service
                     app.UseSwaggerInterface();
                 }
 
+                app.UseCors("AllowWebApp");
                 app.UseHttpsRedirection();
                 app.UseAuthentication();
                 app.UseAuthorization();
@@ -64,24 +75,24 @@ namespace Messenger.Service
                     var db = scope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
                     await db.Database.MigrateAsync(stoppingToken);
 
-                    _logger.LogInformation("Миграции базы данных успешно применены.");
+                    _logger.LogInformation("Database migrations have been successfully applied.");
                 }
 
-                _logger.LogInformation("Встроенный Web API запущен.");
+                _logger.LogInformation("The built-in Web API is running.");
 
                 await app.RunAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Запрошена остановка службы.");
+                _logger.LogInformation("A service stop has been requested.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка фонового сервиса Worker");
+                _logger.LogError(ex, "Worker Background Service error.");
             }
             finally
             {
-                _logger.LogInformation("Служба Messenger остановлена в: {time}", DateTimeOffset.Now);
+                _logger.LogInformation("The Messenger service is stopped in: {time}", DateTimeOffset.Now);
             }
         }
     }
