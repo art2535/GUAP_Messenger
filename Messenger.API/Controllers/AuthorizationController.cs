@@ -41,14 +41,6 @@ namespace Messenger.API.Controllers
                     throw new Exception($"Пользователь с email {user.Login} уже существует");
                 }
 
-                Response.Cookies.Append("JWT_SECRET", token, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddHours(2)
-                });
-
                 return Ok(new
                 {
                     IsSuccess = true,
@@ -80,14 +72,6 @@ namespace Messenger.API.Controllers
             {
                 var token = await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
 
-                Response.Cookies.Append("JWT_SECRET", token, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddHours(2)
-                });
-
                 return Ok(new
                 {
                     IsSuccess = true,
@@ -96,6 +80,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[LOGIN ERROR] {ex.Message}");
                 return BadRequest(new
                 {
                     IsSuccess = false,
@@ -110,34 +95,14 @@ namespace Messenger.API.Controllers
             Summary = "Выход пользователя из системы",
             Description = "Инвалидация JWT-токена")]
         [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 400)]
         [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 500)]
         public IActionResult LogoutUserAsync()
         {
-            try
+            return Ok(new
             {
-                Response.Cookies.Delete("JWT_SECRET", new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict
-                });
-
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Вы успешно вышли из системы"
-                });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
+                IsSuccess = true,
+                Message = "Вы успешно вышли из системы"
+            });
         }
     }
 }
