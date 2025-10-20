@@ -12,7 +12,6 @@ namespace Messenger.Service
                 {
                     logging.ClearProviders();
                     logging.AddConsole();
-                    logging.AddEventLog();
                 })
                 .ConfigureAppConfiguration((context, config) =>
                 {
