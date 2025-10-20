@@ -28,6 +28,16 @@ namespace Messenger.API
             builder.Services.AddServices();
             builder.Services.AddJwtService(builder.Configuration);
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowWebApp", policy =>
+                {
+                    policy.WithOrigins("https://localhost:7128")
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                });
+            });
+
             var app = builder.Build();
 
             if (app.Environment.IsDevelopment())
@@ -35,6 +45,7 @@ namespace Messenger.API
                 app.UseSwaggerInterface();
             }
 
+            app.UseCors("AllowWebApp");
             app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
