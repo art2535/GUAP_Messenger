@@ -32,7 +32,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var (user, token) = await _userService.RegisterAsync(registerRequest.Email, registerRequest.Password,
+                var (user, token, role) = await _userService.RegisterAsync(registerRequest.Email, registerRequest.Password,
                     registerRequest.FirstName, registerRequest.MiddleName, registerRequest.LastName, registerRequest.Phone,
                     registerRequest.BirthDate, null, cancellationToken);
 
@@ -45,6 +45,7 @@ namespace Messenger.API.Controllers
                 {
                     IsSuccess = true,
                     User = user,
+                    Role = role,
                     Token = token
                 });
             }
@@ -70,17 +71,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var token = await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
+                var (token, role) = await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
 
                 return Ok(new
                 {
                     IsSuccess = true,
+                    Role = role,
                     Token = token
                 });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[LOGIN ERROR] {ex.Message}");
                 return BadRequest(new
                 {
                     IsSuccess = false,
