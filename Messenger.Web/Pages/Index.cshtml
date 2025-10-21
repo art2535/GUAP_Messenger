@@ -1,10 +1,37 @@
 ﻿@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Главная";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="container my-5" style="max-width: 900px;">
+    <h1 class="display-4 text-center mb-4">Добро пожаловать в GUAP Messenger</h1>
+    <p class="lead text-justify">
+        GUAP Messenger — это современное веб‑приложение для обмена сообщениями в реальном времени, разработанное для студентов, преподавателей и сотрудников Государственного университета аэрокосмического приборостроения (ГУАП). Оно обеспечивает быстрый и безопасный способ общения внутри университета.
+    </p>
+
+    <h2 class="mt-5">Что вы можете делать</h2>
+    <ul class="list-group list-group-flush mb-4">
+        <li class="list-group-item">Личные и групповые чаты</li>
+        <li class="list-group-item">Отправка текстовых сообщений и файлов</li>
+        <li class="list-group-item">Уведомления в реальном времени благодаря SignalR</li>
+        <li class="list-group-item">Интеграция с внутренней системой аутентификации ГУАП</li>
+        <li class="list-group-item">Серверная часть может быть запущена как Windows-служба для постоянной работы в фоне</li>
+    </ul>
+
+    <h2 class="mt-5">Технологии проекта</h2>
+    <p class="text-justify">
+        Проект построен на современном технологическом стеке:
+    </p>
+    <ul class="list-group list-group-flush mb-4">
+        <li class="list-group-item">Front‑end: ASP.NET Core Razor Pages</li>
+        <li class="list-group-item">Back‑end: ASP.NET Core REST API + SignalR</li>
+        <li class="list-group-item">База данных: PostgreSQL</li>
+        <li class="list-group-item">ORM: Entity Framework Core</li>
+        <li class="list-group-item">Автоматизация сборки и тестирования: GitHub Actions</li>
+    </ul>
+
+    <p class="mt-5 text-center">
+        Готовы начать? Войдите через меню «Личный кабинет» или зарегистрируйтесь, если у вас ещё нет аккаунта.
+    </p>
 </div>
