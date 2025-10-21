@@ -7,7 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="wwwroot\images\logo.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Messenger.API\Messenger.API.csproj" />
+    <ProjectReference Include="..\Messenger.Core\Messenger.Core.csproj" />
   </ItemGroup>
 
 </Project>
