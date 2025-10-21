@@ -13,6 +13,16 @@ namespace Messenger.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<string> GetRoleByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            var user = await _context.Users
+                .Include(r => r.Roles)
+                .FirstOrDefaultAsync(r => r.UserId == userId);
+            
+            var role = user.Roles.FirstOrDefault().Name ?? string.Empty;
+            return role;
+        }
+
         public async Task AddUserToBlacklistAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
         {
             var blockedList = new Blacklist

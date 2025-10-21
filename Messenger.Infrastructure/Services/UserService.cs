@@ -69,11 +69,12 @@ namespace Messenger.Infrastructure.Services
             return await _userRepository.GetUserByIdAsync(id, token);
         }
 
-        public async Task<string> LoginAsync(string login, string password, CancellationToken token = default)
+        public async Task<(string token, string role)> LoginAsync(string login, string password, CancellationToken token = default)
         {
             var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Login == login, token)
-                    ?? throw new UnauthorizedAccessException($"Пользователь с email {login} не найден");
+                .Include(u => u.Roles)
+                .FirstOrDefaultAsync(u => u.Login == login, token)
+                ?? throw new UnauthorizedAccessException($"Пользователь с логином {login} не найден");
 
             bool isPasswordValid = ValidationService.VerifyPassword(password, user.Password);
 
@@ -82,10 +83,15 @@ namespace Messenger.Infrastructure.Services
                 throw new UnauthorizedAccessException("Неверный логин или пароль");
             }
 
-            return await new JwtService(_configuration, _context).GenerateJwtTokenAsync(user, token);
+            var role = user.Roles.FirstOrDefault()?.Name ?? "User";
+
+            string jwtToken = await new JwtService(_configuration, _context)
+                .GenerateJwtTokenAsync(user, token);
+
+            return (jwtToken, role);
         }
 
-        public async Task<(User? user, string? token)> RegisterAsync(string login, string password, string firstName, 
+        public async Task<(User? user, string? token, string? role)> RegisterAsync(string login, string password, string firstName, 
             string? middleName, string lastName, string phone, DateTime birthDate, Guid? roleId = null, 
             CancellationToken token = default)
         {
@@ -129,10 +135,12 @@ namespace Messenger.Infrastructure.Services
 
                 string jwtToken = await new JwtService(_configuration, _context).GenerateJwtTokenAsync(user, token);
 
-                return (user, jwtToken);
+                var userRole = await _userRepository.GetRoleByUserIdAsync(user.UserId);
+
+                return (user, jwtToken, userRole);
             }
 
-            return (registerUser, null);
+            return (registerUser, null, null);
         }
 
         public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)

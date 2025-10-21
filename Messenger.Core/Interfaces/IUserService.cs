@@ -5,9 +5,10 @@ namespace Messenger.Core.Interfaces
 {
     public interface IUserService
     {
-        Task<(User? user, string? token)> RegisterAsync(string login, string password, string firstName, string? middleName, 
-            string lastName, string phone, DateTime birthDate, Guid? roleId = null, CancellationToken token = default);
-        Task<string> LoginAsync(string login, string password, CancellationToken token = default);
+        Task<(User? user, string? token, string? role)> RegisterAsync(string login, string password, string firstName, 
+            string? middleName,  string lastName, string phone, DateTime birthDate, Guid? roleId = null, 
+            CancellationToken token = default);
+        Task<(string token, string role)> LoginAsync(string login, string password, CancellationToken token = default);
         Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default);
         Task<IEnumerable<User>> GetAllUsersAsync(CancellationToken token = default);
         Task BlockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default);
