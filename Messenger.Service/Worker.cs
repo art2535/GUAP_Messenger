@@ -27,24 +27,16 @@ namespace Messenger.Service
 
             try
             {
-                var webProjectPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Messenger.Web"));
+                var solutionPath = @"D:\IDE Projects\Visual Studio\Диплом\GUAP_Messenger";
+                var webProjectPath = Path.Combine(solutionPath, "Messenger.Web");
                 var webRootPath = Path.Combine(webProjectPath, "wwwroot");
+
                 _logger.LogInformation("WebRootPath set to: {path}", webRootPath);
 
                 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
                 {
+                    ContentRootPath = webProjectPath,
                     WebRootPath = webRootPath
-                });
-
-                if (!builder.Environment.IsDevelopment())
-                {
-                    JwtExtension.SetTheEnvironmentVariable(forMachine: false);
-                    PostgreSQLExtension.SetTheEnvironmentVariable(forMachine: false);
-                }
-
-                builder.WebHost.ConfigureKestrel(options =>
-                {
-                    _logger.LogInformation("Configuring Kestrel endpoints from appsettings.json");
                 });
 
                 builder.Configuration
@@ -53,15 +45,32 @@ namespace Messenger.Service
                     .AddUserSecrets<Worker>(optional: true)
                     .AddEnvironmentVariables();
 
-                builder.Services.AddControllers()
-                    .AddApplicationPart(Assembly.Load("Messenger.API"));
+                var webApiUrl = builder.Configuration.GetValue<string>("Kestrel:Endpoints:WebApi:Url")
+                                ?? "https://localhost:7045";
+                var razorPagesUrl = builder.Configuration.GetValue<string>("Kestrel:Endpoints:RazorPages:Url")
+                                    ?? "https://localhost:7128";
 
+                var webApiPort = new Uri(webApiUrl).Port;
+                var razorPagesPort = new Uri(razorPagesUrl).Port;
+
+                builder.WebHost.ConfigureKestrel(options =>
+                {
+                    _logger.LogInformation("Configuring Kestrel endpoints from configuration");
+
+                    options.ListenLocalhost(webApiPort, listenOptions => listenOptions.UseHttps());
+                    options.ListenLocalhost(razorPagesPort, listenOptions => listenOptions.UseHttps());
+                });
+
+                if (!builder.Environment.IsDevelopment())
+                {
+                    JwtExtension.SetTheEnvironmentVariable(forMachine: false);
+                    PostgreSQLExtension.SetTheEnvironmentVariable(forMachine: false);
+                }
+
+                builder.Services.AddControllers().AddApplicationPart(Assembly.Load("Messenger.API"));
                 builder.Services.AddRazorPages()
                     .AddApplicationPart(Assembly.Load("Messenger.Web"))
-                    .AddRazorPagesOptions(options =>
-                    {
-                        options.RootDirectory = "/Pages";
-                    });
+                    .AddRazorPagesOptions(options => options.RootDirectory = "/Pages");
 
                 builder.Services.AddHttpClient();
                 builder.Services.AddSwagger();
@@ -83,8 +92,7 @@ namespace Messenger.Service
                 {
                     options.AddPolicy("AllowWebApp", policy =>
                     {
-                        var razorPagesUrl = builder.Configuration["Kestrel:Endpoints:RazorPages:Url"] ?? "https://localhost:7128";
-                        _logger.LogInformation("CORS configured for origins: {url}, https://localhost:7045, https://localhost:7130", razorPagesUrl);
+                        _logger.LogInformation("CORS configured for origins: {url}, https://localhost:7045", razorPagesUrl);
                         policy.WithOrigins(razorPagesUrl, "https://localhost:7045")
                               .AllowAnyHeader()
                               .AllowAnyMethod()
@@ -115,9 +123,9 @@ namespace Messenger.Service
                 app.UseAuthentication();
                 app.UseAuthorization();
 
-                app.MapWhen(context => context.Request.Host.Port == 7045, webApi =>
+                app.MapWhen(context => context.Request.Host.Port == webApiPort, webApi =>
                 {
-                    _logger.LogInformation("Configuring Web API and Swagger on port 7045");
+                    _logger.LogInformation("Configuring Web API and Swagger on port {port}", webApiPort);
                     if (app.Environment.IsDevelopment())
                     {
                         webApi.UseSwaggerInterface();
@@ -125,15 +133,12 @@ namespace Messenger.Service
                     webApi.UseRouting();
                     webApi.UseAuthentication();
                     webApi.UseAuthorization();
-                    webApi.UseEndpoints(endpoints =>
-                    {
-                        endpoints.MapControllers();
-                    });
+                    webApi.UseEndpoints(endpoints => endpoints.MapControllers());
                 });
 
-                app.MapWhen(context => context.Request.Host.Port == 7128, razorPages =>
+                app.MapWhen(context => context.Request.Host.Port == razorPagesPort, razorPages =>
                 {
-                    _logger.LogInformation("Configuring Razor Pages on port 7128");
+                    _logger.LogInformation("Configuring Razor Pages on port {port}", razorPagesPort);
 
                     razorPages.Use(async (context, next) =>
                     {
@@ -148,9 +153,7 @@ namespace Messenger.Service
                     razorPages.UseStaticFiles(new StaticFileOptions
                     {
                         OnPrepareResponse = ctx =>
-                        {
-                            _logger.LogInformation("Serving static file: {path}", ctx.File.PhysicalPath);
-                        }
+                            _logger.LogInformation("Serving static file: {path}", ctx.File.PhysicalPath)
                     });
 
                     razorPages.UseRouting();
@@ -162,13 +165,12 @@ namespace Messenger.Service
                     razorPages.UseEndpoints(endpoints =>
                     {
                         endpoints.MapRazorPages();
-
                         endpoints.Map("/ws", async context =>
                         {
                             if (context.WebSockets.IsWebSocketRequest)
                             {
                                 using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                                _logger.LogInformation("WebSocket connection established on port 7128");
+                                _logger.LogInformation("WebSocket connection established on port {port}", razorPagesPort);
                                 await context.Response.WriteAsync("WebSocket connected");
                             }
                             else
@@ -186,10 +188,7 @@ namespace Messenger.Service
                     _logger.LogInformation("Database migrations have been successfully applied.");
                 }
 
-                _logger.LogInformation("Starting Web API (Swagger) on {webApiUrl} and Razor Pages on {razorPagesUrl}.",
-                    builder.Configuration["Kestrel:Endpoints:WebApi:Url"] ?? "https://localhost:7045",
-                    builder.Configuration["Kestrel:Endpoints:RazorPages:Url"] ?? "https://localhost:7128");
-
+                _logger.LogInformation("Starting Web API on {webApiUrl} and Razor Pages on {razorPagesUrl}", webApiUrl, razorPagesUrl);
                 await app.RunAsync(stoppingToken);
             }
             catch (OperationCanceledException)
@@ -198,7 +197,7 @@ namespace Messenger.Service
             }
             catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
             {
-                _logger.LogError(ex, "Failed to bind to port. Ensure ports 7045 and 7128 are not in use by other processes.");
+                _logger.LogError(ex, "Failed to bind to port. Ensure ports are not in use by other processes.");
                 throw;
             }
             catch (Exception ex)
