@@ -326,6 +326,33 @@ __pycache__/
 # Telerik's JustMock configuration file
 *.jmconfig
 
+# --- JetBrains Rider / IntelliJ ---
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Optional: keep useful run configurations (uncomment if needed)
+#!.idea/runConfigurations/
+
+# --- ReSharper, DotTrace, DotMemory, etc. ---
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# --- Rider HTTP client requests ---
+.idea/httpRequests/
+
+# --- Rider datasources ---
+.idea/dataSources/
+.idea/dataSources.local.xml
+
+# --- Build tools ---
+*.binlog
+.fake/
+.paket/
+paket-files/
+
 # BizTalk build output
 *.btp.cs
 *.btm.cs
