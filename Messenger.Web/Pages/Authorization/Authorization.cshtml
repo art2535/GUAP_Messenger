@@ -97,16 +97,36 @@
             <span>Ещё нет аккаунта?</span>
             <a asp-page="/Authorization/Registration" class="text-blue-600 hover:text-blue-500">Зарегистрироваться</a>
         </div>
-
-        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
-        {
-            <div class="text-red-600 text-center mt-4">
-                @Model.ErrorMessage
-            </div>
-        }
     </div>
 </div>
 
 <script>
     feather.replace();
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const errors = [];
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <text>
+                errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ErrorMessage)));
+            </text>
+        }
+
+        @foreach (var key in ViewData.ModelState.Keys)
+        {
+            var state = ViewData.ModelState[key];
+            foreach (var error in state.Errors)
+            {
+                <text>
+                    errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(error.ErrorMessage)));
+                </text>
+            }
+        }
+
+        if (errors.length > 0) {
+            alert(errors.join("\n"));
+        }
+    });
 </script>
+

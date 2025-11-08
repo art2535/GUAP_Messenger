@@ -1,0 +1,117 @@
+﻿@page
+@model Messenger.Web.Pages.Authorization.RegistrationModel
+@{
+    ViewData["Title"] = "Регистрация в системе";
+}
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/feather-icons"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+    body {
+        font-family: 'Roboto', sans-serif;
+        background-color: #f8fafc;
+    }
+
+    .guap-gradient {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    }
+
+    .input-field {
+        transition: all 0.3s;
+    }
+
+    .input-field:focus {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    }
+</style>
+
+<div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg mx-auto mt-12">
+    <div class="text-center">
+        <div class="guap-gradient text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i data-feather="user-plus" class="w-8 h-8"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800">GUAP Messenger</h1>
+        <p class="text-gray-600">Создайте новый аккаунт</p>
+    </div>
+
+    <form class="space-y-4" asp-page-handler="Register" method="post" id="registrationForm">
+        <div>
+            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Логин (Email)</label>
+            <input type="email" id="email" name="Email" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="Введите логин" required>
+        </div>
+
+        <div>
+            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
+            <input type="password" id="password" name="Password" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="••••••••" required>
+        </div>
+
+        <div>
+            <label for="lastName" class="block text-sm font-medium text-gray-700 mb-1">Фамилия</label>
+            <input type="text" id="lastName" name="LastName" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="Введите фамилию" required>
+        </div>
+
+        <div>
+            <label for="firstName" class="block text-sm font-medium text-gray-700 mb-1">Имя</label>
+            <input type="text" id="firstName" name="FirstName" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="Введите имя" required>
+        </div>
+
+        <div>
+            <label for="middleName" class="block text-sm font-medium text-gray-700 mb-1">Отчество</label>
+            <input type="text" id="middleName" name="MiddleName" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="Введите отчество (необязательно)">
+        </div>
+
+        <div>
+            <label for="birthday" class="block text-sm font-medium text-gray-700 mb-1">Дата рождения</label>
+            <input type="date" id="birthday" name="Birthday" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" required>
+        </div>
+
+        <div>
+            <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
+            <input type="tel" id="phone" name="Phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none focus:border-blue-500" placeholder="+7 (XXX) XXX-XX-XX" required>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <input id="agree-terms" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" required>
+                <label for="agree-terms" class="ml-2 block text-sm text-gray-700">Согласен с условиями использования</label>
+            </div>
+            <a asp-page="/Authorization/Authorization" class="text-sm text-blue-600 hover:text-blue-500">Уже есть аккаунт?</a>
+        </div>
+
+        <button type="submit" class="w-full guap-gradient text-white py-2 px-4 rounded-lg hover:opacity-90 transition duration-300 font-medium">
+            Зарегистрироваться
+        </button>
+    </form>
+</div>
+
+<script>
+    feather.replace();
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const errors = [];
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <text>
+                errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ErrorMessage)));
+            </text>
+        }
+
+        @foreach (var key in ViewData.ModelState.Keys)
+        {
+            var state = ViewData.ModelState[key];
+            foreach (var error in state.Errors)
+            {
+                <text>
+                    errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(error.ErrorMessage)));
+                </text>
+            }
+        }
+
+        if (errors.length > 0) {
+            alert(errors.join("\n"));
+        }
+    });
+</script>

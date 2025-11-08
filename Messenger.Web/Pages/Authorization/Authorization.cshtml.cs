@@ -14,11 +14,11 @@ namespace Messenger.Web.Pages.Authorization
         public string BodyClass => "auth-page";
 
         [BindProperty]
-        [Required(ErrorMessage = "Логин не может быть пустым")]
+        [Required(ErrorMessage = "Р›РѕРіРёРЅ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј")]
         public string Login { get; set; } = string.Empty;
 
         [BindProperty]
-        [Required(ErrorMessage = "Пароль не может быть пустым")]
+        [Required(ErrorMessage = "РџР°СЂРѕР»СЊ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј")]
         public string Password { get; set; } = string.Empty;
 
         [BindProperty]
@@ -68,7 +68,7 @@ namespace Messenger.Web.Pages.Authorization
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        ErrorMessage = "Авторизация не прошла";
+                        ErrorMessage = "РђРІС‚РѕСЂРёР·Р°С†РёСЏ РЅРµ РїСЂРѕС€Р»Р°";
                         return Page();
                     }
 
@@ -80,7 +80,7 @@ namespace Messenger.Web.Pages.Authorization
 
                     if (userResponse == null || string.IsNullOrEmpty(userResponse.Token))
                     {
-                        ErrorMessage = "Ошибка: токен не получен.";
+                        ErrorMessage = "РћС€РёР±РєР°: С‚РѕРєРµРЅ РёР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ.";
                         return Page();
                     }
 
@@ -109,7 +109,7 @@ namespace Messenger.Web.Pages.Authorization
                 }
                 catch (Exception ex)
                 {
-                    ErrorMessage = "Ошибка соединения с API: " + ex.Message;
+                    ErrorMessage = "РћС€РёР±РєР° СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ API: " + ex.Message;
                     return Page();
                 }
             }

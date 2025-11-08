@@ -95,52 +95,55 @@ namespace Messenger.Infrastructure.Services
             string? middleName, string lastName, string phone, DateTime birthDate, Guid? roleId = null, 
             CancellationToken token = default)
         {
-            var registerUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Login == login && u.Password == password, token);
-            
-            if (registerUser == null)
+            var existingUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Login == login, token);
+
+            if (existingUser != null)
             {
-                login = ValidationService.ValidateEmail(login);
-                var birthDateOnly = ValidationService.ValidateBirthdate(birthDate);
-                password = ValidationService.ValidatePassword(password);
-                
-                var user = new User
-                {
-                    UserId = Guid.NewGuid(),
-                    Login = login,
-                    Password = ValidationService.HashPassword(password),
-                    FirstName = firstName,
-                    MiddleName = middleName,
-                    LastName = lastName,
-                    Phone = phone,
-                    BirthDate = birthDateOnly,
-                    RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Account = new AccountSetting
-                    {
-                        SettingId = Guid.NewGuid(),
-                        AccountId = Guid.NewGuid()
-                    },
-                    UserStatus = new UserStatus
-                    {
-                        UserId = Guid.NewGuid(),
-                        Online = true
-                    }
-                };
-
-                await _userRepository.AddUserAsync(user, token);
-                if (roleId.HasValue)
-                {
-                    await _userRepository.AssignUserRoleAsync(user.UserId, roleId.Value, token);
-                }
-
-                string jwtToken = await new JwtService(_configuration, _context).GenerateJwtTokenAsync(user, token);
-
-                var userRole = await _userRepository.GetRoleByUserIdAsync(user.UserId);
-
-                return (user, jwtToken, userRole);
+                return (existingUser, null, null);
             }
 
-            return (registerUser, null, null);
+            login = ValidationService.ValidateEmail(login);
+            password = ValidationService.ValidatePassword(password);
+            var birthDateOnly = ValidationService.ValidateBirthdate(birthDate);
+
+            var userId = Guid.NewGuid();
+            var user = new User
+            {
+                UserId = userId,
+                Login = login,
+                Password = ValidationService.HashPassword(password),
+                FirstName = firstName,
+                MiddleName = middleName,
+                LastName = lastName,
+                Phone = phone,
+                BirthDate = birthDateOnly,
+                RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Account = new AccountSetting
+                {
+                    SettingId = Guid.NewGuid(),
+                    AccountId = userId
+                },
+                UserStatus = new UserStatus
+                {
+                    UserId = userId,
+                    Online = true
+                }
+            };
+
+            await _userRepository.AddUserAsync(user, token);
+
+            if (roleId.HasValue)
+            {
+                await _userRepository.AssignUserRoleAsync(userId, roleId.Value, token);
+            }
+
+            string jwtToken = await new JwtService(_configuration, _context)
+                .GenerateJwtTokenAsync(user, token);
+
+            string? userRole = await _userRepository.GetRoleByUserIdAsync(userId);
+
+            return (user, jwtToken, userRole);
         }
 
         public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
