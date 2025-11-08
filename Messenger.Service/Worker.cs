@@ -20,6 +20,23 @@ namespace Messenger.Service
             _logger = logger;
             _serviceProvider = serviceProvider;
         }
+        
+        private static string GetSolutionDirectory()
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (directory != null && !directory.GetFiles("*.sln").Any())
+            {
+                directory = directory.Parent;
+            }
+
+            if (directory == null)
+            {
+                throw new DirectoryNotFoundException("Не удалось найти папку решения");
+            }
+
+            return directory.FullName;
+        }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -27,7 +44,7 @@ namespace Messenger.Service
 
             try
             {
-                var solutionPath = @"D:\IDE Projects\Visual Studio\������\GUAP_Messenger";
+                var solutionPath = GetSolutionDirectory();
                 var webProjectPath = Path.Combine(solutionPath, "Messenger.Web");
                 var webRootPath = Path.Combine(webProjectPath, "wwwroot");
 
@@ -78,7 +95,7 @@ namespace Messenger.Service
                 builder.Services.AddRepositories();
                 builder.Services.AddServices();
                 builder.Services.AddJwtService(builder.Configuration);
-                builder.Services.AddWebSockets(options => { });
+                builder.Services.AddWebSockets(_ => { });
 
                 builder.Services.AddDistributedMemoryCache();
                 builder.Services.AddSession(options =>
