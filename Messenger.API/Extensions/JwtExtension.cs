@@ -21,8 +21,6 @@ namespace Messenger.API.Extensions
                 {
                     rawKey = Convert.FromBase64String(envKey);
                     selectedKey = envKey;
-                    Console.WriteLine($"AddJwtService: JWT ключ успешно получен из переменной окружения: " +
-                        $"{envKey} (длина: {rawKey.Length} байт)");
                 }
                 catch (FormatException)
                 {
@@ -36,8 +34,6 @@ namespace Messenger.API.Extensions
                 {
                     rawKey = Convert.FromBase64String(configuration["Jwt:Key"]);
                     selectedKey = configuration["Jwt:Key"];
-                    Console.WriteLine($"AddJwtService: JWT ключ успешно получен из конфигурации: " +
-                        $"{selectedKey} (длина: {rawKey.Length} байт)");
                 }
                 catch (FormatException)
                 {
@@ -101,12 +97,10 @@ namespace Messenger.API.Extensions
             if (string.IsNullOrWhiteSpace(jwtSecretKey))
             {
                 jwtSecretKey = GenerateJwtSecretKey();
-                Console.WriteLine("JWT ключ не найден в конфигурации. Сгенерирован временный ключ.");
             }
 
             var target = forMachine ? EnvironmentVariableTarget.Machine : EnvironmentVariableTarget.User;
             Environment.SetEnvironmentVariable("JWT_SECRET_KEY", jwtSecretKey, target);
-            Console.WriteLine($"JWT_SECRET_KEY установлен в переменную окружения ({target}).");
         }
 
         private static string GenerateJwtSecretKey(int length = 64)
