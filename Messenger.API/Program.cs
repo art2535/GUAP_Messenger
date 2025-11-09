@@ -1,4 +1,5 @@
 using Messenger.API.Extensions;
+using Messenger.API.Hubs;
 
 namespace Messenger.API
 {
@@ -21,6 +22,8 @@ namespace Messenger.API
                 .AddEnvironmentVariables();
 
             builder.Services.AddControllers();
+
+            builder.Services.AddSignalRService();
 
             builder.Services.AddSwagger();
             builder.Services.AddPostgreSQL(builder.Configuration);
@@ -50,6 +53,10 @@ namespace Messenger.API
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
+
+            app.MapHub<ChatHub>("/hubs/chat");
+            app.MapHub<UserStatusHub>("/hubs/userstatus");
+            app.MapHub<NotificationHub>("/hubs/notification");
 
             app.Run();
         }
