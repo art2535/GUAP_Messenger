@@ -1,5 +1,7 @@
-﻿using Messenger.Core.Interfaces;
+﻿using Messenger.API.Providers;
+using Messenger.Core.Interfaces;
 using Messenger.Infrastructure.Services;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Messenger.API.Extensions
 {
@@ -16,6 +18,12 @@ namespace Messenger.API.Extensions
             services.AddScoped<ILoginService, LoginService>();
             services.AddScoped<IUserStatusService, UserStatusService>();
             services.AddScoped<IMessageStatusService, MessageStatusService>();
+        }
+
+        public static void AddSignalRService(this IServiceCollection services)
+        {
+            services.AddSignalR();
+            services.AddSingleton<IUserIdProvider, NameUserIdProvider>();
         }
     }
 }
