@@ -1,4 +1,5 @@
 using Messenger.API.Extensions;
+using Messenger.API.Hubs;
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -84,7 +85,49 @@ namespace Messenger.Service
                     PostgreSQLExtension.SetTheEnvironmentVariable(forMachine: false);
                 }
 
-                builder.Services.AddControllers().AddApplicationPart(Assembly.Load("Messenger.API"));
+                var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET");
+                if (string.IsNullOrEmpty(jwtKey))
+                {
+                    _logger.LogWarning("The JWT key was not found in the environment variable");
+
+                    jwtKey = builder.Configuration.GetValue<string>("Jwt:Key");
+                    if (string.IsNullOrEmpty(jwtKey))
+                    {
+                        _logger.LogWarning("The JWT key was not found in the configuration file");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("The JWT key is found in the configuration file");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("The JWT key is found in the environment variable");
+                }
+
+                var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString");
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    _logger.LogWarning("The connection string was not found in the environment variable");
+
+                    connectionString = builder.Configuration.GetValue<string>("ConnectionStrings:DefaultConnection");
+                    if (string.IsNullOrEmpty(connectionString))
+                    {
+                        _logger.LogWarning("The connection string was not found in the configuration file");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("The connection string is found in the configuration file");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("The connection string is found in the environment variable");
+                }
+
+                builder.Services.AddControllers()
+                    .AddApplicationPart(Assembly.Load("Messenger.API"));
+                builder.Services.AddSignalRService();
                 builder.Services.AddRazorPages()
                     .AddApplicationPart(Assembly.Load("Messenger.Web"))
                     .AddRazorPagesOptions(options => options.RootDirectory = "/Pages");
@@ -150,7 +193,13 @@ namespace Messenger.Service
                     webApi.UseRouting();
                     webApi.UseAuthentication();
                     webApi.UseAuthorization();
-                    webApi.UseEndpoints(endpoints => endpoints.MapControllers());
+                    webApi.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapControllers();
+                        endpoints.MapHub<ChatHub>("/hubs/chat");
+                        endpoints.MapHub<UserStatusHub>("/hubs/userstatus");
+                        endpoints.MapHub<NotificationHub>("/hubs/notification");
+                    });
                 });
 
                 app.MapWhen(context => context.Request.Host.Port == razorPagesPort, razorPages =>
