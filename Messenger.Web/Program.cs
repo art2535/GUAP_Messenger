@@ -1,5 +1,3 @@
-using Messenger.Web.Hubs;
-
 namespace Messenger.Web
 {
     public class Program
@@ -36,9 +34,6 @@ namespace Messenger.Web
             app.MapStaticAssets();
             app.MapRazorPages()
                .WithStaticAssets();
-
-            app.MapHub<ChatHub>("/chatHub");
-            app.MapHub<NotificationHub>("/notificationHub");
 
             app.Run();
         }
