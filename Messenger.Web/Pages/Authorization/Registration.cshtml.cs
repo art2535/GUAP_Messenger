@@ -71,7 +71,7 @@ namespace Messenger.Web.Pages.Authorization
                         return Page();
                     }
 
-                    return RedirectToPage("/Privacy");
+                    return RedirectToPage("/Authorization/Authorization");
                 }
                 catch (Exception ex)
                 {
