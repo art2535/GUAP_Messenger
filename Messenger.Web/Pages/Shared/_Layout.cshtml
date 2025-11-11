@@ -69,14 +69,32 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Authorization/Authorization">Личный кабинет</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" href="https://pro.guap.ru/" target="_blank">Сайт ГУАП</a>
-                        </li>
-                    </ul>
+                    @if (Context.Session.GetString("JWT_SECRET") != null)
+                    {
+                        <ul class="navbar-nav flex-grow-1">
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="https://pro.guap.ru/" target="_blank">Сайт ГУАП</a>
+                            </li>
+                        </ul>
+                        <ul class="navbar-nav ms-auto">
+                            <li class="nav-item">
+                                <form asp-area="" asp-page="/Authorization/Logout" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger">Выйти</button>
+                                </form>
+                            </li>
+                        </ul>
+                    }
+                    else
+                    {
+                        <ul class="navbar-nav flex-grow-1">
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-page="/Authorization/Authorization">Личный кабинет</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" href="https://pro.guap.ru/" target="_blank">Сайт ГУАП</a>
+                            </li>
+                        </ul>
+                    }
                 </div>
             </div>
         </nav>
