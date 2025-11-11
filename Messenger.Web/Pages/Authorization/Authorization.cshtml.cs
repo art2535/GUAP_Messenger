@@ -1,4 +1,5 @@
 using Messenger.Core.DTOs.Auth;
+using Messenger.Web.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
@@ -35,11 +36,9 @@ namespace Messenger.Web.Pages.Authorization
         {
             var sessionToken = HttpContext.Session.GetString("JWT_SECRET");
 
-            var cookieToken = Request.Cookies["JWT_SECRET"];
-
-            if (!string.IsNullOrEmpty(sessionToken) && !string.IsNullOrEmpty(cookieToken))
+            if (!string.IsNullOrEmpty(sessionToken))
             {
-                return RedirectToPage("/Privacy");
+                return RedirectToPage("/Account/Chats");
             }
 
             return Page();
@@ -86,23 +85,12 @@ namespace Messenger.Web.Pages.Authorization
 
                     if (userResponse != null && !string.IsNullOrEmpty(userResponse.Token))
                     {
-                        if (IsRememberedMe)
-                        {
-                            Response.Cookies.Append("JWT_SECRET", userResponse.Token, new CookieOptions
-                            {
-                                HttpOnly = true,
-                                Expires = DateTimeOffset.UtcNow.AddHours(2)
-                            });
-                        }
-                        else
-                        {
-                            HttpContext.Session.SetString("JWT_SECRET", userResponse.Token);
-                        }
-
+                        HttpContext.Session.SetString("JWT_SECRET", userResponse.Token);
                         HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
                         HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
+                        HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
 
-                        return RedirectToPage("/Privacy");
+                        return RedirectToPage("/Account/Chats");
                     }
 
                     return Page();
@@ -114,13 +102,5 @@ namespace Messenger.Web.Pages.Authorization
                 }
             }
         }
-    }
-
-    public class LoginResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string? Role { get; set; } = string.Empty;
-        public string? Token { get; set; } = string.Empty;
-        public string? Error { get; set; } = string.Empty;
     }
 }
