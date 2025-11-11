@@ -69,7 +69,7 @@ namespace Messenger.Infrastructure.Services
             return await _userRepository.GetUserByIdAsync(id, token);
         }
 
-        public async Task<(string token, string role)> LoginAsync(string login, string password, CancellationToken token = default)
+        public async Task<(string token, Guid userId, string role)> LoginAsync(string login, string password, CancellationToken token = default)
         {
             var user = await _context.Users
                 .Include(u => u.Roles)
@@ -88,7 +88,7 @@ namespace Messenger.Infrastructure.Services
             string jwtToken = await new JwtService(_configuration, _context)
                 .GenerateJwtTokenAsync(user, token);
 
-            return (jwtToken, role);
+            return (jwtToken, user.UserId, role);
         }
 
         public async Task<(User? user, string? token, string? role)> RegisterAsync(string login, string password, string firstName, 

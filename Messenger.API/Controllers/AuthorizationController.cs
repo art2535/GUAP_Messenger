@@ -71,11 +71,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var (token, role) = await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
+                var (token, userId, role) = 
+                    await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
 
                 return Ok(new
                 {
                     IsSuccess = true,
+                    UserId = userId,
                     Role = role,
                     Token = token
                 });
