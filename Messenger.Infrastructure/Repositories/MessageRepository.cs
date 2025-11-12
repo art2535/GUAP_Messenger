@@ -27,6 +27,7 @@ namespace Messenger.Infrastructure.Repositories
                 .Include(m => m.Recipient)
                 .Include(m => m.Reactions)
                     .ThenInclude(r => r.User)
+                .OrderBy(m => m.SendTime)
                 .ToListAsync(token);
         }
 
