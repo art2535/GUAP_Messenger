@@ -14,7 +14,7 @@ public partial class Message
     public Guid SenderId { get; set; }
 
     [Column("Recipient_ID")]
-    public Guid RecipientId { get; set; }
+    public Guid? RecipientId { get; set; }
 
     [Column("Chat_ID")]
     public Guid ChatId { get; set; }
