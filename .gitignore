@@ -10,6 +10,9 @@
 *.userosscache
 *.sln.docstates
 
+# Database migrations
+Messenger.Infrastructure/Migrations/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
