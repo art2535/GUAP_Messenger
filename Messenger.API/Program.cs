@@ -1,5 +1,5 @@
 using Messenger.API.Extensions;
-using Messenger.API.Hubs;
+using Messenger.Core.Hubs;
 
 namespace Messenger.API
 {
@@ -37,7 +37,8 @@ namespace Messenger.API
                 {
                     policy.WithOrigins("https://localhost:7128")
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 });
             });
 
