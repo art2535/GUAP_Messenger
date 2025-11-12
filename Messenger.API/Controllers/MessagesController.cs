@@ -1,9 +1,11 @@
 ﻿using Messenger.Core.DTOs.Messages;
+using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
 
@@ -18,42 +20,67 @@ namespace Messenger.API.Controllers
         private readonly IMessageService _messageService;
         private readonly IMessageStatusService _messageStatusService;
         private readonly IReactionService _reactionService;
+        private readonly IHubContext<ChatHub> _hubContext;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
-            IReactionService reactionService)
+            IReactionService reactionService, IHubContext<ChatHub> hubContext)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
             _reactionService = reactionService;
+            _hubContext = hubContext;
         }
 
-        [HttpPost]
+        [HttpPost("{chatId}")]
         [SwaggerOperation(
             Summary = "Отправить сообщение",
             Description = "Отправляет новое сообщение в указанный чат. Требуется авторизация.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> SendMessageAsync([FromBody] SendMessageRequest request, 
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> SendMessageAsync(Guid chatId, [FromForm] string? messageText,
+            [FromForm] IFormFile[]? files, CancellationToken cancellationToken = default)
         {
             try
             {
-                var senderId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                await _messageService.SendMessageAsync(request.ChatId, senderId, request.ReceiverId, request.Content,
-                    request.HasAttachments, cancellationToken);
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userIdClaim))
+                    return Unauthorized(new { isSuccess = false, error = "Пользователь не авторизован." });
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение успешно отправлено"
-                });
+                if (chatId == Guid.Empty)
+                    return BadRequest(new { isSuccess = false, error = "Некорректный идентификатор чата." });
+
+                if (string.IsNullOrWhiteSpace(messageText) && (files == null || files.Length == 0))
+                    return BadRequest(new { isSuccess = false, error = "Пустое сообщение." });
+
+                if (!Guid.TryParse(userIdClaim, out Guid senderId))
+                    return Unauthorized(new { isSuccess = false, error = "Некорректный идентификатор пользователя." });
+
+                var hasAttachments = files != null && files.Length > 0;
+
+                var result = await _messageService.SendMessageAsync(
+                    chatId, senderId, null,
+                    messageText, hasAttachments, cancellationToken);
+
+                if (!result.isSuccess)
+                    return BadRequest(new
+                    {
+                        isSuccess = false,
+                        error = result.error,
+                        innerError = result.innerError
+                    });
+
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("ReceiveMessage", result.data);
+
+                return Ok(new { isSuccess = true, data = result.data });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new
                 {
-                    IsSuccess = false,
-                    Error = ex.Message
+                    isSuccess = false,
+                    error = ex.Message,
+                    innerError = ex.InnerException?.Message
                 });
             }
         }
