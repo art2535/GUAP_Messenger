@@ -9,5 +9,8 @@ namespace Messenger.Core.DTOs.Chats
 
         [Required]
         public string Type { get; set; } = string.Empty;
+
+        [Required]
+        public List<Guid> UserIds { get; set; } = new();
     }
 }
