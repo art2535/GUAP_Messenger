@@ -59,11 +59,25 @@ namespace Messenger.API.Controllers
         public async Task<IActionResult> CreateNewChatAsync([FromBody] CreateChatRequest request,
             CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest(new { IsSuccess = false, Error = "Название чата обязательно" });
+
+            if (request.UserIds == null || request.UserIds.Count == 0)
+                return BadRequest(new { IsSuccess = false, Error = "Выберите хотя бы одного участника" });
+
+            if (request.Type == "private" && request.UserIds.Count != 1)
+                return BadRequest(new { IsSuccess = false, Error = "Приватный чат должен содержать ровно одного участника" });
+
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var chat = await _chatService.CreateChatAsync(request.Name, request.Type, userId, cancellationToken);
 
-                await _chatService.CreateChatAsync(request.Name, request.Type, userId, cancellationToken);
+                foreach (var uid in request.UserIds)
+                {
+                    if (uid != userId)
+                        await _chatService.AddParticipantToChatAsync(chat.ChatId, uid, cancellationToken);
+                }
 
                 return Ok(new
                 {
@@ -110,38 +124,31 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpPatch("{chatId}")]
+        [HttpPut("{chatId}")]
         [SwaggerOperation(
             Summary = "Обновить информацию о чате",
             Description = "Изменяет название и тип чата.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> UpdateChatAsync(Guid chatId, [FromBody] UpdateChatRequest request,
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> UpdateChatAsync(Guid chatId, [FromBody] UpdateChatRequest request, CancellationToken ct)
         {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest(new { IsSuccess = false, Error = "Название не может быть пустым" });
+
             try
             {
-                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken)
-                    ?? throw new Exception("Чат не найден");
-                
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null) 
+                    return NotFound(new { IsSuccess = false, Error = "Чат не найден" });
+
                 chat.Name = request.Name;
-                chat.Type = request.Type;
+                await _chatService.UpdateChatAsync(chat, ct);
 
-                await _chatService.UpdateChatAsync(chat, cancellationToken);
-
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Чат успешно обновлен"
-                });
+                return Ok(new { IsSuccess = true, Message = "Чат обновлён" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
 

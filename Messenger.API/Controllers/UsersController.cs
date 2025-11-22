@@ -21,6 +21,35 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        [HttpGet("search")]
+        [SwaggerOperation(
+            Summary = "",
+            Description = "")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> Search([FromQuery] string query, CancellationToken token = default)
+        {
+            if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+                return Ok(new { isSuccess = true, data = Array.Empty<object>() });
+
+            var result = await _userService.SearchUsersAsync(query.Trim(), token);
+
+            var data = result.Select(u => new
+            {
+                id = u.Id,
+                name = u.Name,
+                avatar = u.Avatar ?? "https://static.photos/people/200x200/default"
+            });
+
+            return Ok(new
+            {
+                isSuccess = true,
+                data
+            });
+        }
+
         [HttpGet]
         [SwaggerOperation(
             Summary = "Получить список всех пользователей",

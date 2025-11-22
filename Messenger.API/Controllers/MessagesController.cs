@@ -217,38 +217,37 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpPatch("{messageId}/update")]
+        [HttpPut("{messageId}")]
         [SwaggerOperation(
             Summary = "Обновить сообщение",
             Description = "Позволяет изменить содержимое сообщения (например, отредактировать текст).")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> UpdateMessageAsync(Guid messageId, 
-            [FromBody] UpdateMessageRequest request, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> UpdateMessageAsync(Guid messageId, [FromBody] UpdateMessageRequest request, CancellationToken ct)
         {
+            if (string.IsNullOrWhiteSpace(request.MessageText))
+                return BadRequest(new { IsSuccess = false, Error = "Текст не может быть пустым" });
+
             try
             {
-                var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, cancellationToken)
-                    ?? throw new Exception("Сообщение не найдено");
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
+                if (message == null) 
+                    return NotFound(new { IsSuccess = false, Error = "Сообщение не найдено" });
+                if (message.SenderId != userId) 
+                    return Forbid();
 
                 message.MessageText = request.MessageText;
-                message.HasAttachments = request.HasAttachmets;
+                await _messageService.UpdateMessageAsync(message, ct);
 
-                await _messageService.UpdateMessageAsync(message, cancellationToken);
+                await _hubContext.Clients.Group(request.ChatId.ToString())
+                    .SendAsync("ReceiveMessage", message);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение успешно обновлено"
-                });
+                return Ok(new { IsSuccess = true, Message = "Сообщение обновлено" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
 
@@ -286,28 +285,26 @@ namespace Messenger.API.Controllers
             Description = "Удаляет сообщение по его идентификатору.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> DeleteMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> DeleteMessageAsync(Guid messageId, [FromQuery] Guid chatId, CancellationToken ct)
         {
             try
             {
-                Guid chatId = Guid.NewGuid();
-                var deletedMessage = await _messageService.GetMessageByIdAsync(chatId, messageId, cancellationToken);
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
+                if (message == null) 
+                    return NotFound();
+                if (message.SenderId != userId)
+                    return Forbid();
 
-                await _messageService.DeleteMessageAsync(messageId, cancellationToken);
+                await _messageService.DeleteMessageAsync(messageId, ct);
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("MessageDeleted", new { messageId });
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение успешно удалено"
-                });
+                return Ok(new { IsSuccess = true, Message = "Сообщение удалено" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
     }
