@@ -34,10 +34,6 @@
             background-color: #e5e7eb;
         }
 
-        #chats-list {
-            max-height: calc(100vh - 200px);
-        }
-
         .attachment {
             color: #3b82f6;
             text-decoration: underline;
@@ -54,44 +50,13 @@
             z-index: 50;
             opacity: 0;
             visibility: hidden;
-            transition: opacity .3s ease, visibility .3s ease;
+            transition: all .3s ease;
         }
 
             .modal.show {
                 opacity: 1;
                 visibility: visible;
             }
-
-        #context-menu {
-            position: absolute;
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,.1);
-            z-index: 100;
-            min-width: 140px;
-            display: none;
-        }
-
-            #context-menu button {
-                width: 100%;
-                padding: 8px 12px;
-                text-align: left;
-                border: none;
-                background: none;
-                font-size: 14px;
-                color: #374151;
-                cursor: pointer;
-            }
-
-                #context-menu button:hover {
-                    background: #f3f4f6;
-                }
-
-                #context-menu button.danger:hover {
-                    background: #fef2f2;
-                    color: #dc2626;
-                }
 
         #connection-status .w-3 {
             transition: background-color 0.3s ease;
@@ -101,9 +66,8 @@
 <body class="h-screen">
     <script>
         const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_SECRET") ?? "")';
-
         if (!JWT_TOKEN || JWT_TOKEN === '') {
-            document.write('<div class="p-4 text-red-500">Ошибка: токен не найден в сессии. <a href="/Authorization/Login">Войти заново</a></div>');
+            document.write('<div class="p-8 text-center text-red-600 text-xl">Ошибка авторизации. <a href="/Authorization/Login" class="underline">Войти заново</a></div>');
         }
     </script>
 
@@ -119,6 +83,7 @@
                 </div>
                 <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700"><i data-feather="settings" class="w-5 h-5"></i></a>
             </div>
+
             <div class="p-3 border-b border-gray-200 space-y-2">
                 <div class="relative">
                     <input type="text" id="chat-search" placeholder="Поиск по чатам"
@@ -129,9 +94,11 @@
                     <i data-feather="plus" class="w-4 h-4 mr-2"></i> Создать чат
                 </button>
             </div>
+
             <div class="flex-1 overflow-y-auto" id="chats-list">
                 <div class="text-gray-500 p-4">Загрузка чатов...</div>
             </div>
+
             <div class="p-4 border-t border-gray-200">
                 <div class="flex items-center space-x-3">
                     <img src="https://static.photos/people/200x200/4" alt="User" class="w-10 h-10 rounded-full">
@@ -141,8 +108,7 @@
                     </div>
                     <div id="connection-status" class="relative ml-auto group">
                         <div id="status-dot" class="w-3 h-3 bg-gray-400 rounded-full"></div>
-                        <div id="status-tooltip"
-                             class="absolute bottom-full right-0 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
+                        <div id="status-tooltip" class="absolute bottom-full right-0 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
                             Подключение...
                         </div>
                     </div>
@@ -159,7 +125,7 @@
                 <h2 id="chat-title" class="font-medium">Выберите чат</h2>
             </div>
             <div id="messages-container" class="flex-1 p-4 overflow-y-auto bg-gray-50">
-                <div id="no-chat-selected" class="flex items-center justify-center h-full text-gray-500">
+                <div class="flex items-center justify-center h-full text-gray-500">
                     <p>Выберите чат для просмотра сообщений</p>
                 </div>
             </div>
@@ -178,191 +144,365 @@
         </div>
     </div>
 
+    <!-- Модальное окно создания чата -->
+    <div id="create-chat-modal" class="modal">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold">Создать чат</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <input type="text" id="chat-name" placeholder="Название чата" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+                <div>
+                    <label class="block text-sm font-medium mb-3">Тип чата</label>
+                    <div class="flex gap-6">
+                        <label class="flex items-center"><input type="radio" name="chat-type" value="private" checked class="mr-2"><span>Приватный</span></label>
+                        <label class="flex items-center"><input type="radio" name="chat-type" value="group" class="mr-2"><span>Групповой</span></label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Участники</label>
+                    <div class="relative">
+                        <input type="text" id="user-search" placeholder="Начните вводить имя..." autocomplete="off"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div id="user-search-results" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto hidden"></div>
+                    </div>
+                    <div id="selected-users" class="mt-3 flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end gap-3">
+                <button id="cancel-create" class="px-5 py-2.5 text-gray-600 hover:text-gray-800 font-medium">Отмена</button>
+                <button id="confirm-create" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Создать</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         feather.replace();
-
         const API_BASE = 'https://localhost:7045/api';
         const HUB_URL = 'https://localhost:7045/hubs/chat';
         const token = JWT_TOKEN;
 
+        // Элементы
         const chatsList = document.getElementById('chats-list');
         const messagesContainer = document.getElementById('messages-container');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const fileInput = document.getElementById('file-input');
         const attachedFiles = document.getElementById('attached-files');
-        const connectionStatus = document.getElementById('connection-status');
+        const createChatBtn = document.getElementById('create-chat-btn');
+
+        // Модалка
+        const modal = document.getElementById('create-chat-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelBtn = document.getElementById('cancel-create');
+        const confirmBtn = document.getElementById('confirm-create');
+        const chatNameInput = document.getElementById('chat-name');
+        const userSearchInput = document.getElementById('user-search');
+        const searchResults = document.getElementById('user-search-results');
+        const selectedUsersContainer = document.getElementById('selected-users');
 
         let currentChatId = null;
         let selectedFiles = [];
         let connection = null;
+        let isSending = false;
+        let selectedUserIds = [];
+        let lastQuery = '';
+        let searchTimeout = null;
 
-        function updateConnectionStatus(status, color) {
-            const dot = document.getElementById('status-dot');
-            const tooltip = document.getElementById('status-tooltip');
+        // === Поиск пользователей (динамический) ===
+        async function searchUsers() {
+            const query = userSearchInput.value.trim();
+            if (query.length < 2) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+            if (query === lastQuery) return;
+            lastQuery = query;
 
-            if (tooltip) tooltip.textContent = status;
+            searchResults.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
+            searchResults.classList.remove('hidden');
+            feather.replace();
 
-            if (!dot) return;
-            switch (color) {
-                case 'green':
-                    dot.className = 'w-3 h-3 bg-green-500 rounded-full';
-                    break;
-                case 'orange':
-                    dot.className = 'w-3 h-3 bg-orange-500 rounded-full';
-                    break;
-                case 'red':
-                    dot.className = 'w-3 h-3 bg-red-500 rounded-full';
-                    break;
-                default:
-                    dot.className = 'w-3 h-3 bg-gray-400 rounded-full';
+            try {
+                const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const json = await res.json();
+
+                searchResults.innerHTML = '';
+                if (!json.isSuccess || !json.data || json.data.length === 0) {
+                    searchResults.innerHTML = '<div class="p-4 text-gray-500 text-sm">Ничего не найдено</div>';
+                    return;
+                }
+
+                json.data
+                    .filter(u => !selectedUserIds.includes(u.id))
+                    .slice(0, 8)
+                    .forEach(user => {
+                        const div = document.createElement('div');
+                        div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition';
+                        div.innerHTML = `
+                            <img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
+                            <span class="font-medium">${user.name}</span>
+                        `;
+                        div.onclick = () => selectUser(user);
+                        searchResults.appendChild(div);
+                    });
+
+            } catch (err) {
+                searchResults.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка поиска</div>';
             }
         }
 
-        async function startSignalR() {
-            if (!token) {
-                updateConnectionStatus('Нет токена', 'red');
+        function selectUser(user) {
+            if (selectedUserIds.includes(user.id)) return;
+
+            const isPrivate = document.querySelector('input[name="chat-type"]:checked').value === 'private';
+            if (isPrivate && selectedUserIds.length >= 1) {
+                alert('В приватном чате может быть только один участник');
                 return;
             }
 
-            const url = `${HUB_URL}?access_token=${encodeURIComponent(token)}`;
+            selectedUserIds.push(user.id);
 
+            const tag = document.createElement('div');
+            tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
+            tag.innerHTML = `
+                ${user.name}
+                <button type="button" class="hover:bg-blue-200 rounded-full p-0.5">
+                    <i data-feather="x" class="w-4 h-4"></i>
+                </button>
+            `;
+            tag.querySelector('button').onclick = (e) => {
+                e.stopPropagation();
+                selectedUserIds = selectedUserIds.filter(id => id !== user.id);
+                tag.remove();
+                feather.replace();
+            };
+            selectedUsersContainer.appendChild(tag);
+            feather.replace();
+
+            userSearchInput.value = '';
+            searchResults.classList.add('hidden');
+        }
+
+        userSearchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchUsers, 300);
+        });
+
+        document.addEventListener('click', e => {
+            if (!userSearchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+
+        // === Создание чата ===
+        async function createChat() {
+            const name = chatNameInput.value.trim();
+            const type = document.querySelector('input[name="chat-type"]:checked').value;
+
+            if (!name) return alert('Введите название чата');
+            if (selectedUserIds.length === 0) return alert('Выберите хотя бы одного участника');
+            if (type === 'private' && selectedUserIds.length !== 1) return alert('В приватном чате должен быть ровно один участник');
+
+            try {
+                const res = await fetch(`${API_BASE}/chats/create-chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, type, userIds: selectedUserIds })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка создания');
+
+                modal.classList.remove('show');
+                await loadChats();
+
+                setTimeout(() => {
+                    const newChat = [...document.querySelectorAll('.chat-item')]
+                        .find(el => el.querySelector('h3')?.textContent.trim() === name);
+                    newChat?.click();
+                }, 500);
+
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+        }
+
+        createChatBtn.onclick = () => {
+            selectedUserIds = [];
+            selectedUsersContainer.innerHTML = '';
+            chatNameInput.value = '';
+            userSearchInput.value = '';
+            lastQuery = '';
+            document.querySelector('input[value="private"]').checked = true;
+            modal.classList.add('show');
+            setTimeout(() => chatNameInput.focus(), 100);
+        };
+
+        closeModalBtn.onclick = cancelBtn.onclick = () => modal.classList.remove('show');
+        confirmBtn.onclick = createChat;
+
+        // === Остальное (SignalR, чаты, сообщения) ===
+        function updateConnectionStatus(text, color) {
+            const dot = document.getElementById('status-dot');
+            const tooltip = document.getElementById('status-tooltip');
+            if (tooltip) tooltip.textContent = text;
+            dot.className = `w-3 h-3 rounded-full ${color === 'green' ? 'bg-green-500' : color === 'orange' ? 'bg-orange-500' : 'bg-red-500'}`;
+        }
+
+        async function startSignalR() {
+            const url = `${HUB_URL}?access_token=${encodeURIComponent(token)}`;
             connection = new signalR.HubConnectionBuilder()
                 .withUrl(url)
                 .withAutomaticReconnect([0, 2000, 10000])
-                .configureLogging(signalR.LogLevel.Information)
                 .build();
 
             connection.on('ReceiveMessage', msg => {
-                if (msg.chatId === currentChatId) appendMessage(msg);
+                if (msg.chatId === currentChatId) {
+                    appendMessage(msg);
+                    scrollToBottom();
+                }
             });
 
-            connection.onreconnecting(() => {
-                updateConnectionStatus('Переподключение...', 'orange');
-            });
-
-            connection.onreconnected(() => {
-                updateConnectionStatus('Онлайн', 'green');
-                rejoinCurrentChat();
-            });
-
-            connection.onclose(() => {
-                updateConnectionStatus('Отключено', 'red');
-                setTimeout(startSignalR, 5000);
-            });
+            connection.onreconnecting(() => updateConnectionStatus('Переподключение...', 'orange'));
+            connection.onreconnected(() => { updateConnectionStatus('Онлайн', 'green'); rejoinCurrentChat(); });
+            connection.onclose(() => { updateConnectionStatus('Отключено', 'red'); setTimeout(startSignalR, 5000); });
 
             try {
                 await connection.start();
                 updateConnectionStatus('Онлайн', 'green');
             } catch (err) {
-                console.error('SignalR start error:', err);
                 updateConnectionStatus('Ошибка', 'red');
                 setTimeout(startSignalR, 5000);
             }
         }
 
-        async function rejoinCurrentChat() {
-            if (currentChatId && connection?.state === signalR.HubConnectionState.Connected) {
-                await connection.invoke('JoinChat', currentChatId);
-            }
-        }
-
-        async function joinChat(chatId) {
-            if (connection?.state === signalR.HubConnectionState.Connected) {
-                await connection.invoke('JoinChat', chatId);
-            }
-        }
-
-        async function leaveChat(chatId) {
-            if (connection?.state === signalR.HubConnectionState.Connected) {
-                await connection.invoke('LeaveChat', chatId);
-            }
-        }
+        async function joinChat(id) { if (connection?.state === signalR.HubConnectionState.Connected) await connection.invoke('JoinChat', id).catch(() => {}); }
+        async function leaveChat(id) { if (connection?.state === signalR.HubConnectionState.Connected) await connection.invoke('LeaveChat', id).catch(() => {}); }
+        async function rejoinCurrentChat() { if (currentChatId) await joinChat(currentChatId); }
 
         async function loadChats() {
             try {
-                const res = await fetch(`${API_BASE}/chats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const result = await res.json();
-                if (!result.isSuccess || !result.data?.length) {
-                    chatsList.innerHTML = '<div class="p-4 text-gray-500">Чатов нет</div>';
-                    return;
-                }
-                chatsList.innerHTML = '';
-                result.data.forEach(chat => {
-                    const chatId = chat.chatId || chat.id;
-                    if (!chatId) return;
+                const res = await fetch(`${API_BASE}/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const json = await res.json();
+                chatsList.innerHTML = !json.isSuccess || !json.data?.length
+                    ? '<div class="p-4 text-gray-500">Чатов нет</div>'
+                    : '';
+                json.data?.forEach(chat => {
                     const div = document.createElement('div');
-                    div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer';
-                    div.dataset.chatId = chatId;
+                    div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
+                    div.dataset.chatId = chat.chatId || chat.id;
                     div.innerHTML = `
                         <div class="relative">
-                            <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full">
+                            <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
                             <span class="absolute bottom-0 right-0 w-3 h-3 ${chat.isOnline ? 'bg-green-500' : 'bg-gray-300'} rounded-full border-2 border-white"></span>
                         </div>
                         <div class="flex-1 min-w-0">
                             <h3 class="font-medium truncate">${chat.name || 'Без имени'}</h3>
-                            <p class="text-sm text-gray-500 truncate">${chat.lastMessage || ''}</p>
+                            <p class="text-sm text-gray-500 truncate">${chat.lastMessage || 'Нет сообщений'}</p>
                         </div>
                     `;
                     chatsList.appendChild(div);
                 });
+            } catch { chatsList.innerHTML = '<div class="p-4 text-red-500">Ошибка загрузки чатов</div>'; }
+        }
+
+        async function loadMessages(chatId) {
+            messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+            try {
+                const res = await fetch(`${API_BASE}/messages/${chatId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const json = await res.json();
+                messagesContainer.innerHTML = '';
+                (json.data || []).forEach(appendMessage);
+                scrollToBottom();
+            } catch {
+                messagesContainer.innerHTML = '<p class="text-red-500 text-center">Ошибка загрузки сообщений</p>';
+            }
+        }
+
+        function appendMessage(msg) {
+            const isMine = msg.senderId === '@Model.UserId';
+            const div = document.createElement('div');
+            div.className = `mb-4 flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            div.innerHTML = `
+                <div class="inline-block max-w-xs px-4 py-2 rounded-2xl shadow-sm ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'}">
+                    ${msg.messageText ? `<p class="break-words">${msg.messageText}</p>` : ''}
+                    <div class="text-xs mt-1 opacity-70">
+                        ${msg.status === 'Read' ? 'Прочитано' : msg.status === 'Delivered' ? 'Доставлено' : 'Отправлено'}
+                        ${msg.sentAt ? ' · ' + new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                </div>
+            `;
+            messagesContainer.appendChild(div);
+        }
+
+        function scrollToBottom() { messagesContainer.scrollTop = messagesContainer.scrollHeight; }
+
+        async function sendMessage() {
+            if (isSending || !currentChatId) return;
+            const text = messageInput.value.trim();
+            if (!text && selectedFiles.length === 0) return;
+
+            isSending = true;
+            const oldIcon = sendButton.innerHTML;
+            sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
+            feather.replace();
+
+            const form = new FormData();
+            if (text) form.append('messageText', text);
+            selectedFiles.forEach(f => form.append('files', f));
+
+            try {
+                const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: form
+                });
+                const json = await res.json();
+                if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
+
+                messageInput.value = '';
+                selectedFiles = [];
+                attachedFiles.innerHTML = '';
+                fileInput.value = '';
             } catch (err) {
-                chatsList.innerHTML = `<div class="p-4 text-red-500">Ошибка: ${err.message}</div>`;
+                alert('Не удалось отправить: ' + err.message);
+            } finally {
+                isSending = false;
+                sendButton.innerHTML = oldIcon;
+                feather.replace();
+                messageInput.focus();
             }
         }
 
         chatsList.addEventListener('click', async e => {
             const item = e.target.closest('.chat-item');
             if (!item) return;
-            const newId = item.dataset.chatId;
-            if (currentChatId === newId) return;
+            const chatId = item.dataset.chatId;
+            if (currentChatId === chatId) return;
+
             if (currentChatId) await leaveChat(currentChatId);
-            currentChatId = newId;
-            document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active'));
+            currentChatId = chatId;
+            document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
-            await loadMessages(currentChatId);
-            await joinChat(currentChatId);
+            document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
+
+            await loadMessages(chatId);
+            await joinChat(chatId);
         });
 
-        async function loadMessages(chatId) {
-            messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
-            try {
-                const res = await fetch(`${API_BASE}/messages/${chatId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const result = await res.json();
-                messagesContainer.innerHTML = '';
-                (result.data || []).forEach(appendMessage);
-                scrollToBottom();
-            } catch (err) {
-                messagesContainer.innerHTML = `<p class="text-red-500 text-center">${err.message}</p>`;
-            }
-        }
-
-        function appendMessage(msg) {
-            const isMine = msg.senderId === '@Model.UserId';
-            const el = document.createElement('div');
-            el.className = `mb-3 ${isMine ? 'text-right' : 'text-left'}`;
-            el.innerHTML = `
-                <div class="inline-block max-w-xs px-4 py-2 rounded-lg shadow-sm ${isMine ? 'bg-blue-500 text-white' : 'bg-white'}">
-                    ${msg.messageText || ''}
-                    <div class="text-xs mt-1 ${isMine ? 'text-blue-200' : 'text-gray-500'}">
-                        ${msg.status === 'Read' ? 'Прочитано' : msg.status === 'Delivered' ? 'Доставлено' : 'Отправлено'}
-                    </div>
-                </div>
-            `;
-            messagesContainer.appendChild(el);
-        }
-
-        function scrollToBottom() {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.onclick = sendMessage;
         messageInput.addEventListener('keydown', e => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -370,61 +510,19 @@
             }
         });
 
-        fileInput.addEventListener('change', () => {
+        fileInput.onchange = () => {
             selectedFiles = Array.from(fileInput.files);
-            attachedFiles.innerHTML = selectedFiles
-                .map(f => `<span class="attachment">${f.name}</span>`)
-                .join(', ');
-        });
+            attachedFiles.innerHTML = selectedFiles.length
+                ? selectedFiles.map(f => `<span class="attachment mr-2">${f.name}</span>`).join('')
+                : '';
+        };
 
-        async function sendMessage() {
-            if (!currentChatId || !/^[0-9a-fA-F-]{36}$/.test(currentChatId)) {
-                alert('Некорректный ID чата');
-                return;
-            }
-
-            const text = messageInput.value.trim();
-            if (!text && selectedFiles.length === 0) return;
-
-            const formData = new FormData();
-            if (text) formData.append('messageText', text);
-            selectedFiles.forEach(file => formData.append('files', file));
-
-            sendButton.disabled = true;
-            sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
-            feather.replace();
-
-            try {
-                const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
-                });
-
-                const result = await res.json();
-
-                if (!res.ok || !result.isSuccess) {
-                    let errorMessage = result.error || `HTTP ${res.status}`;
-                    if (result.innerError) errorMessage += `\nДополнительно: ${result.innerError}`;
-                    throw new Error(errorMessage);
-                }
-
-                messageInput.value = '';
-                selectedFiles = [];
-                attachedFiles.innerHTML = '';
-                scrollToBottom();
-            } catch (err) {
-                console.error('Send error:', err);
-                alert('Не удалось отправить сообщение:\n' + err.message);
-            } finally {
-                sendButton.disabled = false;
-                sendButton.innerHTML = '<i data-feather="send" class="w-5 h-5"></i>';
-                feather.replace();
-            }
-        }
-
+        // Инициализация
         loadChats();
         startSignalR();
+
+        const observer = new MutationObserver(() => feather.replace());
+        observer.observe(document.body, { childList: true, subtree: true });
     </script>
 </body>
 </html>
