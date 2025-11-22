@@ -23,8 +23,8 @@ namespace Messenger.API.Controllers
 
         [HttpGet("search")]
         [SwaggerOperation(
-            Summary = "",
-            Description = "")]
+            Summary = "Фильтрация пользователей",
+            Description = "Отображает список пользователей при вводе")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 400)]
         [ProducesResponseType(typeof(object), 401)]
