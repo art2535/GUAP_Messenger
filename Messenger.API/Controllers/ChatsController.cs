@@ -56,8 +56,7 @@ namespace Messenger.API.Controllers
             Description = "Создает новый чат от имени текущего авторизованного пользователя.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> CreateNewChatAsync([FromBody] CreateChatRequest request,
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> CreateNewChatAsync([FromBody] CreateChatRequest request, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
                 return BadRequest(new { IsSuccess = false, Error = "Название чата обязательно" });
@@ -68,30 +67,37 @@ namespace Messenger.API.Controllers
             if (request.Type == "private" && request.UserIds.Count != 1)
                 return BadRequest(new { IsSuccess = false, Error = "Приватный чат должен содержать ровно одного участника" });
 
+            if (!new[] { "private", "group" }.Contains(request.Type))
+                return BadRequest(new { IsSuccess = false, Error = "Тип чата должен быть 'private' или 'group'" });
+
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var chat = await _chatService.CreateChatAsync(request.Name, request.Type, userId, cancellationToken);
+                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var allParticipantIds = request.UserIds.Append(currentUserId).Distinct().ToList();
 
-                foreach (var uid in request.UserIds)
+                var chat = await _chatService.CreateChatAsync(request.Name, request.Type, currentUserId, ct);
+
+                foreach (var userId in allParticipantIds)
                 {
-                    if (uid != userId)
-                        await _chatService.AddParticipantToChatAsync(chat.ChatId, uid, cancellationToken);
+                    await _chatService.AddParticipantToChatAsync(
+                        chatId: chat.ChatId,
+                        userId: userId,
+                        role: userId == currentUserId ? "владелец" : "участник",
+                        ct);
                 }
 
                 return Ok(new
                 {
                     IsSuccess = true,
-                    Message = "Чат успешно создан"
+                    Message = "Чат успешно создан",
+                    Data = new { chat.ChatId, chat.Name, chat.Type }
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                // Логируем, чтобы видеть реальную ошибку
+                Console.WriteLine($"Ошибка создания чата: {ex}");
+                return StatusCode(500, new { IsSuccess = false, Error = "Не удалось создать чат" });
             }
         }
 
@@ -101,12 +107,12 @@ namespace Messenger.API.Controllers
             Description = "Добавляет указанного пользователя в чат.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> AddParticipantToChatAsync(Guid chatId, Guid userId,
+        public async Task<IActionResult> AddParticipantToChatAsync(Guid chatId, Guid userId, string role = "участник",
             CancellationToken cancellationToken = default)
         {
             try
             {
-                await _chatService.AddParticipantToChatAsync(chatId, userId, cancellationToken);
+                await _chatService.AddParticipantToChatAsync(chatId, userId, role, cancellationToken);
 
                 return Ok(new
                 {

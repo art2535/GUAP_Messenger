@@ -1,6 +1,7 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -23,17 +24,8 @@ namespace Messenger.Infrastructure.Services
                 UserId = creatorId,
                 CreationDate = DateTime.Now
             };
+
             await _repository.AddChatAsync(chat, token);
-
-            var participant = new ChatParticipant
-            {
-                ChatId = chat.ChatId,
-                UserId = creatorId,
-                Role = "владелец",
-                JoinDate = DateTime.Now
-            };
-            await _repository.AddParticipantAsync(participant, token);
-
             return chat;
         }
 
@@ -42,16 +34,28 @@ namespace Messenger.Infrastructure.Services
             return await _repository.GetChatsByUserIdAsync(userId, token);
         }
 
-        public async Task AddParticipantToChatAsync(Guid chatId, Guid userId, CancellationToken token = default)
+        public async Task AddParticipantToChatAsync(Guid chatId, Guid userId, string role, CancellationToken token = default)
         {
+            var existing = await _repository.GetChatParticipantByChatAsync(chatId, userId, token);
+            if (existing != null)
+                return;
+
             var participant = new ChatParticipant
             {
                 ChatId = chatId,
                 UserId = userId,
-                Role = "участник",
-                JoinDate = DateTime.UtcNow
+                Role = role,
+                JoinDate = DateTime.Now
             };
-            await _repository.AddParticipantAsync(participant, token);
+
+            try
+            {
+                await _repository.AddParticipantAsync(participant, token);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true)
+            {
+                return;
+            }
         }
 
         public async Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default)

@@ -6,7 +6,7 @@ namespace Messenger.Core.Interfaces
     {
         Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default);
         Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default);
-        Task AddParticipantToChatAsync(Guid chatId, Guid userId, CancellationToken token = default);
+        Task AddParticipantToChatAsync(Guid chatId, Guid userId, string role, CancellationToken token = default);
         Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default);
         Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId, CancellationToken token = default);
         Task UpdateChatAsync(Chat chat, CancellationToken token = default);
