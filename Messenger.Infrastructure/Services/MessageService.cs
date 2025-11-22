@@ -45,9 +45,6 @@ namespace Messenger.Infrastructure.Services
                 if (loadedMessage == null)
                     return ServiceResult<Message>.Failure("Не удалось загрузить сообщение");
 
-                await _hubContext.Clients.Group($"Chat_{chatId}")
-                    .SendAsync("ReceiveMessage", loadedMessage);
-
                 return ServiceResult<Message>.Success(loadedMessage);
             }
             catch (Exception ex)

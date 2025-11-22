@@ -13,7 +13,7 @@ namespace Messenger.Infrastructure.Services
             _repository = repository;
         }
 
-        public async Task CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
+        public async Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
         {
             var chat = new Chat
             {
@@ -33,6 +33,8 @@ namespace Messenger.Infrastructure.Services
                 JoinDate = DateTime.Now
             };
             await _repository.AddParticipantAsync(participant, token);
+
+            return chat;
         }
 
         public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)

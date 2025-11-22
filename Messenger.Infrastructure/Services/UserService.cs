@@ -151,6 +151,38 @@ namespace Messenger.Infrastructure.Services
             await _userRepository.RemoveUserFromBlacklistAsync(userId, blockedUserId, token);
         }
 
+        public async Task<IEnumerable<UserSearch>> SearchUsersAsync(string search, CancellationToken token = default)
+        {
+            if (string.IsNullOrWhiteSpace(search))
+                return Enumerable.Empty<UserSearch>();
+
+            string searchPattern = $"%{search}%";
+
+            var usersData = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.Account)
+                .Where(u =>
+                    EF.Functions.Like(u.FirstName ?? "", searchPattern) ||
+                    EF.Functions.Like(u.LastName ?? "", searchPattern) ||
+                    EF.Functions.Like(u.Login ?? "", searchPattern) ||
+                    EF.Functions.Like((u.FirstName + " " + u.LastName) ?? "", searchPattern) ||
+                    EF.Functions.Like((u.LastName + " " + u.FirstName) ?? "", searchPattern)
+                )
+                .OrderBy(u => u.LastName)
+                .ThenBy(u => u.FirstName)
+                .Take(15)
+                .ToListAsync(token);
+
+            return usersData
+                .Select(u => new UserSearch
+                {
+                    Id = u.UserId,
+                    Name = string.Join(" ", new[] { u.FirstName, u.LastName }.Where(s => !string.IsNullOrEmpty(s))),
+                    Avatar = u.Account?.Avatar
+                })
+                .ToList();
+        }
+
         public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, 
             string? avatarUrl = null, CancellationToken token = default)
         {
