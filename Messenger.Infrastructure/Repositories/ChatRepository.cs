@@ -54,6 +54,7 @@ namespace Messenger.Infrastructure.Repositories
             return await _context.Chats
                 .Include(c => c.ChatParticipants)
                     .ThenInclude(cp => cp.User)
+                        .ThenInclude(u => u.Account)
                 .Include(c => c.Messages)
                 .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
                 .ToListAsync(token);
@@ -64,6 +65,8 @@ namespace Messenger.Infrastructure.Repositories
         {
             return await _context.ChatParticipants
                 .Where(part => part.ChatId == chatId)
+                .Include(p => p.User)
+                    .ThenInclude(u => u.Account)
                 .ToListAsync(token);
         }
 

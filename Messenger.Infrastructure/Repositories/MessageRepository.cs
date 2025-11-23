@@ -25,9 +25,10 @@ namespace Messenger.Infrastructure.Repositories
                 .Where(m => m.ChatId == chatId)
                 .Include(m => m.Sender)
                 .Include(m => m.Recipient)
-                .Include(m => m.Attachments)
                 .Include(m => m.Reactions)
                     .ThenInclude(r => r.User)
+                .Include(m => m.Attachments)
+                .AsSplitQuery()
                 .OrderBy(m => m.SendTime)
                 .ToListAsync(token);
         }
