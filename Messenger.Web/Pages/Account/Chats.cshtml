@@ -83,7 +83,6 @@
                 </div>
                 <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700"><i data-feather="settings" class="w-5 h-5"></i></a>
             </div>
-
             <div class="p-3 border-b border-gray-200 space-y-2">
                 <div class="relative">
                     <input type="text" id="chat-search" placeholder="Поиск по чатам"
@@ -94,11 +93,9 @@
                     <i data-feather="plus" class="w-4 h-4 mr-2"></i> Создать чат
                 </button>
             </div>
-
             <div class="flex-1 overflow-y-auto" id="chats-list">
                 <div class="text-gray-500 p-4">Загрузка чатов...</div>
             </div>
-
             <div class="p-4 border-t border-gray-200">
                 <div class="flex items-center space-x-3">
                     <img src="https://static.photos/people/200x200/4" alt="User" class="w-10 h-10 rounded-full">
@@ -145,40 +142,58 @@
     </div>
 
     <!-- Модальное окно создания чата -->
+    <!-- Модальное окно создания чата — ИДЕАЛЬНО как в WhatsApp -->
     <div id="create-chat-modal" class="modal">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-semibold">Создать чат</h3>
-                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
-                    <i data-feather="x" class="w-6 h-6"></i>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
+            <div class="flex items-center justify-between mb-8">
+                <h3 class="text-2xl font-bold text-gray-900">Новый чат</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600 transition">
+                    <i data-feather="x" class="w-7 h-7"></i>
                 </button>
             </div>
 
-            <div class="space-y-5">
-                <input type="text" id="chat-name" placeholder="Название чата" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-
-                <div>
-                    <label class="block text-sm font-medium mb-3">Тип чата</label>
-                    <div class="flex gap-6">
-                        <label class="flex items-center"><input type="radio" name="chat-type" value="private" checked class="mr-2"><span>Приватный</span></label>
-                        <label class="flex items-center"><input type="radio" name="chat-type" value="group" class="mr-2"><span>Групповой</span></label>
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="chat-type" value="private" checked class="sr-only peer">
+                    <div class="bg-gray-50 peer-checked:bg-blue-50 peer-checked:border-blue-500 border-2 border-gray-200 rounded-xl p-5 text-center transition-all hover:bg-gray-100">
+                        <i data-feather="user" class="w-10 h-10 mx-auto mb-3 text-gray-600 peer-checked:text-blue-600"></i>
+                        <span class="block text-sm font-medium text-gray-700">Приватный</span>
                     </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium mb-2">Участники</label>
-                    <div class="relative">
-                        <input type="text" id="user-search" placeholder="Начните вводить имя..." autocomplete="off"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <div id="user-search-results" class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto hidden"></div>
+                </label>
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="chat-type" value="group" class="sr-only peer">
+                    <div class="bg-gray-50 peer-checked:bg-blue-50 peer-checked:border-blue-500 border-2 border-gray-200 rounded-xl p-5 text-center transition-all hover:bg-gray-100">
+                        <i data-feather="users" class="w-10 h-10 mx-auto mb-3 text-gray-600 peer-checked:text-blue-600"></i>
+                        <span class="block text-sm font-medium text-gray-700">Групповой</span>
                     </div>
-                    <div id="selected-users" class="mt-3 flex flex-wrap gap-2"></div>
-                </div>
+                </label>
             </div>
 
-            <div class="mt-8 flex justify-end gap-3">
-                <button id="cancel-create" class="px-5 py-2.5 text-gray-600 hover:text-gray-800 font-medium">Отмена</button>
-                <button id="confirm-create" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Создать</button>
+            <div id="group-name-container" class="mb-6 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Название группы</label>
+                <input type="text" id="chat-name" placeholder="Например: Друзья ГУАПа"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Добавить участников</label>
+                <div class="relative">
+                    <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off"
+                           class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                    <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400"></i>
+                </div>
+                <div id="user-search-results" class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto hidden"></div>
+            </div>
+
+            <div id="selected-users" class="flex flex-wrap gap-2 mb-6"></div>
+
+            <div class="flex justify-end gap-3">
+                <button id="cancel-create" class="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition">
+                    Отмена
+                </button>
+                <button id="confirm-create" class="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-lg transition transform hover:scale-105">
+                    Создать
+                </button>
             </div>
         </div>
     </div>
@@ -189,7 +204,6 @@
         const HUB_URL = 'https://localhost:7045/hubs/chat';
         const token = JWT_TOKEN;
 
-        // Элементы
         const chatsList = document.getElementById('chats-list');
         const messagesContainer = document.getElementById('messages-container');
         const messageInput = document.getElementById('message-input');
@@ -198,12 +212,12 @@
         const attachedFiles = document.getElementById('attached-files');
         const createChatBtn = document.getElementById('create-chat-btn');
 
-        // Модалка
         const modal = document.getElementById('create-chat-modal');
         const closeModalBtn = document.getElementById('close-modal');
         const cancelBtn = document.getElementById('cancel-create');
         const confirmBtn = document.getElementById('confirm-create');
         const chatNameInput = document.getElementById('chat-name');
+        const chatNameContainer = chatNameInput.parentElement;
         const userSearchInput = document.getElementById('user-search');
         const searchResults = document.getElementById('user-search-results');
         const selectedUsersContainer = document.getElementById('selected-users');
@@ -216,32 +230,60 @@
         let lastQuery = '';
         let searchTimeout = null;
 
-        // === Поиск пользователей (динамический) ===
+        // === Показать/скрыть поле названия чата ===
+        function toggleChatNameField() {
+            const isGroup = document.querySelector('input[name="chat-type"]:checked').value === 'group';
+            const container = document.getElementById('group-name-container');
+            const input = document.getElementById('chat-name');
+
+            if (isGroup) {
+                container.classList.remove('hidden');
+                input.required = true;
+                input.focus();
+            } else {
+                container.classList.add('hidden');
+                input.required = false;
+                input.value = '';
+            }
+        }
+
+        // При открытии модалки
+        createChatBtn.onclick = () => {
+            selectedUserIds = [];
+            selectedUsersContainer.innerHTML = '';
+            document.getElementById('chat-name').value = '';
+            userSearchInput.value = '';
+            lastQuery = '';
+            document.querySelector('input[value="private"]').checked = true;
+            toggleChatNameField();
+            modal.classList.add('show');
+            setTimeout(() => userSearchInput.focus(), 150);
+        };
+
+        // Обнови обработчики радио-кнопок
+        document.querySelectorAll('input[name="chat-type"]').forEach(radio => {
+            radio.addEventListener('change', toggleChatNameField);
+        });
+
+        // === Поиск пользователей ===
         async function searchUsers() {
             const query = userSearchInput.value.trim();
-            if (query.length < 2) {
-                searchResults.classList.add('hidden');
-                return;
-            }
+            if (query.length < 2) { searchResults.classList.add('hidden'); return; }
             if (query === lastQuery) return;
             lastQuery = query;
-
             searchResults.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
             searchResults.classList.remove('hidden');
             feather.replace();
-
             try {
                 const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
-
                 searchResults.innerHTML = '';
                 if (!json.isSuccess || !json.data || json.data.length === 0) {
                     searchResults.innerHTML = '<div class="p-4 text-gray-500 text-sm">Ничего не найдено</div>';
                     return;
                 }
-
                 json.data
                     .filter(u => !selectedUserIds.includes(u.id))
                     .slice(0, 8)
@@ -255,7 +297,6 @@
                         div.onclick = () => selectUser(user);
                         searchResults.appendChild(div);
                     });
-
             } catch (err) {
                 searchResults.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка поиска</div>';
             }
@@ -263,15 +304,12 @@
 
         function selectUser(user) {
             if (selectedUserIds.includes(user.id)) return;
-
             const isPrivate = document.querySelector('input[name="chat-type"]:checked').value === 'private';
             if (isPrivate && selectedUserIds.length >= 1) {
                 alert('В приватном чате может быть только один участник');
                 return;
             }
-
             selectedUserIds.push(user.id);
-
             const tag = document.createElement('div');
             tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
             tag.innerHTML = `
@@ -288,7 +326,6 @@
             };
             selectedUsersContainer.appendChild(tag);
             feather.replace();
-
             userSearchInput.value = '';
             searchResults.classList.add('hidden');
         }
@@ -297,7 +334,6 @@
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(searchUsers, 300);
         });
-
         document.addEventListener('click', e => {
             if (!userSearchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 searchResults.classList.add('hidden');
@@ -306,10 +342,9 @@
 
         // === Создание чата ===
         async function createChat() {
-            const name = chatNameInput.value.trim();
             const type = document.querySelector('input[name="chat-type"]:checked').value;
-
-            if (!name) return alert('Введите название чата');
+            const name = type === 'group' ? chatNameInput.value.trim() : "Приватный чат";
+            if (type === 'group' && !name) return alert('Введите название группы');
             if (selectedUserIds.length === 0) return alert('Выберите хотя бы одного участника');
             if (type === 'private' && selectedUserIds.length !== 1) return alert('В приватном чате должен быть ровно один участник');
 
@@ -324,16 +359,7 @@
                 });
                 const json = await res.json();
                 if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка создания');
-
                 modal.classList.remove('show');
-                await loadChats();
-
-                setTimeout(() => {
-                    const newChat = [...document.querySelectorAll('.chat-item')]
-                        .find(el => el.querySelector('h3')?.textContent.trim() === name);
-                    newChat?.click();
-                }, 500);
-
             } catch (err) {
                 alert('Ошибка: ' + err.message);
             }
@@ -346,14 +372,20 @@
             userSearchInput.value = '';
             lastQuery = '';
             document.querySelector('input[value="private"]').checked = true;
+            toggleChatNameField();
             modal.classList.add('show');
-            setTimeout(() => chatNameInput.focus(), 100);
+            setTimeout(() => userSearchInput.focus(), 100);
         };
 
         closeModalBtn.onclick = cancelBtn.onclick = () => modal.classList.remove('show');
         confirmBtn.onclick = createChat;
 
-        // === Остальное (SignalR, чаты, сообщения) ===
+        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: было addEventprint → теперь addEventListener
+        document.querySelectorAll('input[name="chat-type"]').forEach(radio => {
+            radio.addEventListener('change', toggleChatNameField);
+        });
+
+        // === SignalR ===
         function updateConnectionStatus(text, color) {
             const dot = document.getElementById('status-dot');
             const tooltip = document.getElementById('status-tooltip');
@@ -362,9 +394,8 @@
         }
 
         async function startSignalR() {
-            const url = `${HUB_URL}?access_token=${encodeURIComponent(token)}`;
             connection = new signalR.HubConnectionBuilder()
-                .withUrl(url)
+                .withUrl(HUB_URL, { accessTokenFactory: () => token })
                 .withAutomaticReconnect([0, 2000, 10000])
                 .build();
 
@@ -373,6 +404,29 @@
                     appendMessage(msg);
                     scrollToBottom();
                 }
+                const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
+                if (item) {
+                    item.querySelector('p').textContent = msg.messageText || 'Вложение';
+                }
+            });
+
+            connection.on('NewChat', chat => {
+                if (document.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`)) return;
+                const div = document.createElement('div');
+                div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
+                div.dataset.chatId = chat.chatId;
+                div.innerHTML = `
+                    <div class="relative">
+                        <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-medium truncate">${chat.name}</h3>
+                        <p class="text-sm text-gray-500 truncate">${chat.lastMessage || 'Чат создан'}</p>
+                    </div>
+                `;
+                chatsList.prepend(div);
+                div.onclick = () => openChat(div);
             });
 
             connection.onreconnecting(() => updateConnectionStatus('Переподключение...', 'orange'));
@@ -382,23 +436,45 @@
             try {
                 await connection.start();
                 updateConnectionStatus('Онлайн', 'green');
+                joinAllMyChats();
             } catch (err) {
+                console.error("SignalR ошибка подключения:", err);
                 updateConnectionStatus('Ошибка', 'red');
                 setTimeout(startSignalR, 5000);
             }
+        }
+
+        async function joinAllMyChats() {
+            try {
+                const res = await fetch(`${API_BASE}/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const json = await res.json();
+                if (json.data) {
+                    json.data.forEach(chat => connection.invoke('JoinChat', chat.chatId || chat.id).catch(() => {}));
+                }
+            } catch { }
         }
 
         async function joinChat(id) { if (connection?.state === signalR.HubConnectionState.Connected) await connection.invoke('JoinChat', id).catch(() => {}); }
         async function leaveChat(id) { if (connection?.state === signalR.HubConnectionState.Connected) await connection.invoke('LeaveChat', id).catch(() => {}); }
         async function rejoinCurrentChat() { if (currentChatId) await joinChat(currentChatId); }
 
+        function openChat(item) {
+            const chatId = item.dataset.chatId;
+            if (currentChatId === chatId) return;
+            if (currentChatId) leaveChat(currentChatId);
+            currentChatId = chatId;
+            document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
+            loadMessages(chatId);
+            joinChat(chatId);
+        }
+
         async function loadChats() {
             try {
                 const res = await fetch(`${API_BASE}/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const json = await res.json();
-                chatsList.innerHTML = !json.isSuccess || !json.data?.length
-                    ? '<div class="p-4 text-gray-500">Чатов нет</div>'
-                    : '';
+                chatsList.innerHTML = !json.isSuccess || !json.data?.length ? '<div class="p-4 text-gray-500">Чатов нет</div>' : '';
                 json.data?.forEach(chat => {
                     const div = document.createElement('div');
                     div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
@@ -406,16 +482,19 @@
                     div.innerHTML = `
                         <div class="relative">
                             <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
-                            <span class="absolute bottom-0 right-0 w-3 h-3 ${chat.isOnline ? 'bg-green-500' : 'bg-gray-300'} rounded-full border-2 border-white"></span>
+                            <span class="absolute bottom-0 right-0 w-3 h-3 ${chat.isOnline !== false ? 'bg-green-500' : 'bg-gray-300'} rounded-full border-2 border-white"></span>
                         </div>
                         <div class="flex-1 min-w-0">
                             <h3 class="font-medium truncate">${chat.name || 'Без имени'}</h3>
                             <p class="text-sm text-gray-500 truncate">${chat.lastMessage || 'Нет сообщений'}</p>
                         </div>
                     `;
+                    div.onclick = () => openChat(div);
                     chatsList.appendChild(div);
                 });
-            } catch { chatsList.innerHTML = '<div class="p-4 text-red-500">Ошибка загрузки чатов</div>'; }
+            } catch {
+                chatsList.innerHTML = '<div class="p-4 text-red-500">Ошибка загрузки чатов</div>';
+            }
         }
 
         async function loadMessages(chatId) {
@@ -453,16 +532,13 @@
             if (isSending || !currentChatId) return;
             const text = messageInput.value.trim();
             if (!text && selectedFiles.length === 0) return;
-
             isSending = true;
             const oldIcon = sendButton.innerHTML;
             sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
             feather.replace();
-
             const form = new FormData();
             if (text) form.append('messageText', text);
             selectedFiles.forEach(f => form.append('files', f));
-
             try {
                 const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
                     method: 'POST',
@@ -471,7 +547,6 @@
                 });
                 const json = await res.json();
                 if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
-
                 messageInput.value = '';
                 selectedFiles = [];
                 attachedFiles.innerHTML = '';
@@ -486,20 +561,9 @@
             }
         }
 
-        chatsList.addEventListener('click', async e => {
+        chatsList.addEventListener('click', e => {
             const item = e.target.closest('.chat-item');
-            if (!item) return;
-            const chatId = item.dataset.chatId;
-            if (currentChatId === chatId) return;
-
-            if (currentChatId) await leaveChat(currentChatId);
-            currentChatId = chatId;
-            document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-            document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
-
-            await loadMessages(chatId);
-            await joinChat(chatId);
+            if (item) openChat(item);
         });
 
         sendButton.onclick = sendMessage;
@@ -517,7 +581,7 @@
                 : '';
         };
 
-        // Инициализация
+        // === Инициализация ===
         loadChats();
         startSignalR();
 
