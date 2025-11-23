@@ -52,9 +52,26 @@ namespace Messenger.API
 
             app.UseStaticFiles(new StaticFileOptions
             {
-                FileProvider = new PhysicalFileProvider(
-                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
-                RequestPath = "/uploads"
+                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+                RequestPath = "/uploads",
+                OnPrepareResponse = ctx =>
+                {
+                    var path = ctx.Context.Request.Path.Value?.ToLowerInvariant() ?? "";
+                    var query = ctx.Context.Request.QueryString.Value ?? "";
+
+                    // Список расширений, которые должны отображаться как изображения (не скачиваться)
+                    var imageExtensions = new HashSet<string> { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif" };
+
+                    var extension = Path.GetExtension(path);
+
+                    // Если это НЕ изображение ИЛИ в запросе есть ?download — принудительно скачиваем
+                    if (!imageExtensions.Contains(extension) || query.Contains("download"))
+                    {
+                        var fileName = Path.GetFileName(path);
+                        ctx.Context.Response.Headers.ContentDisposition =
+                            $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
+                    }
+                }
             });
 
             app.UseCors("AllowWebApp");
