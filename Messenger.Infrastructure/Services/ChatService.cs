@@ -29,6 +29,38 @@ namespace Messenger.Infrastructure.Services
             return chat;
         }
 
+        public async Task<List<object>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken token = default)
+        {
+            var chats = await _repository.GetChatsByUserIdAsync(userId, token);
+
+            var result = new List<object>();
+            foreach (var chat in chats)
+            {
+                var lastMsg = chat.Messages?.OrderByDescending(m => m.SendTime).FirstOrDefault();
+                result.Add(new
+                {
+                    chatId = chat.ChatId,
+                    name = chat.Type == "private"
+                        ? chat.ChatParticipants
+                            .Where(p => p.UserId != userId)
+                            .Select(p => $"{p.User.FirstName} {p.User.LastName}".Trim())
+                            .FirstOrDefault() ?? "Приватный чат"
+                        : chat.Name,
+                    avatar = chat.Type == "private"
+                        ? chat.ChatParticipants
+                            .Where(p => p.UserId != userId)
+                            .Select(p => p.User.Account?.Avatar)
+                            .FirstOrDefault()
+                        : null,
+                    type = chat.Type,
+                    lastMessage = lastMsg?.MessageText ?? (chat.Messages?.Any() == true ? "Вложение" : null),
+                    isOnline = true
+                });
+            }
+
+            return result;
+        }
+
         public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
         {
             return await _repository.GetChatsByUserIdAsync(userId, token);

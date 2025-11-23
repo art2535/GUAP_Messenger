@@ -1,8 +1,11 @@
 ﻿using Messenger.Core.DTOs.Chats;
+using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
 
@@ -15,10 +18,14 @@ namespace Messenger.API.Controllers
     public class ChatsController : ControllerBase
     {
         private readonly IChatService _chatService;
+        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IUserService _userService;
 
-        public ChatsController(IChatService chatService)
+        public ChatsController(IChatService chatService, IHubContext<ChatHub> hubContext, IUserService userService)
         {
             _chatService = chatService;
+            _hubContext = hubContext;
+            _userService = userService;
         }
 
         [HttpGet()]
@@ -32,7 +39,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var chats = await _chatService.GetUserChatsAsync(userId, cancellationToken);
+                var chats = await _chatService.GetUserChatsWithLastMessageAsync(userId, cancellationToken);
 
                 return Ok(new
                 {
@@ -56,26 +63,39 @@ namespace Messenger.API.Controllers
             Description = "Создает новый чат от имени текущего авторизованного пользователя.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> CreateNewChatAsync([FromBody] CreateChatRequest request, CancellationToken ct = default)
+        public async Task<IActionResult> CreateNewChatAsync([FromBody] CreateChatRequest request, 
+            CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Name))
-                return BadRequest(new { IsSuccess = false, Error = "Название чата обязательно" });
+            if (!new[] { "private", "group" }.Contains(request.Type))
+                return BadRequest(new { IsSuccess = false, Error = "Тип чата должен быть 'private' или 'group'" });
+
+            if (request.Type == "group" && string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest(new { IsSuccess = false, Error = "Для группового чата укажите название" });
 
             if (request.UserIds == null || request.UserIds.Count == 0)
                 return BadRequest(new { IsSuccess = false, Error = "Выберите хотя бы одного участника" });
 
             if (request.Type == "private" && request.UserIds.Count != 1)
-                return BadRequest(new { IsSuccess = false, Error = "Приватный чат должен содержать ровно одного участника" });
-
-            if (!new[] { "private", "group" }.Contains(request.Type))
-                return BadRequest(new { IsSuccess = false, Error = "Тип чата должен быть 'private' или 'group'" });
+                return BadRequest(new { IsSuccess = false, Error = "В приватном чате должен быть ровно один участник" });
 
             try
             {
                 var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var allParticipantIds = request.UserIds.Append(currentUserId).Distinct().ToList();
 
-                var chat = await _chatService.CreateChatAsync(request.Name, request.Type, currentUserId, ct);
+                var chatName = request.Type == "group"
+                    ? request.Name.Trim()
+                    : null;
+
+                var allParticipantIds = request.UserIds
+                    .Append(currentUserId)
+                    .Distinct()
+                    .ToList();
+
+                var chat = await _chatService.CreateChatAsync(
+                    name: chatName ?? "Приватный чат",
+                    type: request.Type,
+                    creatorId: currentUserId,
+                    ct);
 
                 foreach (var userId in allParticipantIds)
                 {
@@ -86,19 +106,65 @@ namespace Messenger.API.Controllers
                         ct);
                 }
 
-                return Ok(new
+                string displayName = request.Type == "group"
+                    ? chatName
+                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
+
+                var response = new
                 {
                     IsSuccess = true,
                     Message = "Чат успешно создан",
-                    Data = new { chat.ChatId, chat.Name, chat.Type }
-                });
+                    Data = new
+                    {
+                        chat.ChatId,
+                        Name = displayName,
+                        Type = chat.Type,
+                        chat.CreationDate
+                    }
+                };
+
+                var chatForClients = new
+                {
+                    chatId = chat.ChatId,
+                    name = displayName,
+                    avatar = request.Type == "private"
+                        ? await GetOtherUserAvatarAsync(request.UserIds[0], ct)
+                        : (string?)null,
+                    type = chat.Type,
+                    lastMessage = (string?)null,
+                    participantId = request.Type == "private" ? request.UserIds[0].ToString() : null
+                };
+
+                foreach (var userId in allParticipantIds)
+                {
+                    await _hubContext.Clients.User(userId.ToString()).SendAsync("NewChat", chatForClients);
+                }
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                // Логируем, чтобы видеть реальную ошибку
-                Console.WriteLine($"Ошибка создания чата: {ex}");
                 return StatusCode(500, new { IsSuccess = false, Error = "Не удалось создать чат" });
             }
+        }
+
+        private async Task<string> GetPrivateChatDisplayNameAsync(Guid chatId, Guid currentUserId, CancellationToken ct)
+        {
+            var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+
+            var otherParticipant = participants
+                .FirstOrDefault(p => p.UserId != currentUserId);
+
+            if (otherParticipant?.User == null)
+                return "Удалённый пользователь";
+
+            return $"{otherParticipant.User.FirstName} {otherParticipant.User.LastName}".Trim();
+        }
+
+        private async Task<string?> GetOtherUserAvatarAsync(Guid userId, CancellationToken ct)
+        {
+            var user = await _userService.GetUserByIdAsync(userId, ct);
+            return user?.Account?.Avatar;
         }
 
         [HttpPost("{chatId}/{userId}/participant")]

@@ -37,6 +37,7 @@ namespace Messenger.Web
             app.UseRouting();
 
             app.UseSession();
+            app.UseStaticFiles();
 
             app.UseAuthentication();
             app.UseAuthorization();

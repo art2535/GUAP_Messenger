@@ -34,11 +34,6 @@
             background-color: #e5e7eb;
         }
 
-        .attachment {
-            color: #3b82f6;
-            text-decoration: underline;
-        }
-
         .modal {
             position: fixed;
             inset: 0;
@@ -58,12 +53,86 @@
                 visibility: visible;
             }
 
+        .image-preview {
+            max-width: 260px;
+            max-height: 260px;
+            border-radius: 16px;
+            cursor: zoom-in;
+            object-fit: cover;
+            transition: transform .2s;
+        }
+
+            .image-preview:hover {
+                transform: scale(1.05);
+            }
+
+        .file-attachment {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.06);
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 13px;
+        }
+
+            .file-attachment i {
+                width: 20px;
+                height: 20px;
+            }
+
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all .3s;
+        }
+
+            .lightbox.show {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .lightbox img {
+                max-width: 90vw;
+                max-height: 90vh;
+                border-radius: 16px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            }
+
+        .preview-attachment {
+            position: relative;
+            display: inline-block;
+            margin: 4px;
+        }
+
+            .preview-attachment button {
+                position: absolute;
+                top: -6px;
+                right: -6px;
+                background: #ef4444;
+                color: white;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                font-size: 12px;
+                border: none;
+                cursor: pointer;
+            }
+
         #connection-status .w-3 {
             transition: background-color 0.3s ease;
         }
     </style>
 </head>
 <body class="h-screen">
+
     <script>
         const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_SECRET") ?? "")';
         if (!JWT_TOKEN || JWT_TOKEN === '') {
@@ -72,6 +141,7 @@
     </script>
 
     <div class="flex h-full">
+
         <!-- Sidebar -->
         <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -84,7 +154,7 @@
                 <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700"><i data-feather="settings" class="w-5 h-5"></i></a>
             </div>
 
-            <!-- Поиск и кнопка создания -->
+            <!-- Поиск и создание чата -->
             <div class="p-3 border-b border-gray-200 space-y-2">
                 <div class="relative">
                     <input type="text" id="chat-search" placeholder="Поиск по чатам"
@@ -125,16 +195,18 @@
             </div>
         </div>
 
-        <!-- Основная область чата -->
+        <!-- Основная область -->
         <div class="flex-1 flex flex-col">
             <div id="chat-header" class="p-4 border-b border-gray-200 flex items-center justify-between bg-white">
                 <h2 id="chat-title" class="font-medium">Выберите чат</h2>
             </div>
+
             <div id="messages-container" class="flex-1 p-4 overflow-y-auto bg-gray-50">
                 <div class="flex items-center justify-center h-full text-gray-500">
                     <p>Выберите чат для просмотра сообщений</p>
                 </div>
             </div>
+
             <div class="p-3 border-t border-gray-200 bg-white">
                 <div class="flex items-center space-x-2">
                     <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700"><i data-feather="paperclip" class="w-5 h-5"></i></label>
@@ -145,9 +217,14 @@
                         <i data-feather="send" class="w-5 h-5"></i>
                     </button>
                 </div>
-                <div id="attached-files" class="text-sm text-gray-600 mt-2"></div>
+                <div id="attached-files" class="mt-2 flex flex-wrap gap-2"></div>
             </div>
         </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div id="lightbox" class="lightbox" onclick="this.classList.remove('show')">
+        <img id="lightbox-img" src="" alt="">
     </div>
 
     <!-- Модальное окно создания чата -->
@@ -155,9 +232,7 @@
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
             <div class="flex items-center justify-between mb-8">
                 <h3 class="text-2xl font-bold text-gray-900">Новый чат</h3>
-                <button id="close-modal" class="text-gray-400 hover:text-gray-600 transition">
-                    <i data-feather="x" class="w-7 h-7"></i>
-                </button>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600 transition"><i data-feather="x" class="w-7 h-7"></i></button>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-8">
                 <label class="relative cursor-pointer">
@@ -177,14 +252,12 @@
             </div>
             <div id="group-name-container" class="mb-6 hidden">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Название группы</label>
-                <input type="text" id="chat-name" placeholder="Например: Друзья ГУАПа"
-                       class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                <input type="text" id="chat-name" placeholder="Например: Друзья ГУАПа" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Добавить участников</label>
                 <div class="relative">
-                    <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off"
-                           class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                    <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off" class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400"></i>
                 </div>
                 <div id="user-search-results" class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto hidden"></div>
@@ -210,18 +283,8 @@
         const sendButton = document.getElementById('send-button');
         const fileInput = document.getElementById('file-input');
         const attachedFiles = document.getElementById('attached-files');
-        const createChatBtn = document.getElementById('create-chat-btn');
-        const modal = document.getElementById('create-chat-modal');
-        const closeModalBtn = document.getElementById('close-modal');
-        const cancelBtn = document.getElementById('cancel-create');
-        const confirmBtn = document.getElementById('confirm-create');
-        const chatNameInput = document.getElementById('chat-name');
-        const groupNameContainer = document.getElementById('group-name-container');
-        const userSearchInput = document.getElementById('user-search');
-        const userSearchResults = document.getElementById('user-search-results');
-        const selectedUsersContainer = document.getElementById('selected-users');
-        const chatSearchInput = document.getElementById('chat-search');
-        const clearSearchBtn = document.getElementById('clear-search');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightbox-img');
 
         let currentChatId = null;
         let selectedFiles = [];
@@ -232,128 +295,133 @@
         let searchTimeout = null;
         let allChatItems = [];
 
-        // === ПОИСК ПО ЧАТАМ ===
+        // === Поиск по чатам ===
         function cacheChatItems() {
             allChatItems = Array.from(chatsList.querySelectorAll('.chat-item'));
         }
-
         function filterChats() {
-            const query = chatSearchInput.value.trim().toLowerCase();
-            clearSearchBtn.classList.toggle('hidden', query === '');
-
-            if (query === '') {
-                allChatItems.forEach(item => item.style.display = '');
-                return;
-            }
-
+            const query = document.getElementById('chat-search').value.trim().toLowerCase();
+            document.getElementById('clear-search').classList.toggle('hidden', query === '');
             allChatItems.forEach(item => {
                 const title = (item.querySelector('h3')?.textContent || '').toLowerCase();
                 const lastMsg = (item.querySelector('p')?.textContent || '').toLowerCase();
                 item.style.display = (title.includes(query) || lastMsg.includes(query)) ? '' : 'none';
             });
         }
-
-        chatSearchInput.addEventListener('input', filterChats);
-        clearSearchBtn.addEventListener('click', () => {
-            chatSearchInput.value = '';
-            chatSearchInput.focus();
+        document.getElementById('chat-search').addEventListener('input', filterChats);
+        document.getElementById('clear-search').addEventListener('click', () => {
+            document.getElementById('chat-search').value = '';
+            document.getElementById('chat-search').focus();
             filterChats();
         });
 
-        // === Модалка создания чата ===
-        function toggleChatNameField() {
-            const isGroup = document.querySelector('input[name="chat-type"]:checked').value === 'group';
-            groupNameContainer.classList.toggle('hidden', !isGroup);
+        // === Отображение вложений ===
+        function renderAttachments(attachments = []) {
+            if (!attachments?.length) return '';
+            return attachments.map(att => {
+                if (att.fileType?.startsWith('image/')) {
+                    return `<img src="${att.url}" class="image-preview mt-2" onclick="lightboxImg.src='${att.url}'; lightbox.classList.add('show')">`;
+                } else {
+                    const size = att.sizeInBytes ? (att.sizeInBytes / 1024).toFixed(1) + ' КБ' : '';
+                    return `
+                        <div class="file-attachment mt-2">
+                            <i data-feather="file-text"></i>
+                            <a href="${att.url}" download="${att.fileName}" class="attachment">${att.fileName}</a>
+                            ${size ? `<span class="text-xs opacity-70">(${size})</span>` : ''}
+                        </div>`;
+                }
+            }).join('');
         }
 
-        createChatBtn.onclick = () => {
-            selectedUserIds = []; selectedUsersContainer.innerHTML = '';
-            chatNameInput.value = ''; userSearchInput.value = '';
-            document.querySelector('input[value="private"]').checked = true;
-            toggleChatNameField();
-            modal.classList.add('show');
-            setTimeout(() => userSearchInput.focus(), 150);
-        };
+        function appendMessage(msg) {
+            const isMine = msg.senderId === '@Model.UserId';
+            const div = document.createElement('div');
+            div.className = `mb-4 flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            div.innerHTML = `
+                <div class="inline-block max-w-xs px-4 py-2 rounded-2xl shadow-sm ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'}">
+                    ${msg.messageText ? `<p class="break-words whitespace-pre-wrap">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
+                    ${renderAttachments(msg.attachments)}
+                    <div class="text-xs mt-1 opacity-70">
+                        ${msg.status === 'Read' ? 'Прочитано' : msg.status === 'Delivered' ? 'Доставлено' : 'Отправлено'}
+                        ${msg.sentAt ? ' · ' + new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                </div>
+            `;
+            messagesContainer.appendChild(div);
+            feather.replace();
+            scrollToBottom();
+        }
 
-        document.querySelectorAll('input[name="chat-type"]').forEach(radio => {
-            radio.addEventListener('change', toggleChatNameField);
-        });
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
 
-        closeModalBtn.onclick = cancelBtn.onclick = () => modal.classList.remove('show');
+        // === Отправка сообщения ===
+        async function sendMessage() {
+            if (isSending || !currentChatId) return;
+            const text = messageInput.value.trim();
+            if (!text && selectedFiles.length === 0) return;
 
-        // Поиск пользователей
-        async function searchUsers() {
-            const query = userSearchInput.value.trim();
-            if (query.length < 2) { userSearchResults.classList.add('hidden'); return; }
-            if (query === lastQuery) return;
-            lastQuery = query;
-
-            userSearchResults.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
-            userSearchResults.classList.remove('hidden');
+            isSending = true;
+            const oldIcon = sendButton.innerHTML;
+            sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
             feather.replace();
 
-            try {
-                const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const json = await res.json();
-                userSearchResults.innerHTML = '';
-                if (!json.data?.length) {
-                    userSearchResults.innerHTML = '<div class="p-4 text-gray-500 text-sm">Ничего не найдено</div>';
-                    return;
-                }
-
-                json.data
-                    .filter(u => !selectedUserIds.includes(u.id))
-                    .slice(0, 8)
-                    .forEach(user => {
-                        const div = document.createElement('div');
-                        div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition';
-                        div.innerHTML = `<img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
-                                         <span class="font-medium">${user.name}</span>`;
-                        div.onclick = () => {
-                            if (selectedUserIds.includes(user.id)) return;
-                            if (document.querySelector('input[value="private"]:checked') && selectedUserIds.length >= 1) {
-                                alert('В приватном чате может быть только один участник');
-                                return;
-                            }
-                            selectedUserIds.push(user.id);
-                            const tag = document.createElement('div');
-                            tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
-                            tag.innerHTML = `${user.name}<button type="button" class="hover:bg-blue-200 rounded-full p-0.5"><i data-feather="x" class="w-4 h-4"></i></button>`;
-                            tag.querySelector('button').onclick = (e) => { e.stopPropagation(); selectedUserIds = selectedUserIds.filter(id => id !== user.id); tag.remove(); feather.replace(); };
-                            selectedUsersContainer.appendChild(tag);
-                            feather.replace();
-                            userSearchInput.value = '';
-                            userSearchResults.classList.add('hidden');
-                        };
-                        userSearchResults.appendChild(div);
-                    });
-            } catch { userSearchResults.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка</div>'; }
-        }
-
-        userSearchInput.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(searchUsers, 300);
-        });
-
-        confirmBtn.onclick = async () => {
-            const type = document.querySelector('input[name="chat-type"]:checked').value;
-            const name = type === 'group' ? chatNameInput.value.trim() : null;
-            if (type === 'group' && !name) return alert('Введите название группы');
-            if (selectedUserIds.length === 0) return alert('Выберите участников');
-            if (type === 'private' && selectedUserIds.length !== 1) return alert('В приватном чате — один участник');
+            const form = new FormData();
+            if (text) form.append('messageText', text);
+            selectedFiles.forEach(f => form.append('files', f));
 
             try {
-                const res = await fetch(`${API_BASE}/chats/create-chat`, {
+                const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, type, userIds: selectedUserIds })
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: form
                 });
                 const json = await res.json();
                 if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
-                modal.classList.remove('show');
-            } catch (err) { alert('Ошибка: ' + err.message); }
+
+                messageInput.value = '';
+                selectedFiles = [];
+                attachedFiles.innerHTML = '';
+                fileInput.value = '';
+            } catch (err) {
+                alert('Ошибка отправки: ' + err.message);
+            } finally {
+                isSending = false;
+                sendButton.innerHTML = oldIcon;
+                feather.replace();
+                messageInput.focus();
+            }
+        }
+
+        // === Превью прикреплённых файлов ===
+        fileInput.onchange = () => {
+            selectedFiles = Array.from(fileInput.files);
+            attachedFiles.innerHTML = '';
+            selectedFiles.forEach((file, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'preview-attachment';
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        wrapper.innerHTML = `
+                            <img src="${e.target.result}" class="w-20 h-20 object-cover rounded-lg">
+                            <button type="button" onclick="this.parentElement.remove(); selectedFiles.splice(${index},1)">×</button>
+                        `;
+                        attachedFiles.appendChild(wrapper);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    wrapper.innerHTML = `
+                        <div class="bg-gray-100 border-2 border-dashed rounded-lg w-20 h-20 flex items-center justify-center">
+                            <i data-feather="file" class="w-8 h-8 text-gray-500"></i>
+                        </div>
+                        <button type="button" onclick="this.parentElement.remove(); selectedFiles.splice(${index},1)">×</button>
+                    `;
+                    attachedFiles.appendChild(wrapper);
+                    feather.replace();
+                }
+            });
         };
 
         // === SignalR ===
@@ -372,15 +440,13 @@
             connection.on('ReceiveMessage', msg => {
                 if (msg.chatId === currentChatId) {
                     appendMessage(msg);
-                    scrollToBottom();
                 }
                 const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
-                if (item) item.querySelector('p').textContent = msg.messageText || 'Вложение';
+                if (item) item.querySelector('p').textContent = msg.messageText || (msg.attachments?.length ? 'Вложение' : 'Сообщение');
             });
 
             connection.on('NewChat', chat => {
                 if (document.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`)) return;
-
                 const div = document.createElement('div');
                 div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                 div.dataset.chatId = chat.chatId;
@@ -391,7 +457,7 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="font-medium truncate">${chat.name}</h3>
-                        <p class="text-sm text-gray-500 truncate">${chat.lastMessage || 'Чат создан'}</p>
+                        <p class="text-sm text-gray-500 truncate">Чат создан</p>
                     </div>
                 `;
                 div.onclick = () => openChat(div);
@@ -422,7 +488,6 @@
                 if (json.data) json.data.forEach(chat => connection.invoke('JoinChat', chat.chatId || chat.id).catch(() => {}));
             } catch { }
         }
-
         async function joinChat(id) { if (connection?.state === 'Connected') await connection.invoke('JoinChat', id).catch(() => {}); }
         async function leaveChat(id) { if (connection?.state === 'Connected') await connection.invoke('LeaveChat', id).catch(() => {}); }
         async function rejoinCurrentChat() { if (currentChatId) joinChat(currentChatId); }
@@ -481,67 +546,113 @@
             }
         }
 
-        function appendMessage(msg) {
-            const isMine = msg.senderId === '@Model.UserId';
-            const div = document.createElement('div');
-            div.className = `mb-4 flex ${isMine ? 'justify-end' : 'justify-start'}`;
-            div.innerHTML = `
-                <div class="inline-block max-w-xs px-4 py-2 rounded-2xl shadow-sm ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'}">
-                    ${msg.messageText ? `<p class="break-words">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
-                    <div class="text-xs mt-1 opacity-70">
-                        ${msg.status === 'Read' ? 'Прочитано' : msg.status === 'Delivered' ? 'Доставлено' : 'Отправлено'}
-                        ${msg.sentAt ? ' · ' + new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </div>
-                </div>
-            `;
-            messagesContainer.appendChild(div);
+        // === Модалка создания чата ===
+        function toggleChatNameField() {
+            const isGroup = document.querySelector('input[name="chat-type"]:checked').value === 'group';
+            document.getElementById('group-name-container').classList.toggle('hidden', !isGroup);
         }
 
-        function scrollToBottom() { messagesContainer.scrollTop = messagesContainer.scrollHeight; }
+        document.getElementById('create-chat-btn').onclick = () => {
+            selectedUserIds = []; document.getElementById('selected-users').innerHTML = '';
+            document.getElementById('chat-name').value = ''; document.getElementById('user-search').value = '';
+            document.querySelector('input[value="private"]').checked = true;
+            toggleChatNameField();
+            document.getElementById('create-chat-modal').classList.add('show');
+            setTimeout(() => document.getElementById('user-search').focus(), 150);
+        };
 
-        async function sendMessage() {
-            if (isSending || !currentChatId) return;
-            const text = messageInput.value.trim();
-            if (!text && selectedFiles.length === 0) return;
-            isSending = true;
-            const oldIcon = sendButton.innerHTML;
-            sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
+        document.querySelectorAll('input[name="chat-type"]').forEach(r => r.addEventListener('change', toggleChatNameField));
+        document.getElementById('close-modal').onclick = document.getElementById('cancel-create').onclick = () => {
+            document.getElementById('create-chat-modal').classList.remove('show');
+        };
+
+        // Поиск пользователей
+        async function searchUsers() {
+            const query = document.getElementById('user-search').value.trim();
+            if (query.length < 2) { document.getElementById('user-search-results').classList.add('hidden'); return; }
+            if (query === lastQuery) return;
+            lastQuery = query;
+
+            const results = document.getElementById('user-search-results');
+            results.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
+            results.classList.remove('hidden');
             feather.replace();
 
-            const form = new FormData();
-            if (text) form.append('messageText', text);
-            selectedFiles.forEach(f => form.append('files', f));
-
             try {
-                const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: form
+                const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
-                if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
-                messageInput.value = '';
-                selectedFiles = []; attachedFiles.innerHTML = ''; fileInput.value = '';
-            } catch (err) {
-                alert('Ошибка отправки: ' + err.message);
-            } finally {
-                isSending = false;
-                sendButton.innerHTML = oldIcon;
-                feather.replace();
-                messageInput.focus();
+                results.innerHTML = '';
+                if (!json.data?.length) {
+                    results.innerHTML = '<div class="p-4 text-gray-500 text-sm">Ничего не найдено</div>';
+                    return;
+                }
+                json.data.filter(u => !selectedUserIds.includes(u.id)).slice(0, 8).forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition';
+                    div.innerHTML = `<img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
+                                     <span class="font-medium">${user.name}</span>`;
+                    div.onclick = () => {
+                        if (selectedUserIds.includes(user.id)) return;
+                        if (document.querySelector('input[value="private"]:checked') && selectedUserIds.length >= 1) {
+                            alert('В приватном чате может быть только один участник');
+                            return;
+                        }
+                        selectedUserIds.push(user.id);
+                        const tag = document.createElement('div');
+                        tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
+                        tag.innerHTML = `${user.name}<button type="button" class="hover:bg-blue-200 rounded-full p-0.5"><i data-feather="x" class="w-4 h-4"></i></button>`;
+                        tag.querySelector('button').onclick = e => { e.stopPropagation(); selectedUserIds = selectedUserIds.filter(id => id !== user.id); tag.remove(); feather.replace(); };
+                        document.getElementById('selected-users').appendChild(tag);
+                        feather.replace();
+                        document.getElementById('user-search').value = '';
+                        results.classList.add('hidden');
+                    };
+                    results.appendChild(div);
+                });
+            } catch {
+                results.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка</div>';
             }
         }
 
-        // Инициализация
+        document.getElementById('user-search').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchUsers, 300);
+        });
+
+        document.getElementById('confirm-create').onclick = async () => {
+            const type = document.querySelector('input[name="chat-type"]:checked').value;
+            const name = type === 'group' ? document.getElementById('chat-name').value.trim() : null;
+            if (type === 'group' && !name) return alert('Введите название группы');
+            if (selectedUserIds.length === 0) return alert('Выберите участников');
+            if (type === 'private' && selectedUserIds.length !== 1) return alert('В приватном чате — один участник');
+
+            try {
+                const res = await fetch(`${API_BASE}/chats/create-chat`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, type, userIds: selectedUserIds })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
+                document.getElementById('create-chat-modal').classList.remove('show');
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+        };
+
+        // === Инициализация ===
         loadChats();
         startSignalR();
 
         sendButton.onclick = sendMessage;
-        messageInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-        fileInput.onchange = () => {
-            selectedFiles = Array.from(fileInput.files);
-            attachedFiles.innerHTML = selectedFiles.length ? selectedFiles.map(f => `<span class="attachment mr-2">${f.name}</span>`).join('') : '';
-        };
+        messageInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
 
         const observer = new MutationObserver(() => feather.replace());
         observer.observe(document.body, { childList: true, subtree: true });

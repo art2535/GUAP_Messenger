@@ -20,15 +20,17 @@ namespace Messenger.API.Controllers
         private readonly IMessageService _messageService;
         private readonly IMessageStatusService _messageStatusService;
         private readonly IReactionService _reactionService;
+        private readonly IAttachmentService _attachmentService;
         private readonly IHubContext<ChatHub> _hubContext;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
-            IReactionService reactionService, IHubContext<ChatHub> hubContext)
+            IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
             _reactionService = reactionService;
             _hubContext = hubContext;
+            _attachmentService = attachmentService;
         }
 
         [HttpPost("{chatId}")]
@@ -42,46 +44,86 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Unauthorized(new { isSuccess = false, error = "Пользователь не авторизован." });
+                var senderId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
                 if (chatId == Guid.Empty)
-                    return BadRequest(new { isSuccess = false, error = "Некорректный идентификатор чата." });
+                    return BadRequest(new { isSuccess = false, error = "Неверный chatId" });
 
                 if (string.IsNullOrWhiteSpace(messageText) && (files == null || files.Length == 0))
-                    return BadRequest(new { isSuccess = false, error = "Пустое сообщение." });
-
-                if (!Guid.TryParse(userIdClaim, out Guid senderId))
-                    return Unauthorized(new { isSuccess = false, error = "Некорректный идентификатор пользователя." });
-
-                var hasAttachments = files != null && files.Length > 0;
+                    return BadRequest(new { isSuccess = false, error = "Сообщение пустое" });
 
                 var result = await _messageService.SendMessageAsync(
-                    chatId, senderId, null,
-                    messageText, hasAttachments, cancellationToken);
+                    chatId: chatId,
+                    senderId: senderId,
+                    receiverId: null,
+                    content: messageText?.Trim(),
+                    hasAttachments: files != null && files.Length > 0,
+                    token: cancellationToken
+                );
 
-                if (!result.isSuccess)
-                    return BadRequest(new
+                if (!result.isSuccess || result.data == null)
+                    return BadRequest(new { isSuccess = false, error = result.error });
+
+                var message = result.data;
+
+                var attachments = new List<AttachmentDto>();
+
+                if (files != null && files.Length > 0)
+                {
+                    var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                    Directory.CreateDirectory(uploadFolder);
+
+                    foreach (var file in files.Where(f => f.Length > 0))
                     {
-                        isSuccess = false,
-                        error = result.error,
-                        innerError = result.innerError
-                    });
+                        var uniqueName = Guid.NewGuid() + Path.GetExtension(file.FileName);
+                        var filePath = Path.Combine(uploadFolder, uniqueName);
+                        var fileUrl = $"/uploads/{uniqueName}";
+
+                        await using var stream = new FileStream(filePath, FileMode.Create);
+                        await file.CopyToAsync(stream, cancellationToken);
+
+                        var attachment = new Attachment
+                        {
+                            AttachmentId = Guid.NewGuid(),
+                            MessageId = message.MessageId,
+                            FileName = file.FileName,
+                            FileType = file.ContentType,
+                            SizeInBytes = (int)file.Length,
+                            Url = fileUrl
+                        };
+
+                        await _attachmentService.AddAttachmentAsync(attachment, cancellationToken);
+
+                        attachments.Add(new AttachmentDto
+                        {
+                            AttachmentId = attachment.AttachmentId,
+                            FileName = attachment.FileName,
+                            FileType = attachment.FileType,
+                            SizeInBytes = attachment.SizeInBytes ?? 0,
+                            Url = attachment.Url
+                        });
+                    }
+                }
+
+                var messageDto = new MessageDto
+                {
+                    MessageId = message.MessageId,
+                    ChatId = message.ChatId,
+                    SenderId = message.SenderId,
+                    MessageText = message.MessageText,
+                    SentAt = message.SendTime,
+                    Status = "Sent",
+                    Attachments = attachments
+                };
 
                 await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ReceiveMessage", result.data);
+                    .SendAsync("ReceiveMessage", messageDto);
 
-                return Ok(new { isSuccess = true, data = result.data });
+                return Ok(new { isSuccess = true, data = messageDto });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    isSuccess = false,
-                    error = ex.Message,
-                    innerError = ex.InnerException?.Message
-                });
+                return StatusCode(500, new { isSuccess = false, error = ex.Message });
             }
         }
 
@@ -97,10 +139,28 @@ namespace Messenger.API.Controllers
             {
                 var messages = await _messageService.GetMessagesAsync(chatId, cancellationToken);
 
+                var dtos = messages.Select(m => new MessageDto
+                {
+                    MessageId = m.MessageId,
+                    ChatId = m.ChatId == Guid.Empty ? chatId : m.ChatId,
+                    SenderId = m.SenderId,
+                    MessageText = m.MessageText,
+                    SentAt = m.SendTime,
+                    Status = "Read",
+                    Attachments = m.Attachments.Select(a => new AttachmentDto
+                    {
+                        AttachmentId = a.AttachmentId,
+                        FileName = a.FileName,
+                        FileType = a.FileType,
+                        SizeInBytes = a.SizeInBytes ?? 0,
+                        Url = a.Url
+                    }).ToList()
+                }).ToList();
+
                 return Ok(new
                 {
                     IsSuccess = true,
-                    Data = messages
+                    Data = dtos
                 });
             }
             catch (Exception ex)

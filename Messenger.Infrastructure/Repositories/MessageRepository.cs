@@ -25,6 +25,7 @@ namespace Messenger.Infrastructure.Repositories
                 .Where(m => m.ChatId == chatId)
                 .Include(m => m.Sender)
                 .Include(m => m.Recipient)
+                .Include(m => m.Attachments)
                 .Include(m => m.Reactions)
                     .ThenInclude(r => r.User)
                 .OrderBy(m => m.SendTime)
