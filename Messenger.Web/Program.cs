@@ -1,4 +1,5 @@
 using Messenger.API.Extensions;
+using Messenger.Core.Hubs;
 
 namespace Messenger.Web
 {
@@ -34,16 +35,27 @@ namespace Messenger.Web
 
             app.UseHttpsRedirection();
 
-            app.UseRouting();
+            // 1. Статика из wwwroot Web-проекта (css, js, favicon и т.д.)
+            app.UseStaticFiles();
+
+            // 2. ПРОКСИ: все запросы /uploads/* ? API на 7045
+            //    ? САМОЕ ВАЖНОЕ — стоит СРАЗУ после UseStaticFiles()
+            app.Map("/uploads/{**path}", (string path, HttpContext ctx) =>
+            {
+                var targetUrl = $"https://localhost:7045/uploads/{path}{ctx.Request.QueryString}";
+                return Results.Redirect(targetUrl, permanent: false);
+            });
 
             app.UseSession();
-            app.UseStaticFiles();
+            app.UseRouting();
 
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapRazorPages();
-            app.MapStaticAssets();
+            app.MapStaticAssets();           // если есть такой метод
+            app.MapHub<ChatHub>("/hubs/chat");
+            app.MapControllers();
 
             app.Run();
         }

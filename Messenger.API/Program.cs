@@ -1,5 +1,6 @@
 using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Microsoft.Extensions.FileProviders;
 
 namespace Messenger.API
 {
@@ -48,6 +49,13 @@ namespace Messenger.API
             {
                 app.UseSwaggerInterface();
             }
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(
+                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+                RequestPath = "/uploads"
+            });
 
             app.UseCors("AllowWebApp");
             app.UseHttpsRedirection();

@@ -243,7 +243,7 @@
     </div>
 
     <!-- Lightbox -->
-    <div id="lightbox" class="lightbox" onclick="this.classList.remove('show')">
+    <div id="lightbox" class="lightbox" onclick="this.classList.remove('show'); lightboxImg.src=''">
         <img id="lightbox-img" src="" alt="">
     </div>
 
@@ -340,17 +340,29 @@
             if (!attachments?.length) return '';
             return attachments.map(att => {
                 if (att.fileType?.startsWith('image/')) {
-                    return `<img src="${att.url}" class="image-preview mt-2" onclick="lightboxImg.src='${att.url}'; lightbox.classList.add('show')">`;
+                    return `
+                        <img src="${att.url}"
+                             class="image-preview mt-2"
+                             alt="${att.fileName}"
+                             onclick="openLightbox('${att.url.replace(/'/g, "\\'")}')">
+                    `;
                 } else {
                     const size = att.sizeInBytes ? (att.sizeInBytes / 1024).toFixed(1) + ' КБ' : '';
                     return `
                         <div class="file-attachment mt-2">
-                            <i data-feather="file-text"></i>
-                            <a href="${att.url}" download="${att.fileName}" class="attachment">${att.fileName}</a>
+                            <i data-feather="file"></i>
+                            <a href="${att.url}" download="${att.fileName}">${att.fileName}</a>
                             ${size ? `<span class="text-xs opacity-70">(${size})</span>` : ''}
-                        </div>`;
+                        </div>
+                    `;
                 }
             }).join('');
+        }
+
+        // Вынеси открытие лайтбокса в отдельную функцию (надежнее)
+        function openLightbox(url) {
+            lightboxImg.src = url;
+            lightbox.classList.add('show');
         }
 
         function appendMessage(msg) {
@@ -416,33 +428,47 @@
 
         // === Превью прикреплённых файлов ===
         fileInput.onchange = () => {
-            selectedFiles = Array.from(fileInput.files);
+            selectedFiles = Array.from(fileInput.files || []);
+            renderAttachedPreviews();
+        };
+
+        function renderAttachedPreviews() {
             attachedFiles.innerHTML = '';
-            selectedFiles.forEach((file, index) => {
+
+            selectedFiles.forEach((file, currentIndex) => {
                 const wrapper = document.createElement('div');
-                wrapper.className = 'preview-attachment';
+                wrapper.className = 'preview-attachment relative inline-block';
+
+                // Кнопка удаления
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.innerHTML = '×';
+                removeBtn.className = 'absolute -top-2 -right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xl font-bold shadow-lg z-10 transition';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectedFiles.splice(currentIndex, 1);
+                    renderAttachedPreviews(); // перерисовываем с правильными индексами
+                };
+
                 if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = e => {
-                        wrapper.innerHTML = `
-                            <img src="${e.target.result}" class="w-20 h-20 object-cover rounded-lg">
-                            <button type="button" onclick="this.parentElement.remove(); selectedFiles.splice(${index},1)">×</button>
-                        `;
-                        attachedFiles.appendChild(wrapper);
-                    };
-                    reader.readAsDataURL(file);
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.className = 'w-24 h-24 object-cover rounded-xl border-2 border-gray-200 shadow-md';
+                    wrapper.appendChild(img);
                 } else {
                     wrapper.innerHTML = `
-                        <div class="bg-gray-100 border-2 border-dashed rounded-lg w-20 h-20 flex items-center justify-center">
-                            <i data-feather="file" class="w-8 h-8 text-gray-500"></i>
+                        <div class="w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-600">
+                            <i data-feather="file-text" class="w-10 h-10 mb-1"></i>
+                            <span class="text-xs px-2 text-center truncate w-full">${file.name.length > 15 ? file.name.slice(0,12)+'...' : file.name}</span>
                         </div>
-                        <button type="button" onclick="this.parentElement.remove(); selectedFiles.splice(${index},1)">×</button>
                     `;
-                    attachedFiles.appendChild(wrapper);
                     feather.replace();
                 }
+
+                wrapper.appendChild(removeBtn);
+                attachedFiles.appendChild(wrapper);
             });
-        };
+        }
 
         // === SignalR ===
         function updateConnectionStatus(text, color) {
