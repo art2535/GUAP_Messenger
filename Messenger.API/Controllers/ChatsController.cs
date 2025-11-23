@@ -82,46 +82,29 @@ namespace Messenger.API.Controllers
             {
                 var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-                var chatName = request.Type == "group"
+                // ЯВНО задаём имя чата — никогда не null!
+                string chatNameForDb = request.Type == "group"
                     ? request.Name.Trim()
-                    : null;
+                    : "Приватный чат";
 
-                var allParticipantIds = request.UserIds
-                    .Append(currentUserId)
-                    .Distinct()
-                    .ToList();
-
+                // Создаём чат — создатель уже добавлен внутри сервиса
                 var chat = await _chatService.CreateChatAsync(
-                    name: chatName ?? "Приватный чат",
+                    name: chatNameForDb,
                     type: request.Type,
                     creatorId: currentUserId,
                     ct);
 
-                foreach (var userId in allParticipantIds)
+                // Добавляем только выбранного пользователя (для private — одного, для group — всех)
+                foreach (var userId in request.UserIds.Distinct())
                 {
-                    await _chatService.AddParticipantToChatAsync(
-                        chatId: chat.ChatId,
-                        userId: userId,
-                        role: userId == currentUserId ? "владелец" : "участник",
-                        ct);
+                    if (userId == currentUserId) continue; // на всякий пожарный
+
+                    await _chatService.AddParticipantToChatAsync(chat.ChatId, userId, "участник", ct);
                 }
 
                 string displayName = request.Type == "group"
-                    ? chatName
+                    ? request.Name.Trim()
                     : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
-
-                var response = new
-                {
-                    IsSuccess = true,
-                    Message = "Чат успешно создан",
-                    Data = new
-                    {
-                        chat.ChatId,
-                        Name = displayName,
-                        Type = chat.Type,
-                        chat.CreationDate
-                    }
-                };
 
                 var chatForClients = new
                 {
@@ -130,21 +113,27 @@ namespace Messenger.API.Controllers
                     avatar = request.Type == "private"
                         ? await GetOtherUserAvatarAsync(request.UserIds[0], ct)
                         : (string?)null,
-                    type = chat.Type,
-                    lastMessage = (string?)null,
-                    participantId = request.Type == "private" ? request.UserIds[0].ToString() : null
+                    type = chat.Type
                 };
 
-                foreach (var userId in allParticipantIds)
+                // Рассылаем всем (включая себя)
+                var allUsers = request.UserIds.Append(currentUserId).Distinct();
+                foreach (var userId in allUsers)
                 {
                     await _hubContext.Clients.User(userId.ToString()).SendAsync("NewChat", chatForClients);
                 }
 
-                return Ok(response);
+                return Ok(new { IsSuccess = true, Data = new { chat.ChatId, Name = displayName } });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { IsSuccess = false, Error = "Не удалось создать чат" });
+                return StatusCode(500, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message,
+                    Inner = ex.InnerException?.Message,
+                    StackTrace = ex.StackTrace
+                });
             }
         }
 

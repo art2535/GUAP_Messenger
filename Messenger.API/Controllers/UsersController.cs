@@ -45,8 +45,8 @@ namespace Messenger.API.Controllers
 
             return Ok(new
             {
-                isSuccess = true,
-                data
+                IsSuccess = true,
+                Data = data
             });
         }
 

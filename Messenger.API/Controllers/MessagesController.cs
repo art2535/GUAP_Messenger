@@ -82,12 +82,35 @@ namespace Messenger.API.Controllers
                         await using var stream = new FileStream(filePath, FileMode.Create);
                         await file.CopyToAsync(stream, cancellationToken);
 
+                        Console.WriteLine($"Файл сохранён: {filePath}");
+                        Console.WriteLine($"URL: {fileUrl}");
+
+                        var fileExtension = Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? "";
+                        var detectedType = file.ContentType;
+
+                        if (string.IsNullOrEmpty(detectedType) || detectedType == "application/octet-stream")
+                        {
+                            detectedType = fileExtension switch
+                            {
+                                ".jpg" or ".jpeg" => "image/jpeg",
+                                ".png" => "image/png",
+                                ".gif" => "image/gif",
+                                ".webp" => "image/webp",
+                                ".bmp" => "image/bmp",
+                                ".svg" => "image/svg+xml",
+                                ".pdf" => "application/pdf",
+                                ".doc" or ".docx" => "application/msword",
+                                ".txt" => "text/plain",
+                                _ => "application/octet-stream"
+                            };
+                        }
+
                         var attachment = new Attachment
                         {
                             AttachmentId = Guid.NewGuid(),
                             MessageId = message.MessageId,
                             FileName = file.FileName,
-                            FileType = file.ContentType,
+                            FileType = detectedType,
                             SizeInBytes = (int)file.Length,
                             Url = fileUrl
                         };
@@ -151,7 +174,7 @@ namespace Messenger.API.Controllers
                     {
                         AttachmentId = a.AttachmentId,
                         FileName = a.FileName,
-                        FileType = a.FileType,
+                        FileType = a.FileType ?? GetMimeType(a.FileName),
                         SizeInBytes = a.SizeInBytes ?? 0,
                         Url = a.Url
                     }).ToList()
@@ -171,6 +194,20 @@ namespace Messenger.API.Controllers
                     Error = ex.Message
                 });
             }
+        }
+
+        private static string GetMimeType(string fileName)
+        {
+            var ext = Path.GetExtension(fileName)?.ToLowerInvariant();
+            return ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
         }
 
         [HttpPost("{messageId}/status")]
