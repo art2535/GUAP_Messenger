@@ -4,7 +4,7 @@ namespace Messenger.Core.DTOs.Chats
 {
     public class CreateChatRequest
     {
-        public string Name { get; set; } = string.Empty;
+        public string? Name { get; set; } = string.Empty;
 
         [Required]
         public string Type { get; set; } = string.Empty;

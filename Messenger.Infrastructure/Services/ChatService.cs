@@ -25,7 +25,17 @@ namespace Messenger.Infrastructure.Services
                 CreationDate = DateTime.Now
             };
 
+            var participant = new ChatParticipant
+            {
+                ChatId = chat.ChatId,
+                UserId = creatorId,
+                Role = "владелец",
+                JoinDate = DateTime.Now
+            };
+
             await _repository.AddChatAsync(chat, token);
+            await _repository.AddParticipantAsync(participant, token);
+
             return chat;
         }
 
