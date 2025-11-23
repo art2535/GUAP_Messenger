@@ -35,11 +35,7 @@ namespace Messenger.Web
 
             app.UseHttpsRedirection();
 
-            // 1. Статика из wwwroot Web-проекта (css, js, favicon и т.д.)
             app.UseStaticFiles();
-
-            // 2. ПРОКСИ: все запросы /uploads/* ? API на 7045
-            //    ? САМОЕ ВАЖНОЕ — стоит СРАЗУ после UseStaticFiles()
             app.Map("/uploads/{**path}", (string path, HttpContext ctx) =>
             {
                 var targetUrl = $"https://localhost:7045/uploads/{path}{ctx.Request.QueryString}";
@@ -53,7 +49,7 @@ namespace Messenger.Web
             app.UseAuthorization();
 
             app.MapRazorPages();
-            app.MapStaticAssets();           // если есть такой метод
+            app.MapStaticAssets();
             app.MapHub<ChatHub>("/hubs/chat");
             app.MapControllers();
 
