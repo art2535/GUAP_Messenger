@@ -129,6 +129,26 @@
         #connection-status .w-3 {
             transition: background-color 0.3s ease;
         }
+
+        #user-search-results {
+            position: absolute;
+            z-index: 100; /* было 20 → стало 100 */
+            width: calc(100% - 2rem); /* чтобы не вылезал за края модалки */
+            left: 1rem; /* отступ слева как у инпута */
+            right: 1rem;
+            margin-top: 0.25rem;
+            background: white;
+            border: 1px solid rgb(229 231 235);
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            max-height: 16rem;
+            overflow-y: auto;
+            display: none; /* вместо класса hidden */
+        }
+
+            #user-search-results.show {
+                display: block;
+            }
     </style>
 </head>
 <body class="h-screen">
@@ -260,7 +280,7 @@
                     <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off" class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400"></i>
                 </div>
-                <div id="user-search-results" class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto hidden"></div>
+                <div id="user-search-results"></div>
             </div>
             <div id="selected-users" class="flex flex-wrap gap-2 mb-6"></div>
             <div class="flex justify-end gap-3">
@@ -446,17 +466,17 @@
             });
 
             connection.on('NewChat', chat => {
-                if (document.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`)) return;
+                if (document.querySelector(`.chat-item[data-chat-id="${chat.chatId || chat.id}"]`)) return;
                 const div = document.createElement('div');
                 div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
-                div.dataset.chatId = chat.chatId;
+                div.dataset.chatId = chat.chatId || chat.id;
                 div.innerHTML = `
                     <div class="relative">
                         <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
                         <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <h3 class="font-medium truncate">${chat.name}</h3>
+                        <h3 class="font-medium truncate">${chat.name || 'Новый чат'}</h3>
                         <p class="text-sm text-gray-500 truncate">Чат создан</p>
                     </div>
                 `;
@@ -569,15 +589,16 @@
         // Поиск пользователей
         async function searchUsers() {
             const query = document.getElementById('user-search').value.trim();
-            if (query.length < 2) { document.getElementById('user-search-results').classList.add('hidden'); return; }
+            if (query.length < 2) {
+                document.getElementById('user-search-results').classList.remove('show');
+                return;
+            }
             if (query === lastQuery) return;
             lastQuery = query;
-
             const results = document.getElementById('user-search-results');
             results.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
-            results.classList.remove('hidden');
+            results.classList.add('show');
             feather.replace();
-
             try {
                 const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -603,15 +624,21 @@
                         const tag = document.createElement('div');
                         tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
                         tag.innerHTML = `${user.name}<button type="button" class="hover:bg-blue-200 rounded-full p-0.5"><i data-feather="x" class="w-4 h-4"></i></button>`;
-                        tag.querySelector('button').onclick = e => { e.stopPropagation(); selectedUserIds = selectedUserIds.filter(id => id !== user.id); tag.remove(); feather.replace(); };
+                        tag.querySelector('button').onclick = e => {
+                            e.stopPropagation();
+                            selectedUserIds = selectedUserIds.filter(id => id !== user.id);
+                            tag.remove();
+                            feather.replace();
+                        };
                         document.getElementById('selected-users').appendChild(tag);
                         feather.replace();
                         document.getElementById('user-search').value = '';
-                        results.classList.add('hidden');
+                        results.classList.remove('show');  // ← ИСПРАВЛЕНО: было .add('hidden')
                     };
                     results.appendChild(div);
                 });
-            } catch {
+            } catch (err) {
+                console.error(err);
                 results.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка</div>';
             }
         }
