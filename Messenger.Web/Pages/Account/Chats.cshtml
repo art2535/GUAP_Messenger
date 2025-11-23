@@ -495,8 +495,10 @@
                 if (msg.chatId === currentChatId) {
                     appendMessage(msg);
                 }
-                const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
-                if (item) item.querySelector('p').textContent = msg.messageText || (msg.attachments?.length ? 'Вложение' : 'Сообщение');
+                 const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
+                if (item) {
+                    item.querySelector('p').textContent = getLastMessagePreview(msg);
+                }
             });
 
             connection.on('NewChat', chat => {
@@ -574,7 +576,7 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <h3 class="font-medium truncate">${chat.name || 'Без имени'}</h3>
-                            <p class="text-sm text-gray-500 truncate">${chat.lastMessage || 'Нет сообщений'}</p>
+                            <p class="text-sm text-gray-500 truncate">${getLastMessagePreview(chat)}</p>
                         </div>
                     `;
                     div.onclick = () => openChat(div);
@@ -598,6 +600,39 @@
             } catch {
                 messagesContainer.innerHTML = '<p class="text-red-500 text-center">Ошибка загрузки</p>';
             }
+        }
+
+        // Умное превью последнего сообщения
+        function getLastMessagePreview(chatOrMessage) {
+            const msg = chatOrMessage.lastMessage || chatOrMessage;
+            if (!msg) return "Нет сообщений";
+
+            if (msg.messageText && msg.messageText.trim()) {
+                return msg.messageText.trim();
+            }
+
+            if (msg.attachments && msg.attachments.length > 0) {
+                const images = msg.attachments.filter(a =>
+                    a.fileType?.startsWith('image/') ||
+                    a.fileName?.match(/\.(jpe?g|png|gif|webp|bmp|svg)$/i)
+                ).length;
+
+                const videos = msg.attachments.filter(a =>
+                    a.fileType?.startsWith('video/') ||
+                    a.fileName?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+                ).length;
+
+                const files = msg.attachments.length - images - videos;
+
+                const parts = [];
+                if (images > 0) parts.push(images === 1 ? "Фото" : `Фото (${images})`);
+                if (videos > 0) parts.push(videos === 1 ? "Видео" : `Видео (${videos})`);
+                if (files > 0) parts.push(files === 1 ? "Файл" : `Файлов: ${files}`);
+
+                return parts.length > 0 ? parts.join(", ") : "Прикрепления";
+            }
+
+            return "Сообщение";
         }
 
         // === Модалка создания чата ===
