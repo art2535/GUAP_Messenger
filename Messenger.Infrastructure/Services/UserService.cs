@@ -156,17 +156,18 @@ namespace Messenger.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(search))
                 return Enumerable.Empty<UserSearch>();
 
+            search = search.ToLower().Trim();
             string searchPattern = $"%{search}%";
 
             var usersData = await _context.Users
                 .AsNoTracking()
                 .Include(u => u.Account)
                 .Where(u =>
-                    EF.Functions.Like(u.FirstName ?? "", searchPattern) ||
-                    EF.Functions.Like(u.LastName ?? "", searchPattern) ||
-                    EF.Functions.Like(u.Login ?? "", searchPattern) ||
-                    EF.Functions.Like((u.FirstName + " " + u.LastName) ?? "", searchPattern) ||
-                    EF.Functions.Like((u.LastName + " " + u.FirstName) ?? "", searchPattern)
+                    EF.Functions.Like((u.FirstName ?? "").ToLower(), searchPattern) ||
+                    EF.Functions.Like((u.LastName ?? "").ToLower(), searchPattern) ||
+                    EF.Functions.Like((u.Login ?? "").ToLower(), searchPattern) ||
+                    EF.Functions.Like(((u.FirstName + " " + u.LastName) ?? "").ToLower(), searchPattern) ||
+                    EF.Functions.Like(((u.LastName + " " + u.FirstName) ?? "").ToLower(), searchPattern)
                 )
                 .OrderBy(u => u.LastName)
                 .ThenBy(u => u.FirstName)
