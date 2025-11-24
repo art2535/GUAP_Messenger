@@ -1266,6 +1266,73 @@
             document.addEventListener('keydown', escHandler);
         });
 
+        // Поддержка кнопки Esc для закрытия чатов
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+
+            const modals = [
+                document.getElementById('delete-confirm-overlay'),
+                document.getElementById('chat-info-search-container'),
+                document.getElementById('chat-info-modal'),
+                document.getElementById('create-chat-modal'),
+                document.getElementById('lightbox')
+            ];
+
+            for (const modal of modals) {
+                if (!modal) continue;
+
+                if (modal.id === 'delete-confirm-overlay') {
+                    modal.remove();
+                    return;
+                }
+
+                if (modal.id === 'chat-info-search-container') {
+                    modal.remove();
+                    return;
+                }
+
+                if (modal.id === 'chat-info-modal' && modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                    removedParticipantIds = [];
+                    addedParticipantIds = [];
+                    chatNameChanged = false;
+                    toggleSaveButton();
+                    return;
+                }
+
+                if (modal.id === 'create-chat-modal' && modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                    return;
+                }
+
+                if (modal.id === 'lightbox' && modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                    document.getElementById('lightbox-img').src = '';
+                    return;
+                }
+
+                if (currentChatId !== null) {
+                    document.querySelectorAll('.chat-item.active').forEach(el => el.classList.remove('active'));
+
+                    currentChatId = null;
+                    if (connection?.state === 'Connected') {
+                        leaveChat(currentChatId);
+                    }
+
+                    messagesContainer.innerHTML = `
+                        <div class="flex items-center justify-center h-full text-gray-500">
+                            <p>Выберите чат для просмотра сообщений</p>
+                        </div>
+                    `;
+                    document.getElementById('chat-title').textContent = 'Выберите чат';
+                    document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
+                    document.getElementById('chat-info-avatar').src = 'https://static.photos/people/200x200/default';
+
+                    return;
+                }
+            }
+        });
+
         // === Инициализация ===
         loadChats();
         startSignalR();
