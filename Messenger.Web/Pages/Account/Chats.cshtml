@@ -126,15 +126,23 @@
                 cursor: pointer;
             }
 
+        .modal {
+            z-index: 1000 !important;
+        }
+
+        .lightbox {
+            z-index: 2000 !important;
+        }
+
         #connection-status .w-3 {
             transition: background-color 0.3s ease;
         }
 
         #user-search-results {
             position: absolute;
-            z-index: 100; /* было 20 → стало 100 */
-            width: calc(100% - 2rem); /* чтобы не вылезал за края модалки */
-            left: 1rem; /* отступ слева как у инпута */
+            z-index: 100;
+            width: calc(100% - 2rem);
+            left: 1rem;
             right: 1rem;
             margin-top: 0.25rem;
             background: white;
@@ -143,7 +151,7 @@
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
             max-height: 16rem;
             overflow-y: auto;
-            display: none; /* вместо класса hidden */
+            display: none;
         }
 
             #user-search-results.show {
@@ -217,8 +225,18 @@
 
         <!-- Основная область -->
         <div class="flex-1 flex flex-col">
-            <div id="chat-header" class="p-4 border-b border-gray-200 flex items-center justify-between bg-white">
-                <h2 id="chat-title" class="font-medium">Выберите чат</h2>
+            <div id="chat-header" class="p-4 border-b border-gray-200 bg-white flex items-center justify-between cursor-pointer hover:bg-gray-50 transition" onclick="openChatInfo()">
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <img id="chat-info-avatar" src="https://static.photos/people/200x200/default" class="w-12 h-12 rounded-full object-cover">
+                        <span id="chat-online-indicator" class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                    </div>
+                    <div>
+                        <h2 id="chat-title" class="font-semibold text-lg">Выберите чат</h2>
+                        <p id="chat-subtitle" class="text-sm text-gray-500">Нажмите, чтобы посмотреть информацию</p>
+                    </div>
+                </div>
+                <i data-feather="chevron-down" class="w-5 h-5 text-gray-500"></i>
             </div>
 
             <div id="messages-container" class="flex-1 p-4 overflow-y-auto bg-gray-50">
@@ -286,6 +304,37 @@
             <div class="flex justify-end gap-3">
                 <button id="cancel-create" class="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition">Отмена</button>
                 <button id="confirm-create" class="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-lg transition transform hover:scale-105">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- НОВАЯ МОДАЛКА: Информация о чате -->
+    <div id="chat-info-modal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 max-h-screen overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold">Информация о чате</h3>
+                <button onclick="document.getElementById('chat-info-modal').classList.remove('show')" class="text-gray-400 hover:text-gray-600">
+                    <i data-feather="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-col items-center mb-8">
+                <img id="modal-chat-avatar" src="https://static.photos/people/200x200/default" class="w-24 h-24 rounded-full object-cover mb-4">
+                <input type="text" id="modal-chat-name" class="text-2xl font-bold text-center bg-transparent border-b-2 border-transparent focus:border-blue-500 outline-none w-full" placeholder="Название чата">
+                <p id="modal-chat-type" class="text-sm text-gray-500 mt-2"></p>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold">Участники <span id="participants-count" class="text-gray-500"></span></h4>
+                    <button id="add-participant-btn" class="text-blue-600 text-sm font-medium hover:underline">+ Добавить</button>
+                </div>
+                <div id="participants-list" class="space-y-2"></div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="document.getElementById('chat-info-modal').classList.remove('show')" class="px-6 py-3 text-gray-600 font-medium">Отмена</button>
+                <button id="save-chat-info" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-medium opacity-0 pointer-events-none transition">Сохранить изменения</button>
             </div>
         </div>
     </div>
@@ -501,6 +550,36 @@
                 }
             });
 
+            connection.on('ReceiveSearchResults', users => {
+                userSearchResults.innerHTML = "";
+
+                if (!users || users.length === 0) {
+                    userSearchResults.innerHTML = "<div class='p-2 text-muted'>Нет пользователей</div>";
+                    return;
+                }
+
+                users.forEach(user => {
+                    const userDiv = document.createElement("div");
+                    userDiv.className = "user-search-item p-2 border-bottom";
+                    userDiv.style.cursor = "pointer";
+                    userDiv.dataset.userId = user.id;
+
+                    userDiv.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <img src="/avatars/${user.avatarPath || 'default.png'}"
+                                 class="rounded-circle me-2" width="32" height="32">
+                            <span>${user.fullName}</span>
+                        </div>
+                    `;
+
+                    userDiv.onclick = () => {
+                        toggleUserSelection(user.id, user.fullName);
+                    };
+
+                    userSearchResults.appendChild(userDiv);
+                });
+            });
+
             connection.on('NewChat', chat => {
                 if (document.querySelector(`.chat-item[data-chat-id="${chat.chatId || chat.id}"]`)) return;
                 const div = document.createElement('div');
@@ -558,6 +637,10 @@
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
             loadMessages(chatId);
             joinChat(chatId);
+
+            document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
+            document.getElementById('chat-subtitle').textContent =
+            item.querySelector('p').textContent === 'Нет сообщений' ? 'Нет сообщений' : 'Последнее: ' + item.querySelector('p').textContent;
         }
 
         async function loadChats() {
@@ -642,11 +725,17 @@
         }
 
         document.getElementById('create-chat-btn').onclick = () => {
-            selectedUserIds = []; document.getElementById('selected-users').innerHTML = '';
-            document.getElementById('chat-name').value = ''; document.getElementById('user-search').value = '';
+            selectedUserIds = [];
+            document.getElementById('selected-users').innerHTML = '';
+            document.getElementById('chat-name').value = '';
+            document.getElementById('user-search').value = '';
             document.querySelector('input[value="private"]').checked = true;
             toggleChatNameField();
             document.getElementById('create-chat-modal').classList.add('show');
+
+            lastQuery = '';
+            document.getElementById('user-search-results').classList.remove('show');
+
             setTimeout(() => document.getElementById('user-search').focus(), 150);
         };
 
@@ -658,60 +747,105 @@
         // Поиск пользователей
         async function searchUsers() {
             const query = document.getElementById('user-search').value.trim();
+            const results = document.getElementById('user-search-results');
+
             if (query.length < 2) {
-                document.getElementById('user-search-results').classList.remove('show');
+                results.classList.remove('show');
+                results.innerHTML = '';
+                lastQuery = '';
                 return;
             }
+
             if (query === lastQuery) return;
             lastQuery = query;
-            const results = document.getElementById('user-search-results');
-            results.innerHTML = '<div class="p-4 text-center text-gray-500"><i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...</div>';
+
+            results.innerHTML = `
+                <div class="p-4 text-center text-gray-500">
+                    <i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...
+                </div>
+            `;
             results.classList.add('show');
             feather.replace();
+
             try {
                 const res = await fetch(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
+
                 results.innerHTML = '';
-                if (!json.data?.length) {
+
+                if (!json.data || json.data.length === 0) {
                     results.innerHTML = '<div class="p-4 text-gray-500 text-sm">Ничего не найдено</div>';
+                    feather.replace();
                     return;
                 }
-                json.data.filter(u => !selectedUserIds.includes(u.id)).slice(0, 8).forEach(user => {
+
+                const availableUsers = json.data
+                    .filter(u => !selectedUserIds.includes(u.id))
+                    .slice(0, 8);
+
+                if (availableUsers.length === 0) {
+                    results.innerHTML = '<div class="p-4 text-gray-500 text-sm">Все уже добавлены</div>';
+                    feather.replace();
+                    return;
+                }
+
+                availableUsers.forEach(user => {
                     const div = document.createElement('div');
-                    div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition';
-                    div.innerHTML = `<img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
-                                     <span class="font-medium">${user.name}</span>`;
+                    div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition rounded-lg';
+                    div.innerHTML = `
+                        <img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
+                        <span class="font-medium">${user.name || 'Без имени'}</span>
+                    `;
+
                     div.onclick = () => {
                         if (selectedUserIds.includes(user.id)) return;
-                        if (document.querySelector('input[value="private"]:checked') && selectedUserIds.length >= 1) {
+
+                        const isPrivate = document.querySelector('input[name="chat-type"]:checked').value === 'private';
+                        if (isPrivate && selectedUserIds.length >= 1) {
                             alert('В приватном чате может быть только один участник');
                             return;
                         }
+
                         selectedUserIds.push(user.id);
+
                         const tag = document.createElement('div');
                         tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
-                        tag.innerHTML = `${user.name}<button type="button" class="hover:bg-blue-200 rounded-full p-0.5"><i data-feather="x" class="w-4 h-4"></i></button>`;
-                        tag.querySelector('button').onclick = e => {
+                        tag.innerHTML = `
+                            ${user.name || 'Пользователь'}
+                            <button type="button" class="ml-2 hover:bg-blue-200 rounded-full p-0.5 transition">
+                                <i data-feather="x" class="w-4 h-4"></i>
+                            </button>
+                        `;
+
+                        tag.querySelector('button').onclick = (e) => {
                             e.stopPropagation();
                             selectedUserIds = selectedUserIds.filter(id => id !== user.id);
                             tag.remove();
-                            feather.replace();
                         };
+
                         document.getElementById('selected-users').appendChild(tag);
                         feather.replace();
+
                         document.getElementById('user-search').value = '';
                         results.classList.remove('show');
+                        lastQuery = '';
                     };
+
                     results.appendChild(div);
                 });
+
+                feather.replace();
+
             } catch (err) {
-                console.error(err);
-                results.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка</div>';
+                console.error('Ошибка поиска:', err);
+                results.innerHTML = '<div class="p-4 text-red-500 text-sm">Ошибка связи</div>';
+                feather.replace();
             }
         }
 
+        // Обработчик ввода с дебаунсом
         document.getElementById('user-search').addEventListener('input', () => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(searchUsers, 300);
@@ -737,6 +871,162 @@
                 alert('Ошибка: ' + err.message);
             }
         };
+
+        let currentChatInfo = null;
+        let chatNameChanged = false;
+        let participantsChanged = false;
+
+        function openChatInfo() {
+            if (!currentChatId) {
+                alert('Выберите чат');
+                return;
+            }
+
+            document.getElementById('chat-info-modal').classList.add('show');
+
+            fetch(`${API_BASE}/chats/${currentChatId}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then(res => {
+                if (!res.isSuccess || !res.data) throw new Error(res.error || 'Нет данных');
+
+                const chat = res.data;
+                currentChatInfo = { ...chat };
+
+                // Аватар
+                document.getElementById('modal-chat-avatar').src = chat.avatar || 'https://static.photos/people/200x200/default';
+
+                // Название
+                const nameInput = document.getElementById('modal-chat-name');
+                nameInput.value = chat.name || 'Чат';
+                nameInput.readOnly = chat.type !== 'group';
+
+                // Тип
+                document.getElementById('modal-chat-type').textContent =
+                    chat.type === 'group' ? 'Групповой чат' : 'Приватный чат';
+
+                // Участники
+                document.getElementById('participants-count').textContent = `(${chat.participants.length})`;
+
+                const list = document.getElementById('participants-list');
+                list.innerHTML = '';
+
+                chat.participants.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <img src="${p.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
+                            <div>
+                                <p class="font-semibold">${p.name}</p>
+                                <p class="text-xs text-gray-500">${p.id === '@Model.UserId' ? 'Вы' : ''}</p>
+                            </div>
+                        </div>
+                        ${chat.type === 'group' && p.id !== '@Model.UserId' ? `
+                        <button onclick="removeParticipant('${p.id}', this)" class="text-red-600 hover:bg-red-100 rounded-full p-2">
+                            <i data-feather="x" class="w-5 h-5"></i>
+                        </button>` : ''}
+                    `;
+                    list.appendChild(div);
+                });
+
+                feather.replace();
+
+                // Сброс изменений
+                chatNameChanged = false;
+                participantsChanged = false;
+                document.getElementById('save-chat-info').addEventListener('click', () => {
+                    const newName = document.getElementById('modal-chat-name').value.trim();
+
+                    fetch(`${API_BASE}/chats/${currentChatId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ name: newName })
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.isSuccess) {
+                            alert('Чат обновлён');
+                            document.getElementById('chat-title').textContent = newName;
+                            document.getElementById('chat-info-modal').classList.remove('show');
+                        } else {
+                            alert('Ошибка: ' + res.error);
+                        }
+                    });
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Ошибка загрузки чата');
+                document.getElementById('chat-info-modal').classList.remove('show');
+            });
+        }
+
+        // Отслеживание изменений
+        document.getElementById('modal-chat-name').addEventListener('input', () => {
+            chatNameChanged = true;
+            showSaveButton();
+        });
+
+        function showSaveButton() {
+            if (chatNameChanged || participantsChanged) {
+                document.getElementById('save-chat-info').classList.remove('opacity-0', 'pointer-events-none');
+            } else {
+                document.getElementById('save-chat-info').classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        function removeParticipant(userId, btn) {
+            if (!confirm('Удалить участника из чата?')) return;
+            currentChatInfo.participants = currentChatInfo.participants.filter(p => p.id !== userId);
+            btn.closest('div').remove();
+            participantsChanged = true;
+            showSaveButton();
+            document.getElementById('participants-count').textContent = `(${currentChatInfo.participants.length})`;
+        }
+
+        // Кнопка "Добавить участника"
+        document.getElementById('add-participant-btn').addEventListener('click', () => {
+            alert('Скоро будет добавление через поиск');
+            // Можно подключить тот же поиск, что и в создании чата
+        });
+
+        // Сохранение изменений
+        document.getElementById('save-chat-info').addEventListener('click', () => {
+            const newName = document.getElementById('modal-chat-name').value.trim();
+            const participantIds = currentChatInfo.participants.map(p => p.id);
+
+            fetch(`${API_BASE}/chats/${currentChatId}/update`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: newName || null,
+                    userIdsToAdd: [],
+                    userIdsToRemove: [] // можно расширить
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.isSuccess) {
+                    alert('Чат обновлён');
+                    document.getElementById('chat-title').textContent = newName || document.getElementById('chat-title').textContent;
+                    document.getElementById('chat-info-modal').classList.remove('show');
+                } else {
+                    alert('Ошибка: ' + (res.error || 'неизвестно'));
+                }
+            });
+        });
 
         // === Инициализация ===
         loadChats();

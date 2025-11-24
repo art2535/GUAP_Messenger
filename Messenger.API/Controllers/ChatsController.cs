@@ -28,7 +28,7 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
-        [HttpGet()]
+        [HttpGet]
         [SwaggerOperation(
             Summary = "Получить чаты пользователя",
             Description = "Возвращает список всех чатов, в которых состоит указанный пользователь.")]
@@ -54,6 +54,58 @@ namespace Messenger.API.Controllers
                     IsSuccess = false,
                     Error = ex.Message
                 });
+            }
+        }
+
+        [HttpGet("{chatId}")]
+        [SwaggerOperation(
+            Summary = "Получить информацию о конкретном чате",
+            Description = "Возвращает детали чата: название, тип, участников, аватар и т.д.")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 404)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> GetChatByIdAsync(Guid chatId, CancellationToken ct = default)
+        {
+            try
+            {
+                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null)
+                    return NotFound(new { IsSuccess = false, Error = "Чат не найден" });
+
+                // Проверяем, состоит ли пользователь в чате
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+                if (!participants.Any(p => p.UserId == currentUserId))
+                    return Forbid();
+
+                // Формируем список участников
+                var participantDtos = participants.Select(p => new
+                {
+                    id = p.UserId,
+                    name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
+                    avatar = p.User?.Account?.Avatar
+                }).ToList();
+
+                // Для приватного чата — имя собеседника
+                string displayName = chat.Type == "group"
+                    ? chat.Name
+                    : await GetPrivateChatDisplayNameAsync(chatId, currentUserId, ct);
+
+                var result = new
+                {
+                    chatId = chat.ChatId,
+                    name = displayName,
+                    type = chat.Type,
+                    avatar = chat.Type == "group" ? (string?)null : await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.id != currentUserId)?.id ?? currentUserId, ct),
+                    participants = participantDtos
+                };
+
+                return Ok(new { IsSuccess = true, Data = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
 
