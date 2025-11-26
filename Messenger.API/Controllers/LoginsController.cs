@@ -75,7 +75,7 @@ namespace Messenger.API.Controllers
                     UserId = userId,
                     Token = request.Token,
                     IpAddress = request.IpAddress,
-                    LoginTime = DateTime.UtcNow,
+                    LoginTime = DateTime.Now,
                     Active = true
                 };
 
@@ -85,6 +85,47 @@ namespace Messenger.API.Controllers
                 {
                     IsSuccess = true,
                     Message = "Вход успешно добавлен"
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        [HttpPatch]
+        [SwaggerOperation(
+            Summary = "Обновление записи входа (логина)",
+            Description = "Обновляет текущую запись о выходе пользователя из системы. " +
+                          "Требуется JWT-аутентификация. " +
+                          "В теле запроса передаются данные токена и IP-адрес пользователя.")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                var logins = await _loginService.GetLoginsByUserIdAsync(userId, cancellationToken);
+
+                var userLogout = logins.FirstOrDefault(l => l.UserId == userId && l.Active == true);
+                if (userLogout != null)
+                {
+                    userLogout.Active = false;
+                    await _loginService.UpdateLoginAsync(userLogout, cancellationToken);
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Message = "Выход успешно обновлен"
                 });
             }
             catch (Exception ex)

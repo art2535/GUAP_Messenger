@@ -23,5 +23,10 @@ namespace Messenger.Infrastructure.Services
         {
             return await _loginRepository.GetLoginByUserIdAsync(userId, cancellationToken);
         }
+
+        public async Task UpdateLoginAsync(Login login, CancellationToken cancellationToken = default)
+        {
+            await _loginRepository.UpdateLoginAsync(login, cancellationToken);
+        }
     }
 }

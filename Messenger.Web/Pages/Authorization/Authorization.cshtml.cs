@@ -1,8 +1,13 @@
 using Messenger.Core.DTOs.Auth;
+using Messenger.Core.DTOs.Logins;
 using Messenger.Web.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Headers;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -85,6 +90,24 @@ namespace Messenger.Web.Pages.Authorization
 
                     if (userResponse != null && !string.IsNullOrEmpty(userResponse.Token))
                     {
+                        httpClient.DefaultRequestHeaders.Authorization =
+                            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, userResponse.Token);
+
+                        var logRequest = new CreateLoginRequest
+                        {
+                            Token = userResponse.Token,
+                            IpAddress = GetLocalIPv4()
+                        };
+
+                        var logContent = new StringContent(JsonSerializer.Serialize(logRequest), Encoding.UTF8, "application/json");
+                        var logResponse = await httpClient.PostAsync("https://localhost:7045/api/logins", logContent);
+
+                        if (!logResponse.IsSuccessStatusCode)
+                        {
+                            ErrorMessage = "Ошибка записи лога входа";
+                            return Page();
+                        }
+
                         HttpContext.Session.SetString("JWT_SECRET", userResponse.Token);
                         HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
                         HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
@@ -101,6 +124,26 @@ namespace Messenger.Web.Pages.Authorization
                     return Page();
                 }
             }
+        }
+
+        public static string GetLocalIPv4()
+        {
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus == OperationalStatus.Up)
+                {
+                    var props = ni.GetIPProperties();
+                    foreach (var addr in props.UnicastAddresses)
+                    {
+                        if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            return addr.Address.ToString();
+                        }
+                    }
+                }
+            }
+
+            return "IPv4 адрес компьютера не найден";
         }
     }
 }
