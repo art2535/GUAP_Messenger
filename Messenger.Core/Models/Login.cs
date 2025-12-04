@@ -13,11 +13,11 @@ public partial class Login
     [Column("User_ID")]
     public Guid UserId { get; set; }
 
-    [StringLength(100)]
+    [Column(TypeName = "text")]
     public string Token { get; set; } = null!;
 
     [Column("IP_Address")]
-    [StringLength(15)]
+    [StringLength(45)]
     public string IpAddress { get; set; } = null!;
 
     [Column("Login_Time", TypeName = "timestamp without time zone")]

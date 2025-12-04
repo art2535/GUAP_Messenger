@@ -119,6 +119,7 @@ namespace Messenger.API.Controllers
                 if (userLogout != null)
                 {
                     userLogout.Active = false;
+                    userLogout.LogoutTime = DateTime.Now;
                     await _loginService.UpdateLoginAsync(userLogout, cancellationToken);
                 }
 
