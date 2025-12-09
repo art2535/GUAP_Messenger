@@ -74,12 +74,17 @@ namespace Messenger.API.Controllers
                 var (token, userId, role) = 
                     await _userService.LoginAsync(loginRequest.Login, loginRequest.Password, cancellationToken);
 
+                var user = await _userService.GetUserByIdAsync(userId, cancellationToken);
+                var fullName = string.Join(" ", new[] { user?.FirstName, user?.LastName }
+                    .Where(s => !string.IsNullOrEmpty(s)));
+
                 return Ok(new
                 {
                     IsSuccess = true,
                     UserId = userId,
                     Role = role,
-                    Token = token
+                    Token = token,
+                    FullName = fullName
                 });
             }
             catch (Exception ex)

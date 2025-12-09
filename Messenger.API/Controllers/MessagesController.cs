@@ -39,7 +39,7 @@ namespace Messenger.API.Controllers
             Description = "Отправляет новое сообщение в указанный чат. Требуется авторизация.")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> SendMessageAsync(Guid chatId, [FromForm] string? messageText,
+        public async Task<IActionResult> SendMessageAsync(Guid chatId, [FromForm] string? messageText, [FromForm] string? senderName,
             [FromForm] IFormFile[]? files, CancellationToken cancellationToken = default)
         {
             try
@@ -133,6 +133,9 @@ namespace Messenger.API.Controllers
                     MessageId = message.MessageId,
                     ChatId = message.ChatId,
                     SenderId = message.SenderId,
+                    SenderName = string.IsNullOrWhiteSpace(senderName)
+                        ? "Пользователь"
+                        : senderName.Trim(),
                     MessageText = message.MessageText,
                     SentAt = message.SendTime,
                     Status = "Sent",
@@ -167,6 +170,9 @@ namespace Messenger.API.Controllers
                     MessageId = m.MessageId,
                     ChatId = m.ChatId == Guid.Empty ? chatId : m.ChatId,
                     SenderId = m.SenderId,
+                    SenderName = m.Sender != null
+                        ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
+                        : "Удалённый пользователь",
                     MessageText = m.MessageText,
                     SentAt = m.SendTime,
                     Status = "Read",
