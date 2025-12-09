@@ -449,7 +449,10 @@
             if (msg.messageId) div.dataset.mid = msg.messageId;
 
             const time = msg.sentAt
-                ? new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+                ? new Date(msg.sentAt + 'Z').toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
                 : '';
 
             const statusText = msg.status === 'Read'
