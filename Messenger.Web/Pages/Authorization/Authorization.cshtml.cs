@@ -68,11 +68,12 @@ namespace Messenger.Web.Pages.Authorization
 
                     var content = new StringContent(JsonSerializer.Serialize(loginRequest), Encoding.UTF8, "application/json");
 
-                    var response = await httpClient.PostAsync("https://localhost:7045/api/authorization/login", content);
+                    var response = await httpClient.PostAsync("https://localhost:7001/api/authorization/login", content);
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        ErrorMessage = "Авторизация не прошла";
+                        var errorContent = await response.Content.ReadAsStringAsync();
+                        ErrorMessage = $"Авторизация не прошла: {response.StatusCode} — {errorContent}";
                         return Page();
                     }
 
@@ -100,7 +101,7 @@ namespace Messenger.Web.Pages.Authorization
                         };
 
                         var logContent = new StringContent(JsonSerializer.Serialize(logRequest), Encoding.UTF8, "application/json");
-                        var logResponse = await httpClient.PostAsync("https://localhost:7045/api/logins", logContent);
+                        var logResponse = await httpClient.PostAsync("https://localhost:7001/api/logins", logContent);
 
                         if (!logResponse.IsSuccessStatusCode)
                         {
@@ -112,6 +113,7 @@ namespace Messenger.Web.Pages.Authorization
                         HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
                         HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
                         HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
+                        HttpContext.Session.SetString("USER_NAME", userResponse.FullName ?? userResponse.UserName ?? loginRequest.Login);
 
                         return RedirectToPage("/Account/Chats");
                     }

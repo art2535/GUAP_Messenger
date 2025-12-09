@@ -20,7 +20,7 @@ namespace Messenger.Web.Pages.Authorization
             if (!string.IsNullOrEmpty(token))
             {
                 var client = _httpClientFactory.CreateClient();
-                var request = new HttpRequestMessage(HttpMethod.Patch, "https://localhost:7045/api/logins");
+                var request = new HttpRequestMessage(HttpMethod.Patch, "https://localhost:7001/api/logins");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 try

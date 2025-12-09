@@ -38,7 +38,7 @@ namespace Messenger.Web
             app.UseStaticFiles();
             app.Map("/uploads/{**path}", (string path, HttpContext ctx) =>
             {
-                var targetUrl = $"https://localhost:7045/uploads/{path}{ctx.Request.QueryString}";
+                var targetUrl = $"https://localhost:7001/uploads/{path}{ctx.Request.QueryString}";
                 return Results.Redirect(targetUrl, permanent: false);
             });
 

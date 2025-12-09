@@ -64,7 +64,7 @@ namespace Messenger.Web.Pages.Authorization
                     var content = new StringContent(JsonSerializer.Serialize(registerRequest), Encoding.UTF8,
                         "application/json");
 
-                    var response = await httpClient.PostAsync("https://localhost:7045/api/Authorization/register", content);
+                    var response = await httpClient.PostAsync("https://localhost:7001/api/Authorization/register", content);
                     if (!response.IsSuccessStatusCode)
                     {
                         ErrorMessage = "Регистрация не прошла";

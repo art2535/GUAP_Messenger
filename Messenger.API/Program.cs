@@ -36,7 +36,7 @@ namespace Messenger.API
             {
                 options.AddPolicy("AllowWebApp", policy =>
                 {
-                    policy.WithOrigins("https://localhost:7128")
+                    policy.WithOrigins("https://localhost:7228")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -59,12 +59,10 @@ namespace Messenger.API
                     var path = ctx.Context.Request.Path.Value?.ToLowerInvariant() ?? "";
                     var query = ctx.Context.Request.QueryString.Value ?? "";
 
-                    // Список расширений, которые должны отображаться как изображения (не скачиваться)
                     var imageExtensions = new HashSet<string> { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif" };
 
                     var extension = Path.GetExtension(path);
 
-                    // Если это НЕ изображение ИЛИ в запросе есть ?download — принудительно скачиваем
                     if (!imageExtensions.Contains(extension) || query.Contains("download"))
                     {
                         var fileName = Path.GetFileName(path);
