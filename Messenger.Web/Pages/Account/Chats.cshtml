@@ -355,8 +355,8 @@
     <script>
         feather.replace();
 
-        const API_BASE = 'https://localhost:7045/api';
-        const HUB_URL = 'https://localhost:7045/hubs/chat';
+        const API_BASE = 'https://localhost:7001/api';
+        const HUB_URL = 'https://localhost:7001/hubs/chat';
         const token = '@(HttpContext.Session.GetString("JWT_SECRET") ?? "")';
 
         const chatsList = document.getElementById('chats-list');
@@ -436,19 +436,57 @@
         }
 
         function appendMessage(msg) {
+            if (msg.messageId && document.querySelector(`[data-mid="${msg.messageId}"]`)) {
+                return;
+            }
+
             const isMine = msg.senderId === '@Model.UserId';
+
+            const senderName = decodeHtml(msg.senderName || msg.SenderName || "Пользователь");
+
             const div = document.createElement('div');
-            div.className = `mb-4 flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            div.className = `mb-6 flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            if (msg.messageId) div.dataset.mid = msg.messageId;
+
+            const time = msg.sentAt
+                ? new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+                : '';
+
+            const statusText = msg.status === 'Read'
+                ? 'Прочитано'
+                : msg.status === 'Delivered'
+                ? 'Доставлено'
+                : 'Отправлено';
+
+            let footerHtml = '';
+            if (isMine) {
+                footerHtml = `
+                    <div class="text-xs text-blue-500 mt-1 flex items-center gap-1.5 flex-row-reverse">
+                        <span>${statusText}</span>
+                        <span>·</span>
+                        <span class="font-medium">${senderName} (вы)</span>
+                        <span>· ${time}</span>
+                    </div>`;
+            } else {
+                footerHtml = `
+                    <div class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                        <span class="font-medium">${senderName}</span>
+                        <span>·</span>
+                        <span>${statusText}</span>
+                        <span>· ${time}</span>
+                    </div>`;
+            }
+
             div.innerHTML = `
-                <div class="inline-block max-w-xs px-4 py-2 rounded-2xl shadow-sm ${isMine ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'}">
-                    ${msg.messageText ? `<p class="break-words whitespace-pre-wrap">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
-                    ${renderAttachments(msg.attachments)}
-                    <div class="text-xs mt-1 opacity-70">
-                        ${msg.status === 'Read' ? 'Прочитано' : msg.status === 'Delivered' ? 'Доставлено' : 'Отправлено'}
-                        ${msg.sentAt ? ' · ' + new Date(msg.sentAt).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : ''}
+                <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-xs lg:max-w-md">
+                    <div class="inline-block px-4 py-2.5 rounded-2xl shadow-sm ${isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
+                        ${msg.messageText ? `<p class="break-words whitespace-pre-wrap leading-relaxed">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
+                        ${renderAttachments(msg.attachments || [])}
                     </div>
+                    ${footerHtml}
                 </div>
             `;
+
             messagesContainer.appendChild(div);
             feather.replace();
             scrollToBottom();
@@ -458,41 +496,56 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
+        function decodeHtml(html) {
+            const txt = document.createElement("textarea");
+            txt.innerHTML = html;
+            return txt.value;
+        }
+
         // === Отправка сообщения ===
         async function sendMessage() {
-            if (isSending || !currentChatId) return;
-            const text = messageInput.value.trim();
-            if (!text && selectedFiles.length === 0) return;
+            if (!currentChatId || !connection) return;
 
-            isSending = true;
-            const oldIcon = sendButton.innerHTML;
-            sendButton.innerHTML = '<i data-feather="loader" class="w-5 h-5 animate-spin"></i>';
-            feather.replace();
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            const files = document.getElementById('file-input').files;
 
-            const form = new FormData();
-            if (text) form.append('messageText', text);
-            selectedFiles.forEach(f => form.append('files', f));
+            if (!text && files.length === 0) return;
+
+            const senderName = '@(HttpContext.Session.GetString("USER_NAME") ?? "Пользователь")';
+
+            const formData = new FormData();
+            if (text) formData.append('messageText', text);
+            formData.append('senderName', senderName);
+            for (let file of files) {
+                formData.append('files', file);
+            }
 
             try {
-                const res = await fetch(`${API_BASE}/messages/${currentChatId}`, {
+                const response = await fetch(`${API_BASE}/messages/${currentChatId}`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: form
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
                 });
-                const json = await res.json();
-                if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
 
-                messageInput.value = '';
-                selectedFiles = [];
-                attachedFiles.innerHTML = '';
-                fileInput.value = '';
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error || 'Ошибка сервера');
+                }
+
+                // ВОБЯЗАТЕЛЬНО ДОБАВЬ ЭТУ СТРОКУ:
+                const result = await response.json();
+
+                // Очистка полей
+                input.value = '';
+                document.getElementById('file-input').value = '';
+                document.getElementById('attached-files').innerHTML = '';
+
             } catch (err) {
-                alert('Ошибка отправки: ' + err.message);
-            } finally {
-                isSending = false;
-                sendButton.innerHTML = oldIcon;
-                feather.replace();
-                messageInput.focus();
+                console.error('Send error:', err);
+                alert('Не удалось отправить: ' + err.message);
             }
         }
 
