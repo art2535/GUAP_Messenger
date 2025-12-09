@@ -538,10 +538,6 @@
                     throw new Error(error || 'Ошибка сервера');
                 }
 
-                // ВОБЯЗАТЕЛЬНО ДОБАВЬ ЭТУ СТРОКУ:
-                const result = await response.json();
-
-                // Очистка полей
                 input.value = '';
                 document.getElementById('file-input').value = '';
                 document.getElementById('attached-files').innerHTML = '';
@@ -573,7 +569,7 @@
                 removeBtn.onclick = (e) => {
                     e.stopPropagation();
                     selectedFiles.splice(currentIndex, 1);
-                    renderAttachedPreviews(); // перерисовываем с правильными индексами
+                    renderAttachedPreviews();
                 };
 
                 if (file.type.startsWith('image/')) {
@@ -699,17 +695,24 @@
         function openChat(item) {
             const chatId = item.dataset.chatId;
             if (currentChatId === chatId) return;
+
             if (currentChatId) leaveChat(currentChatId);
             currentChatId = chatId;
+
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
+
             loadMessages(chatId);
             joinChat(chatId);
 
             document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
             document.getElementById('chat-subtitle').textContent =
-            item.querySelector('p').textContent === 'Нет сообщений' ? 'Нет сообщений' : 'Последнее: ' + item.querySelector('p').textContent;
+                item.querySelector('p').textContent === 'Нет сообщений'
+                    ? 'Нет сообщений'
+                    : 'Последнее: ' + item.querySelector('p').textContent;
+
+            scrollToBottom();
         }
 
         async function loadChats() {
@@ -743,13 +746,24 @@
 
         async function loadMessages(chatId) {
             messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+
             try {
-                const res = await fetch(`${API_BASE}/messages/${chatId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const res = await fetch(`${API_BASE}/messages/${chatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const json = await res.json();
+
                 messagesContainer.innerHTML = '';
-                (json.data || []).forEach(appendMessage);
-                scrollToBottom();
-            } catch {
+                const messages = json.data || [];
+
+                messages.forEach(appendMessage);
+
+                requestAnimationFrame(() => {
+                    setTimeout(scrollToBottom, 50);
+                });
+
+            } catch (err) {
+                console.error('Ошибка загрузки сообщений:', err);
                 messagesContainer.innerHTML = '<p class="text-red-500 text-center">Ошибка загрузки</p>';
             }
         }
