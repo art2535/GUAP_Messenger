@@ -441,42 +441,46 @@
             }
 
             const isMine = msg.senderId === '@Model.UserId';
-
             const senderName = decodeHtml(msg.senderName || msg.SenderName || "Пользователь");
+
+            const isGroupChat = currentChatInfo?.type === 'group';
 
             const div = document.createElement('div');
             div.className = `mb-6 flex ${isMine ? 'justify-end' : 'justify-start'}`;
             if (msg.messageId) div.dataset.mid = msg.messageId;
 
-            const time = msg.sentAt
-                ? new Date(msg.sentAt + 'Z').toLocaleTimeString('ru-RU', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })
-                : '';
+            const fullTime = formatDateTime(msg.sentAt);
 
             const statusText = msg.status === 'Read'
                 ? 'Прочитано'
                 : msg.status === 'Delivered'
-                ? 'Доставлено'
-                : 'Отправлено';
+                    ? 'Доставлено'
+                    : 'Отправлено';
 
             let footerHtml = '';
-            if (isMine) {
-                footerHtml = `
-                    <div class="text-xs text-blue-500 mt-1 flex items-center gap-1.5 flex-row-reverse">
-                        <span>${statusText}</span>
-                        <span>·</span>
-                        <span class="font-medium">${senderName} (вы)</span>
-                        <span>· ${time}</span>
-                    </div>`;
+
+            if (isGroupChat) {
+                if (isMine) {
+                    footerHtml = `
+                        <div class="text-xs text-blue-500 mt-1 flex items-center gap-1.5 flex-row-reverse">
+                            <span>${statusText}</span>
+                            <span>·</span>
+                            <span class="font-medium">${senderName} (вы)</span>
+                            <span>· ${fullTime}</span>
+                        </div>`;
+                } else {
+                    footerHtml = `
+                        <div class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                            <span class="font-medium">${senderName}</span>
+                            <span>·</span>
+                            <span>${statusText}</span>
+                            <span>· ${fullTime}</span>
+                        </div>`;
+                }
             } else {
                 footerHtml = `
-                    <div class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
-                        <span class="font-medium">${senderName}</span>
-                        <span>·</span>
-                        <span>${statusText}</span>
-                        <span>· ${time}</span>
+                    <div class="text-xs ${isMine ? 'text-blue-500' : 'text-gray-500'} mt-1 text-right">
+                        ${statusText} · ${fullTime}
                     </div>`;
             }
 
@@ -503,6 +507,17 @@
             const txt = document.createElement("textarea");
             txt.innerHTML = html;
             return txt.value;
+        }
+
+        function formatDateTime(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString + 'Z');
+            const day   = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year  = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
         }
 
         // === Отправка сообщения ===
@@ -699,19 +714,36 @@
             if (currentChatId) leaveChat(currentChatId);
             currentChatId = chatId;
 
+            // Снимаем активный класс со всех
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
+
+            // Обновляем заголовок
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
-
-            loadMessages(chatId);
-            joinChat(chatId);
-
             document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
             document.getElementById('chat-subtitle').textContent =
                 item.querySelector('p').textContent === 'Нет сообщений'
                     ? 'Нет сообщений'
                     : 'Последнее: ' + item.querySelector('p').textContent;
 
+            // ВАЖНО: Загружаем полную информацию о чате (включая тип)
+            fetch(`${API_BASE}/chats/${chatId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.isSuccess && res.data) {
+                    currentChatInfo = res.data; // <-- Вот здесь заполняется!
+                }
+            })
+            .catch(err => {
+                console.warn('Не удалось загрузить тип чата:', err);
+                currentChatInfo = null;
+            });
+
+            // Загружаем сообщения
+            loadMessages(chatId);
+            joinChat(chatId);
             scrollToBottom();
         }
 
