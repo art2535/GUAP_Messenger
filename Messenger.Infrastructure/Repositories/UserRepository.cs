@@ -27,14 +27,20 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task AddUserToBlacklistAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
         {
-            var blockedList = new Blacklist
+            bool alreadyExists = await _context.Blacklists
+                .AnyAsync(b => b.UserId == userId && b.BlockedUserId == blockedUserId, token);
+
+            if (alreadyExists)
+                return;
+
+            var blockedEntry = new Blacklist
             {
                 UserId = userId,
                 BlockedUserId = blockedUserId,
-                BlockDate = DateTime.UtcNow,
+                BlockDate = DateTime.Now
             };
 
-            await _context.Blacklists.AddAsync(blockedList, token);
+            _context.Blacklists.Add(blockedEntry);
             await _context.SaveChangesAsync(token);
         }
 
@@ -80,22 +86,11 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default)
         {
-            var user = await _context.Users
+            return await _context.Users
                 .Include(u => u.Account)
                 .Include(u => u.UserStatus)
                 .Include(u => u.Roles)
-                .Include(u => u.BlacklistBlockedUsers)
                 .FirstOrDefaultAsync(u => u.UserId == id, token);
-
-            if (user != null)
-            {
-                foreach (var bl in user.BlacklistBlockedUsers)
-                {
-                    await _context.Entry(bl).Reference(b => b.BlockedUser).LoadAsync(token);
-                }
-            }
-
-            return user;
         }
 
         public async Task RemoveUserFromBlacklistAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)

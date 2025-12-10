@@ -173,6 +173,31 @@ namespace Messenger.API.Controllers
             }
         }
 
+        [HttpGet("blocked")]
+        [SwaggerOperation(Summary = "Получить список заблокированных пользователей текущего пользователя")]
+        public async Task<IActionResult> GetBlockedUsersAsync(CancellationToken token = default)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var blockedUsers = await _userService.GetBlockedUsersAsync(userId, token);
+
+                var result = blockedUsers.Select(u => new
+                {
+                    id = u.UserId.ToString(),
+                    name = $"{u.LastName} {u.FirstName}".Trim(),
+                    login = u.Login,
+                    avatar = u.Account?.Avatar ?? "/images/default-avatar.png"
+                });
+
+                return Ok(new { IsSuccess = true, Data = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
+            }
+        }
+
         [HttpPost("block/{blockedUserId}")]
         [SwaggerOperation(
             Summary = "Заблокировать пользователя",
@@ -186,6 +211,10 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                if (userId == blockedUserId)
+                    return BadRequest(new { Success = false, Message = "Нельзя заблокировать себя" });
+
                 await _userService.BlockUserAsync(userId, blockedUserId, token);
 
                 return Ok(new 

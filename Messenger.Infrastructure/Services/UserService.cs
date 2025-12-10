@@ -184,6 +184,17 @@ namespace Messenger.Infrastructure.Services
                 .ToList();
         }
 
+        public async Task<IEnumerable<User>> GetBlockedUsersAsync(Guid userId, CancellationToken token = default)
+        {
+            return await _context.Blacklists
+                .AsNoTracking()
+                .Where(b => b.UserId == userId)
+                .Include(b => b.BlockedUser)
+                    .ThenInclude(u => u.Account)
+                .Select(b => b.BlockedUser!)
+                .ToListAsync(token);
+        }
+
         public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, 
             string? avatarUrl = null, CancellationToken token = default)
         {
