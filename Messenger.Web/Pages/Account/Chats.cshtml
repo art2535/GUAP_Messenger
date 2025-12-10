@@ -714,11 +714,9 @@
             if (currentChatId) leaveChat(currentChatId);
             currentChatId = chatId;
 
-            // Снимаем активный класс со всех
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
 
-            // Обновляем заголовок
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
             document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
             document.getElementById('chat-subtitle').textContent =
@@ -726,24 +724,27 @@
                     ? 'Нет сообщений'
                     : 'Последнее: ' + item.querySelector('p').textContent;
 
-            // ВАЖНО: Загружаем полную информацию о чате (включая тип)
             fetch(`${API_BASE}/chats/${chatId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             .then(r => r.json())
             .then(res => {
                 if (res.isSuccess && res.data) {
-                    currentChatInfo = res.data; // <-- Вот здесь заполняется!
+                    currentChatInfo = res.data;
+                    loadMessages(chatId);
+                    joinChat(chatId);
+                } else {
+                    console.warn('Не удалось получить тип чата');
+                    currentChatInfo = null;
+                    loadMessages(chatId);
                 }
             })
             .catch(err => {
-                console.warn('Не удалось загрузить тип чата:', err);
+                console.warn('Ошибка загрузки типа чата:', err);
                 currentChatInfo = null;
+                loadMessages(chatId);
             });
 
-            // Загружаем сообщения
-            loadMessages(chatId);
-            joinChat(chatId);
             scrollToBottom();
         }
 
