@@ -326,6 +326,31 @@ namespace Messenger.API.Controllers
             }
         }
 
+        [HttpGet("is-blocked-by/{userId}")]
+        [SwaggerOperation(Summary = "Проверка заблокированного пользователя")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> IsBlockedByUser(Guid userId, CancellationToken token = default)
+        {
+            try
+            {
+                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                var isBlocked = await _userService.IsBlockedByAsync(userId, currentUserId, token);
+
+                return Ok(new { isBlocked });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
         [HttpDelete("delete-account")]
         [SwaggerOperation(
             Summary = "Удалить аккаунт пользователя",
