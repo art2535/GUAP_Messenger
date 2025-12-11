@@ -170,7 +170,7 @@
 <body class="h-screen">
 
     <script>
-        const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_SECRET") ?? "")';
+        const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
         if (!JWT_TOKEN || JWT_TOKEN === '') {
             document.write('<div class="p-8 text-center text-red-600 text-xl">Ошибка авторизации. <a href="/Authorization/Login" class="underline">Войти заново</a></div>');
         }
@@ -357,7 +357,7 @@
 
         const API_BASE = 'https://localhost:7001/api';
         const HUB_URL = 'https://localhost:7001/hubs/chat';
-        const token = '@(HttpContext.Session.GetString("JWT_SECRET") ?? "")';
+        const token = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
 
         const chatsList = document.getElementById('chats-list');
         const messagesContainer = document.getElementById('messages-container');
@@ -522,44 +522,47 @@
 
         // === Отправка сообщения ===
         async function sendMessage() {
-            if (!currentChatId || !connection) return;
-
-            const input = document.getElementById('message-input');
-            const text = input.value.trim();
-            const files = document.getElementById('file-input').files;
-
-            if (!text && files.length === 0) return;
-
-            const senderName = '@(HttpContext.Session.GetString("USER_NAME") ?? "Пользователь")';
+            if (!currentChatId) {
+                alert("Выберите чат");
+                return;
+            }
+            const text = messageInput.value.trim();
+            if (!text && selectedFiles.length === 0) return;
 
             const formData = new FormData();
             if (text) formData.append('messageText', text);
-            formData.append('senderName', senderName);
-            for (let file of files) {
-                formData.append('files', file);
-            }
+            selectedFiles.forEach(file => formData.append('files', file));
+
+            const url = `${API_BASE}/messages/${currentChatId}?access_token=${encodeURIComponent(token)}`;
 
             try {
-                const response = await fetch(`${API_BASE}/messages/${currentChatId}`, {
+                const res = await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
 
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error || 'Ошибка сервера');
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data.error?.includes("чёрном списке")) {
+                        alert("Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке");
+                        document.getElementById('message-input').disabled = true;
+                        document.getElementById('send-button').disabled = true;
+                        document.getElementById('file-input').disabled = true;
+                    } else {
+                        alert("Ошибка: " + (data.error || res.status));
+                    }
+                    return;
                 }
 
-                input.value = '';
-                document.getElementById('file-input').value = '';
-                document.getElementById('attached-files').innerHTML = '';
+                messageInput.value = '';
+                attachedFiles.innerHTML = '';
+                selectedFiles = [];
+                fileInput.value = '';
 
-            } catch (err) {
-                console.error('Send error:', err);
-                alert('Не удалось отправить: ' + err.message);
+            } catch (e) {
+                console.error(e);
+                alert("Ошибка отправки");
             }
         }
 

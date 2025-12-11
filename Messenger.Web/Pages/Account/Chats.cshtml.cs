@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Messenger.Web.Pages.Account
 {
@@ -12,13 +13,23 @@ namespace Messenger.Web.Pages.Account
 
         public IActionResult OnGet()
         {
-            JwtToken = HttpContext.Session.GetString("JWT_SECRET");
+            var token = HttpContext.Session.GetString("JWT_TOKEN");
+
+            if (string.IsNullOrEmpty(token))
+                return RedirectToPage("/Authorization/Authorization");
+
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+
+            if (jwtToken.ValidTo < DateTime.UtcNow)
+            {
+                HttpContext.Session.Clear();
+                return RedirectToPage("/Authorization/Authorization");
+            }
+
             UserId = HttpContext.Session.GetString("USER_ID");
             UserName = HttpContext.Session.GetString("USER_EMAIL");
             UserRole = HttpContext.Session.GetString("USER_ROLE");
-
-            if (string.IsNullOrEmpty(JwtToken))
-                return RedirectToPage("/Authorization/Authorization");
 
             return Page();
         }

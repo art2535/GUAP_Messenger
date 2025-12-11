@@ -39,7 +39,7 @@ namespace Messenger.Web.Pages.Authorization
 
         public IActionResult OnGet()
         {
-            var sessionToken = HttpContext.Session.GetString("JWT_SECRET");
+            var sessionToken = HttpContext.Session.GetString("JWT_TOKEN");
 
             if (!string.IsNullOrEmpty(sessionToken))
             {
@@ -109,7 +109,7 @@ namespace Messenger.Web.Pages.Authorization
                             return Page();
                         }
 
-                        HttpContext.Session.SetString("JWT_SECRET", userResponse.Token);
+                        HttpContext.Session.SetString("JWT_TOKEN", userResponse.Token);
                         HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
                         HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
                         HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
