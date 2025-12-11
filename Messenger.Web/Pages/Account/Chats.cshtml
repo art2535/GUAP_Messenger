@@ -377,7 +377,63 @@
         let searchTimeout = null;
         let allChatItems = [];
 
-        // === Поиск по чатам ===
+        function blockChat(reason) {
+            messageInput.disabled = true;
+            messageInput.placeholder = reason;
+            messageInput.style.backgroundColor = "#f3f4f6";
+            messageInput.style.color = "#6b7280";
+            messageInput.style.cursor = "not-allowed";
+
+            sendButton.disabled = true;
+            sendButton.style.opacity = "0.4";
+            sendButton.style.cursor = "not-allowed";
+
+            document.querySelector('label[for="file-input"]').style.opacity = "0.4";
+            document.querySelector('label[for="file-input"]').style.cursor = "not-allowed";
+            fileInput.disabled = true;
+
+            if (!document.querySelector('.blocked-chat-notice')) {
+                const notice = document.createElement('div');
+                notice.className = 'blocked-chat-notice text-center py-12 px-4';
+                notice.innerHTML = `
+                    <div class="max-w-lg mx-auto bg-red-50 border border-red-200 rounded-3xl p-10 shadow-2xl">
+                        <i data-feather="lock" class="w-20 h-20 text-red-500 mx-auto mb-6"></i>
+                        <h3 class="text-3xl font-bold text-red-800 mb-4">Вы заблокированы</h3>
+                        <p class="text-red-700 text-lg">Этот пользователь добавил вас в чёрный список.</p>
+                        <p class="text-red-600 mt-3 text-base">Вы не можете отправлять сообщения в этот чат.</p>
+                    </div>
+                `;
+                messagesContainer.appendChild(notice);
+                feather.replace();
+                scrollToBottom();
+            }
+        }
+
+        function unblockChat() {
+            messageInput.disabled = false;
+            messageInput.placeholder = "Напишите сообщение...";
+            messageInput.style.backgroundColor = "";
+            messageInput.style.color = "";
+            messageInput.style.cursor = "";
+
+            sendButton.disabled = false;
+            sendButton.style.opacity = "";
+            sendButton.style.cursor = "";
+
+            document.querySelector('label[for="file-input"]').style.opacity = "";
+            document.querySelector('label[for="file-input"]').style.cursor = "";
+            fileInput.disabled = false;
+
+            const notice = document.querySelector('.blocked-chat-notice');
+            if (notice) notice.remove();
+        }
+
+        function clearBlockedNotice() {
+            unblockMessageInput();
+            const notice = document.querySelector('.blocked-chat-notice');
+            if (notice) notice.remove();
+        }
+
         function cacheChatItems() {
             allChatItems = Array.from(chatsList.querySelectorAll('.chat-item'));
         }
@@ -397,7 +453,6 @@
             filterChats();
         });
 
-        // === Отображение вложений ===
         function renderAttachments(attachments = []) {
             if (!attachments?.length) return '';
             return attachments.map(att => {
@@ -429,7 +484,6 @@
             }).join('');
         }
 
-        // Вынеси открытие лайтбокса в отдельную функцию
         function openLightbox(url) {
             lightboxImg.src = url;
             lightbox.classList.add('show');
@@ -520,12 +574,9 @@
             return `${day}.${month}.${year} ${hours}:${minutes}`;
         }
 
-        // === Отправка сообщения ===
         async function sendMessage() {
-            if (!currentChatId) {
-                alert("Выберите чат");
-                return;
-            }
+            if (!currentChatId) return;
+
             const text = messageInput.value.trim();
             if (!text && selectedFiles.length === 0) return;
 
@@ -536,21 +587,12 @@
             const url = `${API_BASE}/messages/${currentChatId}?access_token=${encodeURIComponent(token)}`;
 
             try {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'include'
-                });
+                const res = await fetch(url, { method: 'POST', body: formData });
 
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
-                    if (data.error?.includes("чёрном списке")) {
-                        alert("Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке");
-                        document.getElementById('message-input').disabled = true;
-                        document.getElementById('send-button').disabled = true;
-                        document.getElementById('file-input').disabled = true;
-                    } else {
-                        alert("Ошибка: " + (data.error || res.status));
+                    if (data.error?.includes("чёрном списке") || data.error?.includes("заблокирован")) {
+                        blockChat("Вы в чёрном списке этого пользователя");
                     }
                     return;
                 }
@@ -562,11 +604,9 @@
 
             } catch (e) {
                 console.error(e);
-                alert("Ошибка отправки");
             }
         }
 
-        // === Превью прикреплённых файлов ===
         fileInput.onchange = () => {
             selectedFiles = Array.from(fileInput.files || []);
             renderAttachedPreviews();
@@ -579,7 +619,6 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'preview-attachment relative inline-block';
 
-                // Кнопка удаления
                 const removeBtn = document.createElement('button');
                 removeBtn.type = 'button';
                 removeBtn.innerHTML = '×';
@@ -727,28 +766,63 @@
                     ? 'Нет сообщений'
                     : 'Последнее: ' + item.querySelector('p').textContent;
 
+            unblockChat();
+            messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+
             fetch(`${API_BASE}/chats/${chatId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             .then(r => r.json())
-            .then(res => {
+            .then(async res => {
                 if (res.isSuccess && res.data) {
                     currentChatInfo = res.data;
-                    loadMessages(chatId);
-                    joinChat(chatId);
+
+                    if (currentChatInfo.type === 'private') {
+                        const recipient = currentChatInfo.participants.find(p => p.id !== '@Model.UserId');
+                        if (recipient) {
+                            const isBlocked = await checkIfBlockedByUserAsync(recipient.id);
+                            if (isBlocked) {
+                                return;
+                            }
+                        }
+                    }
+
+                    loadMessagesAndJoin(chatId);
                 } else {
-                    console.warn('Не удалось получить тип чата');
-                    currentChatInfo = null;
-                    loadMessages(chatId);
+                    loadMessagesAndJoin(chatId);
                 }
             })
-            .catch(err => {
-                console.warn('Ошибка загрузки типа чата:', err);
-                currentChatInfo = null;
-                loadMessages(chatId);
+            .catch(() => {
+                loadMessagesAndJoin(chatId);
             });
+        }
 
-            scrollToBottom();
+        function loadMessagesAndJoin(chatId) {
+            loadMessages(chatId);
+            joinChat(chatId);
+        }
+
+        async function checkIfBlockedByUserAsync(userId) {
+            try {
+                const res = await fetch(`${API_BASE}/users/is-blocked-by/${userId}?access_token=${encodeURIComponent(token)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) return false;
+
+                const data = await res.json();
+
+                if (data.isBlocked === true) {
+                    messagesContainer.innerHTML = '';
+                    blockChat("Вы в чёрном списке этого пользователя");
+                    return true;
+                }
+
+                return false;
+            } catch (err) {
+                console.warn("Ошибка проверки блокировки", err);
+                return false;
+            }
         }
 
         async function loadChats() {
@@ -996,75 +1070,22 @@
         let removedParticipantIds = [];
         let addedParticipantIds = [];
 
-        function openChatInfo() {
-            if (!currentChatId) {
-                alert('Сначала выберите чат');
-                return;
-            }
-
-            chatNameChanged = false;
-            removedParticipantIds = [];
-            addedParticipantIds = [];
-
-            document.getElementById('chat-info-modal').classList.add('show');
-
-            fetch(`${API_BASE}/chats/${currentChatId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.json();
-            })
-            .then(res => {
-                if (!res.isSuccess || !res.data) throw new Error(res.error || 'Нет данных');
-                const chat = res.data;
-                currentChatInfo = { ...chat };
-
-                document.getElementById('modal-chat-avatar').src =
-                    chat.avatar || 'https://static.photos/people/200x200/default';
-
-                const nameInput = document.getElementById('modal-chat-name');
-                nameInput.value = chat.name || (chat.type === 'group' ? 'Без названия' : chat.name);
-                nameInput.readOnly = chat.type !== 'group';
-
-                document.getElementById('modal-chat-type').textContent =
-                    chat.type === 'group' ? 'Групповой чат' : 'Приватный чат';
-
-                document.getElementById('participants-count').textContent = `(${chat.participants.length})`;
-                const list = document.getElementById('participants-list');
-                list.innerHTML = '';
-
-                chat.participants.forEach(p => {
-                    const div = document.createElement('div');
-                    div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
-                    div.dataset.userId = p.id;
-
-                    div.innerHTML = `
-                        <div class="flex items-center gap-4">
-                            <img src="${p.avatar || 'https://static.photos/people/200x200/default'}"
-                                 class="w-12 h-12 rounded-full object-cover">
-                            <div>
-                                <p class="font-semibold">${p.name || 'Без имени'}</p>
-                                ${p.id === '@Model.UserId' ? '<p class="text-xs text-blue-600">Вы</p>' : ''}
-                            </div>
-                        </div>
-                        ${chat.type === 'group' && p.id !== '@Model.UserId' ? `
-                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                onclick="removeParticipantFromChat('${p.id}', this)">
-                            <i data-feather="x" class="w-5 h-5"></i>
-                        </button>` : ''}
-                    `;
-                    list.appendChild(div);
+        async function checkIfBlockedByUser(userId) {
+            try {
+                const res = await fetch(`${API_BASE}/users/is-blocked-by/${userId}?access_token=${encodeURIComponent(token)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                feather.replace();
-                toggleSaveButton();
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Ошибка загрузки информации о чате');
-                document.getElementById('chat-info-modal').classList.remove('show');
-            });
+                if (!res.ok) return;
+
+                const data = await res.json();
+                if (data.isBlocked === true) {
+                    messagesContainer.innerHTML = '';
+                    blockChat("Вы в чёрном списке этого пользователя");
+                }
+            } catch (err) {
+                console.warn("Не удалось проверить блокировку", err);
+            }
         }
 
         function removeParticipantFromChat(userId, buttonElement) {
