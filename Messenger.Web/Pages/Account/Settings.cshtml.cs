@@ -27,7 +27,7 @@ namespace Messenger.Web.Pages.Account
 
         public async Task<IActionResult> OnGetAsync()
         {
-            var token = HttpContext.Session.GetString("JWT_SECRET");
+            var token = HttpContext.Session.GetString("JWT_TOKEN");
 
             if (string.IsNullOrEmpty(token))
             {
@@ -184,7 +184,7 @@ namespace Messenger.Web.Pages.Account
 
         public IActionResult OnGetGetToken()
         {
-            var token = HttpContext.Session.GetString("JWT_SECRET");
+            var token = HttpContext.Session.GetString("JWT_TOKEN");
             return new JsonResult(new { token = token ?? "" });
         }
 
@@ -192,7 +192,7 @@ namespace Messenger.Web.Pages.Account
         {
             var client = _httpClientFactory.CreateClient("ApiClient");
 
-            var token = HttpContext.Session.GetString("JWT_SECRET");
+            var token = HttpContext.Session.GetString("JWT_TOKEN");
 
             if (!string.IsNullOrEmpty(token))
             {
