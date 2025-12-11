@@ -74,10 +74,15 @@ namespace Messenger.API.Extensions
                         {
                             var accessToken = context.Request.Query["access_token"];
                             if (string.IsNullOrEmpty(accessToken))
-                                accessToken = context.Request.Cookies["JWT_SECRET"];
+                                accessToken = context.Request.Cookies["JWT_TOKEN"];
 
-                            if (!string.IsNullOrEmpty(accessToken) &&
-                                context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                            var path = context.HttpContext.Request.Path;
+
+                            if (path.StartsWithSegments("/hubs") && !string.IsNullOrEmpty(accessToken))
+                            {
+                                context.Token = accessToken;
+                            }
+                            else if (path.StartsWithSegments("/api") && !string.IsNullOrEmpty(accessToken))
                             {
                                 context.Token = accessToken;
                             }

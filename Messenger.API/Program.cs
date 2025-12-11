@@ -36,7 +36,7 @@ namespace Messenger.API
             {
                 options.AddPolicy("AllowWebApp", policy =>
                 {
-                    policy.WithOrigins("https://localhost:7228")
+                    policy.WithOrigins("https://localhost:7010")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();

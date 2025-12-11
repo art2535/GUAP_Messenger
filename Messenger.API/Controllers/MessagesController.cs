@@ -2,6 +2,7 @@
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,15 +23,20 @@ namespace Messenger.API.Controllers
         private readonly IReactionService _reactionService;
         private readonly IAttachmentService _attachmentService;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IChatService _chatService;
+        private readonly IUserService _userService;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
-            IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService)
+            IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService, 
+            IChatService chatService, IUserService userService)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
             _reactionService = reactionService;
             _hubContext = hubContext;
             _attachmentService = attachmentService;
+            _chatService = chatService;
+            _userService = userService;
         }
 
         [HttpPost("{chatId}")]
@@ -46,71 +52,62 @@ namespace Messenger.API.Controllers
             {
                 var senderId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-                if (chatId == Guid.Empty)
-                    return BadRequest(new { isSuccess = false, error = "Неверный chatId" });
+                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                if (chat == null)
+                    return NotFound(new { error = "Чат не найден" });
 
-                if (string.IsNullOrWhiteSpace(messageText) && (files == null || files.Length == 0))
-                    return BadRequest(new { isSuccess = false, error = "Сообщение пустое" });
+                if (!chat.ChatParticipants.Any(p => p.UserId == senderId))
+                    return Forbid();
+
+                if (chat.Type == "private")
+                {
+                    var recipientId = chat.ChatParticipants.First(p => p.UserId != senderId).UserId;
+
+                    if (await _userService.IsBlockedByAsync(recipientId, senderId, cancellationToken))
+                    {
+                        return BadRequest(new
+                        {
+                            error = "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке"
+                        });
+                    }
+                }
 
                 var result = await _messageService.SendMessageAsync(
                     chatId: chatId,
                     senderId: senderId,
                     receiverId: null,
                     content: messageText?.Trim(),
-                    hasAttachments: files != null && files.Length > 0,
+                    hasAttachments: files?.Any() == true,
+                    files: files,
                     token: cancellationToken
                 );
 
-                if (!result.isSuccess || result.data == null)
-                    return BadRequest(new { isSuccess = false, error = result.error });
+                if (!result.isSuccess)
+                    return BadRequest(new { error = result.error });
 
-                var message = result.data;
+                var message = result.data!;
 
                 var attachments = new List<AttachmentDto>();
-
                 if (files != null && files.Length > 0)
                 {
-                    var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    Directory.CreateDirectory(uploadFolder);
+                    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                    Directory.CreateDirectory(uploadPath);
 
                     foreach (var file in files.Where(f => f.Length > 0))
                     {
-                        var uniqueName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                        var filePath = Path.Combine(uploadFolder, uniqueName);
-                        var fileUrl = $"/uploads/{uniqueName}";
+                        var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
+                        var filePath = Path.Combine(uploadPath, fileName);
+                        var fileUrl = $"/uploads/{fileName}";
 
                         await using var stream = new FileStream(filePath, FileMode.Create);
                         await file.CopyToAsync(stream, cancellationToken);
-
-                        Console.WriteLine($"Файл сохранён: {filePath}");
-                        Console.WriteLine($"URL: {fileUrl}");
-
-                        var fileExtension = Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? "";
-                        var detectedType = file.ContentType;
-
-                        if (string.IsNullOrEmpty(detectedType) || detectedType == "application/octet-stream")
-                        {
-                            detectedType = fileExtension switch
-                            {
-                                ".jpg" or ".jpeg" => "image/jpeg",
-                                ".png" => "image/png",
-                                ".gif" => "image/gif",
-                                ".webp" => "image/webp",
-                                ".bmp" => "image/bmp",
-                                ".svg" => "image/svg+xml",
-                                ".pdf" => "application/pdf",
-                                ".doc" or ".docx" => "application/msword",
-                                ".txt" => "text/plain",
-                                _ => "application/octet-stream"
-                            };
-                        }
 
                         var attachment = new Attachment
                         {
                             AttachmentId = Guid.NewGuid(),
                             MessageId = message.MessageId,
                             FileName = file.FileName,
-                            FileType = detectedType,
+                            FileType = file.ContentType ?? "application/octet-stream",
                             SizeInBytes = (int)file.Length,
                             Url = fileUrl
                         };
@@ -132,18 +129,15 @@ namespace Messenger.API.Controllers
                 {
                     MessageId = message.MessageId,
                     ChatId = message.ChatId,
-                    SenderId = message.SenderId,
-                    SenderName = string.IsNullOrWhiteSpace(senderName)
-                        ? "Пользователь"
-                        : senderName.Trim(),
+                    SenderId = senderId,
+                    SenderName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Пользователь",
                     MessageText = message.MessageText,
                     SentAt = message.SendTime,
                     Status = "Sent",
                     Attachments = attachments
                 };
 
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ReceiveMessage", messageDto);
+                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ReceiveMessage", messageDto, cancellationToken);
 
                 return Ok(new { isSuccess = true, data = messageDto });
             }
