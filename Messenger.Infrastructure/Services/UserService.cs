@@ -220,5 +220,11 @@ namespace Messenger.Infrastructure.Services
             _context.Users.Update(user);
             await _context.SaveChangesAsync(token);
         }
+
+        public async Task<bool> IsBlockedByAsync(Guid blockerId, Guid blockedId, CancellationToken token = default)
+        {
+            return await _context.Blacklists
+                .AnyAsync(ub => ub.UserId == blockerId && ub.BlockedUserId == blockedId, token);
+        }
     }
 }

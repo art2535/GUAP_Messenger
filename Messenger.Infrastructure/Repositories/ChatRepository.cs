@@ -46,6 +46,7 @@ namespace Messenger.Infrastructure.Repositories
         public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
         {
             return await _context.Chats
+                .Include(c => c.ChatParticipants)
                 .FirstOrDefaultAsync(c => c.ChatId == chatId, token);
         }
 

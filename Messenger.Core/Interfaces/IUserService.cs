@@ -10,6 +10,7 @@ namespace Messenger.Core.Interfaces
             CancellationToken token = default);
         Task<(string token, Guid userId, string role)> LoginAsync(string login, string password, CancellationToken token = default);
         Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default);
+        Task<bool> IsBlockedByAsync(Guid blockerId, Guid blockedId, CancellationToken token = default);
         Task<IEnumerable<User>> GetBlockedUsersAsync(Guid userId, CancellationToken token = default);
         Task<IEnumerable<User>> GetAllUsersAsync(CancellationToken token = default);
         Task BlockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default);

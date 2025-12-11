@@ -1,8 +1,9 @@
-﻿using Messenger.Core.Hubs;
-using Messenger.Core.DTOs;
+﻿using Messenger.Core.DTOs;
+using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Messenger.Infrastructure.Services
@@ -24,7 +25,7 @@ namespace Messenger.Infrastructure.Services
         }
 
         public async Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId, Guid? receiverId,
-            string? content, bool hasAttachments, CancellationToken token = default)
+            string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default)
         {
             try
             {
@@ -40,12 +41,11 @@ namespace Messenger.Infrastructure.Services
                 };
 
                 await _repository.AddMessageAsync(message, token);
-
                 var loadedMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
-                if (loadedMessage == null)
-                    return ServiceResult<Message>.Failure("Не удалось загрузить сообщение");
 
-                return ServiceResult<Message>.Success(loadedMessage);
+                return loadedMessage != null
+                    ? ServiceResult<Message>.Success(loadedMessage)
+                    : ServiceResult<Message>.Failure("Не удалось загрузить сообщение");
             }
             catch (Exception ex)
             {
