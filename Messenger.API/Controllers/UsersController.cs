@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
+using Messenger.Core.Hubs;
 
 namespace Messenger.API.Controllers
 {
@@ -15,10 +17,12 @@ namespace Messenger.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public UsersController(IUserService userService)
+        public UsersController(IUserService userService, IHubContext<ChatHub> hubContext)
         {
             _userService = userService;
+            _hubContext = hubContext;
         }
 
         [HttpGet("search")]
@@ -217,6 +221,9 @@ namespace Messenger.API.Controllers
 
                 await _userService.BlockUserAsync(userId, blockedUserId, token);
 
+                await _hubContext.Clients.User(blockedUserId.ToString())
+                    .SendAsync("UserBlockedMe", userId.ToString(), token);
+
                 return Ok(new 
                 { 
                     Success = true, 
@@ -248,6 +255,9 @@ namespace Messenger.API.Controllers
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 await _userService.UnblockUserAsync(userId, blockedUserId, token);
+
+                await _hubContext.Clients.User(blockedUserId.ToString())
+                    .SendAsync("UserUnblockedMe", userId.ToString(), token);
 
                 return Ok(new 
                 { 

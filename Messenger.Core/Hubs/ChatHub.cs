@@ -38,5 +38,15 @@ namespace Messenger.Core.Hubs
             }
             await base.OnDisconnectedAsync(exception);
         }
+
+        public async Task NotifyBlocked(string blockedUserId)
+        {
+            await Clients.User(blockedUserId).SendAsync("UserBlockedMe", Context.UserIdentifier);
+        }
+
+        public async Task NotifyUnblocked(string unblockedUserId)
+        {
+            await Clients.User(unblockedUserId).SendAsync("UserUnblockedMe", Context.UserIdentifier);
+        }
     }
 }

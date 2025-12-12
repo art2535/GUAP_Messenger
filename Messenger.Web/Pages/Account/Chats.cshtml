@@ -377,36 +377,38 @@
         let searchTimeout = null;
         let allChatItems = [];
 
-        function blockChat(reason) {
+        function addBlockSystemMessage(blockerName, blockTime = null) {
+            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
+
+            const div = document.createElement('div');
+            div.className = 'mb-6 flex justify-center system-block-message';
+            div.innerHTML = `
+                <div class="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-2xl text-center max-w-sm">
+                    <i data-feather="lock" class="w-8 h-8 mx-auto mb-2"></i>
+                    <p class="font-semibold text-lg">${blockerName} добавил вас в чёрный список</p>
+                    ${blockTime ? `<p class="text-sm opacity-80 mt-1">${formatDateTime(blockTime)}</p>` : ''}
+                    <p class="text-sm mt-2 opacity-90">Вы не можете отправлять сообщения в этот чат</p>
+                </div>
+            `;
+            messagesContainer.appendChild(div);
+            feather.replace();
+            scrollToBottom();
+        }
+
+        function blockChat(blockerName = "Этот пользователь", blockTime = null) {
             messageInput.disabled = true;
-            messageInput.placeholder = reason;
+            messageInput.placeholder = "Вы в чёрном списке";
             messageInput.style.backgroundColor = "#f3f4f6";
             messageInput.style.color = "#6b7280";
-            messageInput.style.cursor = "not-allowed";
-
             sendButton.disabled = true;
             sendButton.style.opacity = "0.4";
-            sendButton.style.cursor = "not-allowed";
-
-            document.querySelector('label[for="file-input"]').style.opacity = "0.4";
-            document.querySelector('label[for="file-input"]').style.cursor = "not-allowed";
             fileInput.disabled = true;
+            document.querySelector('label[for="file-input"]').style.opacity = "0.4";
 
-            if (!document.querySelector('.blocked-chat-notice')) {
-                const notice = document.createElement('div');
-                notice.className = 'blocked-chat-notice text-center py-12 px-4';
-                notice.innerHTML = `
-                    <div class="max-w-lg mx-auto bg-red-50 border border-red-200 rounded-3xl p-10 shadow-2xl">
-                        <i data-feather="lock" class="w-20 h-20 text-red-500 mx-auto mb-6"></i>
-                        <h3 class="text-3xl font-bold text-red-800 mb-4">Вы заблокированы</h3>
-                        <p class="text-red-700 text-lg">Этот пользователь добавил вас в чёрный список.</p>
-                        <p class="text-red-600 mt-3 text-base">Вы не можете отправлять сообщения в этот чат.</p>
-                    </div>
-                `;
-                messagesContainer.appendChild(notice);
-                feather.replace();
-                scrollToBottom();
-            }
+            const subtitle = document.getElementById('chat-subtitle');
+            if (subtitle) subtitle.textContent = 'Заблокировал вас';
+
+            addBlockSystemMessage(blockerName, blockTime);
         }
 
         function unblockChat() {
@@ -414,18 +416,15 @@
             messageInput.placeholder = "Напишите сообщение...";
             messageInput.style.backgroundColor = "";
             messageInput.style.color = "";
-            messageInput.style.cursor = "";
-
             sendButton.disabled = false;
             sendButton.style.opacity = "";
-            sendButton.style.cursor = "";
-
-            document.querySelector('label[for="file-input"]').style.opacity = "";
-            document.querySelector('label[for="file-input"]').style.cursor = "";
             fileInput.disabled = false;
+            document.querySelector('label[for="file-input"]').style.opacity = "";
 
-            const notice = document.querySelector('.blocked-chat-notice');
-            if (notice) notice.remove();
+            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
+
+            const subtitle = document.getElementById('chat-subtitle');
+            if (subtitle) subtitle.textContent = 'Активен недавно';
         }
 
         function clearBlockedNotice() {
@@ -649,7 +648,6 @@
             });
         }
 
-        // === SignalR ===
         function updateConnectionStatus(text, color) {
             document.getElementById('status-dot').className = `w-3 h-3 rounded-full ${color === 'green' ? 'bg-green-500' : color === 'orange' ? 'bg-orange-500' : 'bg-red-500'}`;
             const tooltip = document.getElementById('status-tooltip');
@@ -669,6 +667,24 @@
                  const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
                 if (item) {
                     item.querySelector('p').textContent = getLastMessagePreview(msg);
+                }
+            });
+
+            connection.on('UserBlockedMe', (blockerId, blockTime) => {
+                if (currentChatInfo?.type === 'private' &&
+                    currentChatInfo.participants.some(p => p.id === blockerId)) {
+
+                    const blocker = currentChatInfo.participants.find(p => p.id === blockerId);
+                    const name = blocker?.fullName || blocker?.name || "Этот пользователь";
+
+                    blockChat(name, blockTime);
+                }
+            });
+
+            connection.on('UserUnblockedMe', (unblockerId) => {
+                if (currentChatInfo?.type === 'private' &&
+                    currentChatInfo.participants.some(p => p.id === unblockerId)) {
+                    unblockChat();
                 }
             });
 
@@ -752,21 +768,16 @@
         function openChat(item) {
             const chatId = item.dataset.chatId;
             if (currentChatId === chatId) return;
-
             if (currentChatId) leaveChat(currentChatId);
             currentChatId = chatId;
 
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
-
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
             document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
-            document.getElementById('chat-subtitle').textContent =
-                item.querySelector('p').textContent === 'Нет сообщений'
-                    ? 'Нет сообщений'
-                    : 'Последнее: ' + item.querySelector('p').textContent;
 
             unblockChat();
+
             messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
 
             fetch(`${API_BASE}/chats/${chatId}`, {
@@ -777,17 +788,20 @@
                 if (res.isSuccess && res.data) {
                     currentChatInfo = res.data;
 
+                    loadMessagesAndJoin(chatId);
+
                     if (currentChatInfo.type === 'private') {
                         const recipient = currentChatInfo.participants.find(p => p.id !== '@Model.UserId');
                         if (recipient) {
                             const isBlocked = await checkIfBlockedByUserAsync(recipient.id);
                             if (isBlocked) {
-                                return;
+                                const blockerName = recipient.fullName || recipient.name || "Этот пользователь";
+                                setTimeout(() => {
+                                    blockChat(blockerName);
+                                }, 100);
                             }
                         }
                     }
-
-                    loadMessagesAndJoin(chatId);
                 } else {
                     loadMessagesAndJoin(chatId);
                 }
@@ -807,18 +821,9 @@
                 const res = await fetch(`${API_BASE}/users/is-blocked-by/${userId}?access_token=${encodeURIComponent(token)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 if (!res.ok) return false;
-
                 const data = await res.json();
-
-                if (data.isBlocked === true) {
-                    messagesContainer.innerHTML = '';
-                    blockChat("Вы в чёрном списке этого пользователя");
-                    return true;
-                }
-
-                return false;
+                return data.isBlocked === true;
             } catch (err) {
                 console.warn("Ошибка проверки блокировки", err);
                 return false;
@@ -878,7 +883,6 @@
             }
         }
 
-        // Умное превью последнего сообщения
         function getLastMessagePreview(chatOrMessage) {
             const msg = chatOrMessage.lastMessage || chatOrMessage;
             if (!msg) return "Нет сообщений";
@@ -911,7 +915,6 @@
             return "Сообщение";
         }
 
-        // === Модалка создания чата ===
         function toggleChatNameField() {
             const isGroup = document.querySelector('input[name="chat-type"]:checked').value === 'group';
             document.getElementById('group-name-container').classList.toggle('hidden', !isGroup);
@@ -937,7 +940,6 @@
             document.getElementById('create-chat-modal').classList.remove('show');
         };
 
-        // Поиск пользователей
         async function searchUsers() {
             const query = document.getElementById('user-search').value.trim();
             const results = document.getElementById('user-search-results');
@@ -1038,7 +1040,6 @@
             }
         }
 
-        // Обработчик ввода с дебаунсом
         document.getElementById('user-search').addEventListener('input', () => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(searchUsers, 300);
@@ -1148,7 +1149,6 @@
             saveBtn.classList.toggle('pointer-events-none', !hasChanges);
         }
 
-        // Кнопка «+ Добавить» — поиск пользователей
         document.getElementById('add-participant-btn').addEventListener('click', function () {
             const existing = document.getElementById('chat-info-search-container');
             if (existing) {
@@ -1254,7 +1254,6 @@
             setTimeout(() => document.addEventListener('click', closeHandler), 100);
         });
 
-        // Сохранение всех изменений
         document.getElementById('save-chat-info').addEventListener('click', async () => {
             if (!currentChatId || !currentChatInfo) return;
 
@@ -1315,7 +1314,6 @@
             chatNameChanged = false;
         };
 
-        // Удаление чата
         document.getElementById('delete-chat-btn')?.addEventListener('click', function () {
             if (!currentChatId) return;
 
@@ -1393,7 +1391,6 @@
             document.addEventListener('keydown', escHandler);
         });
 
-        // Поддержка кнопки Esc для закрытия чатов
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
 
@@ -1460,7 +1457,6 @@
             }
         });
 
-        // === Инициализация ===
         loadChats();
         startSignalR();
 
