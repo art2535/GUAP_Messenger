@@ -136,7 +136,6 @@ namespace Messenger.Web.Pages.Account
             }
         }
 
-        // Добавь этот обработчик в SettingsModel
         public async Task<IActionResult> OnGetSearchUsersAsync(string query)
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
@@ -163,7 +162,6 @@ namespace Messenger.Web.Pages.Account
 
                     if (string.IsNullOrEmpty(id)) continue;
 
-                    // Исключаем уже заблокированных
                     bool isBlocked = BlockedUsers.Any(b =>
                         b.TryGetProperty("id", out var bid) && bid.GetString() == id);
 

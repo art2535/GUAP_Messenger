@@ -46,7 +46,7 @@
         .input-field {
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid #d1d5db; /* чёткая серая граница */
+            border: 1px solid #d1d5db;
             border-radius: 0.5rem;
             background-color: white;
             transition: all 0.3s;
@@ -148,8 +148,6 @@
     </style>
 </head>
 <body class="flex">
-
-    <!-- Сайдбар -->
     <aside class="sidebar">
         <div class="p-6 text-center border-b border-gray-200">
             <div class="guap-gradient w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -172,14 +170,12 @@
         </div>
     </aside>
 
-    <!-- Основной контент -->
     <main class="main-content">
         <h2 class="text-3xl font-bold text-gray-800 mb-8">Настройки</h2>
 
         <form method="post" enctype="multipart/form-data" class="max-w-4xl mx-auto space-y-8">
             <input type="hidden" asp-for="AvatarUrl" />
 
-            <!-- Профиль -->
             <section id="profile" class="bg-white rounded-xl shadow-md p-8">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-6">Профиль</h3>
                 <div class="grid md:grid-cols-2 gap-8">
@@ -203,34 +199,72 @@
                         </div>
                     </div>
                     <div class="space-y-5">
-                        <div><label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label><input asp-for="Profile.LastName" class="input-field" required></div>
-                        <div><label class="block text-sm font-medium text-gray-700 mb-2">Имя</label><input asp-for="Profile.FirstName" class="input-field" required></div>
-                        <div><label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label><input asp-for="Profile.MiddleName" class="input-field"></div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
+                            <input asp-for="Profile.LastName" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
+                            <input asp-for="Profile.FirstName" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
+                            <input asp-for="Profile.MiddleName" class="input-field">
+                        </div>
                     </div>
                 </div>
                 <div class="grid md:grid-cols-2 gap-6 mt-8">
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Логин (email)</label><input asp-for="Profile.Login" type="email" class="input-field" required></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label><input asp-for="Profile.Phone" type="tel" class="input-field"></div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Логин (email)</label>
+                        <input asp-for="Profile.Login" type="email" class="input-field" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                        <input asp-for="Profile.Phone" type="tel" class="input-field">
+                    </div>
                 </div>
             </section>
 
-            <!-- Уведомления -->
             <section id="notifications" class="bg-white rounded-xl shadow-md p-8">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-6">Уведомления</h3>
                 <div class="space-y-5">
-                    <label class="flex items-center justify-between cursor-pointer"><div class="flex items-center"><input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded"><span class="ml-3 font-medium">Сообщения</span></div></label>
-                    <label class="flex items-center justify-between cursor-pointer"><div class="flex items-center"><input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded"><span class="ml-3 font-medium">Групповые чаты</span></div></label>
-                    <label class="flex items-center justify-between cursor-pointer"><div class="flex items-center"><input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded"><span class="ml-3 font-medium">Объявления</span></div></label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center">
+                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                            <span class="ml-3 font-medium">Сообщения</span>
+                        </div>
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center">
+                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                            <span class="ml-3 font-medium">Групповые чаты</span>
+                        </div>
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center">
+                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                            <span class="ml-3 font-medium">Объявления</span>
+                        </div>
+                    </label>
                 </div>
             </section>
 
-            <!-- Приватность + Чёрный список -->
             <section id="privacy" class="bg-white rounded-xl shadow-md p-8">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-6">Приватность</h3>
                 <div class="space-y-8">
                     <div class="space-y-5">
-                        <label class="flex items-center justify-between cursor-pointer"><div class="flex items-center"><input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded"><span class="ml-3 font-medium">Показывать профиль</span></div></label>
-                        <label class="flex items-center justify-between cursor-pointer"><div class="flex items-center"><input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded"><span class="ml-3 font-medium">Показывать статус онлайн</span></div></label>
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center">
+                                <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                                <span class="ml-3 font-medium">Показывать профиль</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center">
+                                <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                                <span class="ml-3 font-medium">Показывать статус онлайн</span>
+                            </div>
+                        </label>
                     </div>
 
                     <div>
@@ -299,10 +333,8 @@
         </form>
     </main>
 
-    <!-- Toast контейнер -->
     <div id="toast-container"></div>
 
-    <!-- Подтверждение (для блокировки/разблокировки) -->
     <div id="confirmModal" class="modal-overlay">
         <div class="modal-content p-8 text-center">
             <h3 class="text-xl font-semibold mb-4" id="confirmTitle">Подтвердите действие</h3>
@@ -314,7 +346,6 @@
         </div>
     </div>
 
-    <!-- Модалка смены пароля -->
     <div id="changePasswordModal" class="modal-overlay">
         <div class="modal-content p-8">
             <div class="flex justify-between items-center mb-6">
@@ -344,7 +375,6 @@
         </div>
     </div>
 
-    <!-- Модалка удаления аккаунта -->
     <div id="deleteAccountModal" class="modal-overlay">
         <div class="modal-content p-8">
             <div class="flex justify-between items-center mb-6">
@@ -636,6 +666,97 @@
                 }
             });
         });
+
+        document.getElementById('changePasswordForm').onsubmit = async function(e) {
+            e.preventDefault();
+
+            const oldPass = document.getElementById('currentPassword').value.trim();
+            const newPass = document.getElementById('newPassword').value;
+            const confirmPass = document.getElementById('confirmPassword').value;
+
+            if (!oldPass) return showToast('Введите текущий пароль', 'error');
+            if (newPass !== confirmPass) return showToast('Пароли не совпадают', 'error');
+            if (newPass.length < 6) return showToast('Новый пароль должен быть не менее 6 символов', 'error');
+
+            const token = await getJwtToken();
+            if (!token) return showToast('Сессия истекла. Войдите заново.', 'error');
+
+            try {
+                const response = await fetch('https://localhost:7001/api/users/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        oldPassword: oldPass,
+                        newPassword: newPass
+                    })
+                });
+
+                if (response.ok) {
+                    showToast('Пароль успешно изменён!', 'success');
+                    closeChangePasswordModal();
+                    this.reset();
+                } else {
+                    const error = await response.text();
+                    showToast(error || 'Не удалось сменить пароль', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка соединения с сервером', 'error');
+            }
+        };
+
+        async function deleteAccount() {
+            const password = document.getElementById('deletePassword').value.trim();
+
+            if (!password) {
+                showToast('Введите пароль для подтверждения', 'error');
+                return;
+            }
+
+            const confirmed = await openConfirm(
+                'Удаление аккаунта',
+                'Вы уверены? Это действие нельзя отменить. Введите пароль ещё раз.'
+            );
+            if (!confirmed) return;
+
+            try {
+                const token = await getJwtToken();
+
+                const response = await fetch('https://localhost:7001/api/users/delete-account', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showToast('Аккаунт успешно удалён. До свидания!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/Authorization/Logout';
+                    }, 2500);
+                } else {
+                    const error = await response.text();
+                    showToast(error || 'Неверный пароль или ошибка сервера', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Не удалось подключиться к серверу', 'error');
+            }
+        }
+
+        async function getJwtToken() {
+            try {
+                const res = await fetch('/Account/Settings?handler=GetToken');
+                const data = await res.json();
+                return data.token || '';
+            } catch (err) {
+                console.error('Failed to get token:', err);
+                return '';
+            }
+        }
     </script>
 </body>
 </html>
