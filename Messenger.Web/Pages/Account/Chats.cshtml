@@ -613,6 +613,30 @@
                 }
 
                 messageInput.value = '';
+
+                const currentChatItem = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
+                if (currentChatItem) {
+                    const previewDiv = currentChatItem.querySelector('div.text-sm.text-gray-500');
+                    if (preview) {
+                        if (text.trim()) {
+                            preview.innerHTML = text.trim().length > 38 ? text.trim().substring(0, 35) + '...' : text.trim();
+                        } else if (selectedFiles.length > 0) {
+                            const images = selectedFiles.filter(f => f.type.startsWith('image/')).length;
+                            const videos = selectedFiles.filter(f => f.type.startsWith('video/')).length;
+                            const files = selectedFiles.length - images - videos;
+                            const parts = [];
+                            if (images > 0) 
+                                parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${images > 1 ? ' ('+images+')' : ''}`);
+                            if (videos > 0) 
+                                parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${videos > 1 ? ' ('+videos+')' : ''}`);
+                            if (files > 0) 
+                                parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
+                            preview.innerHTML = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
+                            feather.replace();
+                        }
+                    }
+                }
+
                 attachedFiles.innerHTML = '';
                 selectedFiles = [];
                 fileInput.value = '';
@@ -680,9 +704,30 @@
                 if (msg.chatId === currentChatId) {
                     appendMessage(msg);
                 }
-                 const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
+
+                const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
                 if (item) {
-                    item.querySelector('p').textContent = getLastMessagePreview(msg);
+                    const previewDiv = item.querySelector('div.text-sm.text-gray-500');
+                    if (previewDiv) {
+                        let previewText = '';
+                        if (msg.messageText && msg.messageText.trim()) {
+                            previewText = msg.messageText.trim();
+                        } else if (msg.attachments && msg.attachments.length > 0) {
+                            const imgs = msg.attachments.filter(a => a.fileType?.startsWith('image/')).length;
+                            const vids = msg.attachments.filter(a => a.fileType?.startsWith('video/')).length;
+                            const files = msg.attachments.length - imgs - vids;
+                            const parts = [];
+                            if (imgs > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${imgs > 1 ? ' ('+imgs+')' : ''}`);
+                            if (vids > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${vids > 1 ? ' ('+vids+')' : ''}`);
+                            if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
+                            previewText = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
+                        } else {
+                            previewText = '<i data-feather="message-square" class="w-4 h-4"></i> Сообщение';
+                        }
+
+                        previewDiv.innerHTML = previewText;
+                        feather.replace();
+                    }
                 }
             });
 
@@ -983,7 +1028,9 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <h3 class="font-medium truncate">${chat.name || 'Без имени'}</h3>
-                            <p class="text-sm text-gray-500 truncate">${getLastMessagePreview(chat)}</p>
+                            <div class="text-sm text-gray-500 truncate flex items-center gap-1.5">
+                                ${renderLastMessagePreview(chat.lastMessage)}
+                            </div>
                         </div>
                     `;
                     div.onclick = () => openChat(div);
@@ -1020,36 +1067,37 @@
             }
         }
 
-        function getLastMessagePreview(chatOrMessage) {
-            const msg = chatOrMessage.lastMessage || chatOrMessage;
-            if (!msg) return "Нет сообщений";
-
-            if (msg.messageText && msg.messageText.trim()) {
-                return msg.messageText.trim();
+        function renderLastMessagePreview(lastMessageValue) {
+            if (!lastMessageValue || lastMessageValue === null || lastMessageValue === undefined || lastMessageValue.toString().trim() === "") {
+                return '<span class="italic text-gray-400">Нет сообщений</span>';
             }
 
-            if (msg.attachments && msg.attachments.length > 0) {
-                const images = msg.attachments.filter(a =>
-                    a.fileType?.startsWith('image/') ||
-                    a.fileName?.match(/\.(jpe?g|png|gif|webp|bmp|svg)$/i)
-                ).length;
-
-                const videos = msg.attachments.filter(a =>
-                    a.fileType?.startsWith('video/') ||
-                    a.fileName?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
-                ).length;
-
-                const files = msg.attachments.length - images - videos;
-
-                const parts = [];
-                if (images > 0) parts.push(images === 1 ? "Фото" : `Фото (${images})`);
-                if (videos > 0) parts.push(videos === 1 ? "Видео" : `Видео (${videos})`);
-                if (files > 0) parts.push(files === 1 ? "Файл" : `Файлов: ${files}`);
-
-                return parts.length > 0 ? parts.join(", ") : "Прикрепления";
+            if (typeof lastMessageValue === "string") {
+                const text = lastMessageValue.trim();
+                if (text === "") {
+                    return '<i data-feather="paperclip" class="w-4 h-4"></i> Вложение';
+                }
+                return text.length > 38 ? text.substring(0, 35) + '...' : text;
             }
 
-            return "Сообщение";
+            if (typeof lastMessageValue === "object" && lastMessageValue !== null) {
+                if (lastMessageValue.messageText?.trim()) {
+                    const text = lastMessageValue.messageText.trim();
+                    return text.length > 38 ? text.substring(0, 35) + '...' : text;
+                }
+                if (lastMessageValue.attachments?.length > 0) {
+                    const imgs = lastMessageValue.attachments.filter(a => a.fileType?.startsWith('image/')).length;
+                    const vids = lastMessageValue.attachments.filter(a => a.fileType?.startsWith('video/')).length;
+                    const files = lastMessageValue.attachments.length - imgs - vids;
+                    const parts = [];
+                    if (imgs > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${imgs > 1 ? ' ('+imgs+')' : ''}`);
+                    if (vids > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${vids > 1 ? ' ('+vids+')' : ''}`);
+                    if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
+                    return parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
+                }
+            }
+
+            return '<i data-feather="message-square" class="w-4 h-4"></i> Сообщение';
         }
 
         function toggleChatNameField() {
