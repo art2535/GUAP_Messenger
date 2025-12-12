@@ -48,5 +48,39 @@ namespace Messenger.Core.Hubs
         {
             await Clients.User(unblockedUserId).SendAsync("UserUnblockedMe", Context.UserIdentifier);
         }
+
+        public async Task NotifyParticipantRemoved(Guid chatId, Guid removedUserId)
+        {
+            await Clients.Group(chatId.ToString()).SendAsync("ParticipantRemoved", new
+            {
+                chatId = chatId,
+                userId = removedUserId
+            });
+
+            await Clients.User(removedUserId.ToString()).SendAsync("YouWereRemovedFromChat", chatId);
+        }
+
+        public async Task NotifyParticipantAdded(Guid chatId, Guid addedUserId, object userInfo)
+        {
+            await Clients.Group(chatId.ToString()).SendAsync("ParticipantAdded", new
+            {
+                chatId,
+                user = userInfo
+            });
+        }
+
+        public async Task NotifyChatDeleted(Guid chatId)
+        {
+            await Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId);
+        }
+
+        public async Task NotifyChatUpdated(Guid chatId, string newName)
+        {
+            await Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
+            {
+                chatId,
+                name = newName
+            });
+        }
     }
 }

@@ -114,6 +114,32 @@ namespace Messenger.API.Controllers
             }
         }
 
+        [HttpGet("{userId}/name")]
+        [SwaggerOperation(
+            Summary = "Получить имени пользователя по ID",
+            Description = "Возвращает имя и фамилию пользователя по его идентификатору")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> GetUserDisplayName(Guid userId)
+        {
+            try
+            {
+                var user = await _userService.GetUserByIdAsync(userId);
+                if (user == null)
+                    return NotFound(new { isSuccess = false, error = "Пользователь не найден" });
+
+                var name = $"{user.FirstName} {user.LastName}".Trim() ?? "Удалённый пользователь";
+
+                return Ok(new { isSuccess = true, data = name });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
+            }
+        }
+
         [HttpGet("info")]
         [SwaggerOperation(
             Summary = "Получить пользователя по ID",

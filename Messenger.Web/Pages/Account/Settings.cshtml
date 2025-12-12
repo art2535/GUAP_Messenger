@@ -400,22 +400,6 @@
     <script>
         feather.replace();
 
-        function showToast(message, type = 'info', duration = 4500) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            const icons = { success: 'check-circle', error: 'x-circle', info: 'info' };
-            toast.innerHTML = `<i data-feather="${icons[type]}"></i><span>${message}</span>`;
-            container.appendChild(toast);
-            feather.replace();
-            requestAnimationFrame(() => toast.classList.add('show'));
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 400);
-            }, duration);
-        }
-
         let confirmCallback = null;
         function openConfirm(title, message) {
             document.getElementById('confirmTitle').textContent = title;
