@@ -25,6 +25,7 @@
     <title>Настройки</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         html, body {
@@ -400,6 +401,132 @@
     <script>
         feather.replace();
 
+        let connection = null;
+
+        async function initSignalR() {
+            const token = await getJwtToken();
+            if (!token) return;
+
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("https://localhost:7001/hubs/chat", { accessTokenFactory: () => token })
+                .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            connection.on("UserBlocked", (blockedUserId) => {
+                fetchUserAndAddToBlocked(blockedUserId);
+            });
+
+            connection.on("UserUnblocked", (unblockedUserId) => {
+                removeFromBlockedList(unblockedUserId);
+                showToast("Вы разблокировали пользователя", "success");
+            });
+
+            connection.on("UserBlockedMe", async (blockerId) => {
+                await fetchUserAndAddToBlocked(blockerId);
+                showToast("Вы были заблокированы пользователем", "info");
+            });
+
+            connection.on("UserUnblockedMe", (unblockerId) => {
+                removeFromBlockedList(unblockerId);
+                showToast("Вы были разблокированы", "success");
+            });
+
+            connection.start()
+                .then(() => console.log("SignalR подключён"))
+                .catch(err => console.error("SignalR ошибка:", err));
+        }
+
+        function showToast(message, type = 'info', duration = 4000) {
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'fixed top-4 right-4 z-50 flex flex-col gap-3';
+                document.body.appendChild(toastContainer);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'px-6 py-4 rounded-xl shadow-2xl text-white font-medium min-w-80 max-w-sm transform translate-x-full opacity-0 transition-all duration-500 ease-out flex items-center gap-3';
+
+            const colors = {
+                success: 'bg-green-600',
+                error: 'bg-red-600',
+                info: 'bg-blue-600',
+                warning: 'bg-orange-600'
+            };
+            toast.classList.add(colors[type] || 'bg-blue-600');
+
+            toast.innerHTML = `
+                <div class="flex-1">${message}</div>
+                <button class="ml-4 text-white/70 hover:text-white">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            `;
+
+            toastContainer.insertBefore(toast, toastContainer.firstChild);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+            });
+
+            const timeoutId = setTimeout(() => {
+                toast.style.transform = 'translateX(120%)';
+                toast.style.opacity = '0';
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, duration);
+
+            toast.querySelector('button').addEventListener('click', (e) => {
+                e.stopPropagation();
+                clearTimeout(timeoutId);
+                toast.style.transform = 'translateX(120%)';
+                toast.style.opacity = '0';
+                toast.addEventListener('transitionend', () => toast.remove());
+            });
+
+            feather.replace();
+        }
+
+        async function fetchUserAndAddToBlocked(userId) {
+            if (document.querySelector(`[ data-user-id="${userId}"]`)) {
+                return;
+            }
+
+            const token = await getJwtToken();
+            if (!token) {
+                addToBlockedList(userId, "Пользователь", "");
+                return;
+            }
+
+            try {
+                const res = await fetch(`https://localhost:7001/api/users/${userId}/name`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                let name = "Пользователь";
+                if (res.ok) {
+                    const data = await res.json();
+                    name = (data.data || "").trim() || "Пользователь";
+                }
+
+                addToBlockedList(userId, name, "");
+            } catch (err) {
+                console.error("Ошибка загрузки имени:", err);
+                addToBlockedList(userId, "Пользователь", "");
+            }
+        }
+
+        function removeFromBlockedList(userId) {
+            const item = document.querySelector(`.blocked-user-item[data-user-id="${userId}"]`);
+            if (item) {
+                item.remove();
+                if (!document.querySelector('.blocked-user-item')) {
+                    document.getElementById('blocked-users-list').innerHTML =
+                        '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
+                }
+            }
+        }
+
         let confirmCallback = null;
         function openConfirm(title, message) {
             document.getElementById('confirmTitle').textContent = title;
@@ -414,6 +541,7 @@
                 confirmCallback = null;
             }
         }
+        
         document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
 
         document.querySelectorAll('.modal-overlay').forEach(m => {
@@ -442,7 +570,7 @@
                 return;
             }
 
-            const token = await getJwt();
+            const token = await getJwtToken();
             if (!token) { showToast('Сессия истекла', 'error'); return; }
 
             try {
@@ -472,7 +600,7 @@
                 return;
             }
 
-            const token = await getJwt();
+            const token = await getJwtToken();
             if (!token) { showToast('Сессия истекла', 'error'); return; }
 
             try {
@@ -491,16 +619,6 @@
                 }
             } catch {
                 showToast('Ошибка соединения', 'error');
-            }
-        }
-
-        async function getJwt() {
-            try {
-                const res = await fetch('/Account/Settings?handler=GetToken');
-                const data = await res.json();
-                return data.token || '';
-            } catch {
-                return '';
             }
         }
 
@@ -550,8 +668,11 @@
             const ok = await openConfirm('Блокировка', `Заблокировать пользователя «${userName}»?`);
             if (!ok) return;
 
-            const token = await getJwt();
-            if (!token) { showToast('Сессия истекла', 'error'); return; }
+            const token = await getJwtToken();
+            if (!token) {
+                showToast('Сессия истекла', 'error');
+                return;
+            }
 
             try {
                 const res = await fetch(`https://localhost:7001/api/users/block/${userId}`, {
@@ -561,59 +682,89 @@
 
                 if (res.ok) {
                     showToast(`«${userName}» добавлен в чёрный список`, 'success');
-                    addToBlockedList(userId, userName, userLogin);
                 } else if (res.status === 409) {
                     showToast('Уже в чёрном списке', 'info');
                 } else {
-                    showToast('Ошибка блокировки', 'error');
+                    const err = await res.text();
+                    showToast(err || 'Ошибка блокировки', 'error');
                 }
-            } catch {
+            } catch (err) {
                 showToast('Ошибка сети', 'error');
             }
         }
 
-        document.getElementById('blocked-users-list').addEventListener('click', async function(e) {
-            const btn = e.target.closest('.unblock-btn');
-            if (!btn) return;
+        function decodeHtml(html) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = html;
+            return txt.value;
+        }
 
-            const userId = btn.dataset.id;
-            const userName = btn.dataset.name;
 
-            const ok = await openConfirm('Разблокировка', `Разблокировать «${userName}»?`);
-            if (!ok) return;
+        window.addEventListener('load', async () => {
+            feather.replace();
 
-            const token = await getJwt();
-            if (!token) { showToast('Сессия истекла', 'error'); return; }
+            const blockedList = document.getElementById('blocked-users-list');
+            if (blockedList) {
+                blockedList.addEventListener('click', async (e) => {
+                    const btn = e.target.closest('.unblock-btn');
+                    if (!btn) return;
 
-            try {
-                const res = await fetch(`https://localhost:7001/api/users/unblock/${userId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                    const userId = btn.dataset.id;
+                    const userName = decodeHtml(btn.dataset.name);
 
-                if (res.ok) {
-                    showToast(`«${userName}» разблокирован`, 'success');
-                    btn.closest('.blocked-user-item').remove();
-                    if (!document.querySelector('.blocked-user-item')) {
-                        this.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
+                    const ok = await openConfirm('Разблокировка', `Разблокировать пользователя «${userName}»?`);
+                    if (!ok) return;
+
+                    const token = await getJwtToken();
+                    if (!token) return showToast('Сессия истекла', 'error');
+
+                    try {
+                        const res = await fetch(`https://localhost:7001/api/users/unblock/${userId}`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+
+                        if (res.ok) {
+                            showToast(`«${userName}» разблокирован`, 'success');
+                            btn.closest('.blocked-user-item').remove();
+
+                            if (!document.querySelector('.blocked-user-item')) {
+                                blockedList.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
+                            }
+                        } else {
+                            showToast('Ошибка разблокировки', 'error');
+                        }
+                    } catch {
+                        showToast('Ошибка сети', 'error');
                     }
-                } else {
-                    showToast('Ошибка разблокировки', 'error');
-                }
-            } catch {
-                showToast('Ошибка соединения', 'error');
+                });
             }
+
+            await initSignalR();
         });
 
         function addToBlockedList(userId, name, login = '') {
+            if (document.querySelector(`[ data-user-id="${userId}"]`)) {
+                return;
+            }
+
             const list = document.getElementById('blocked-users-list');
-            if (list.querySelector('p')) list.innerHTML = '';
+
+            const emptyMsg = list.querySelector('p');
+            if (emptyMsg) emptyMsg.remove();
 
             if (document.querySelector(`[data-user-id="${userId}"]`)) return;
 
             const item = document.createElement('div');
             item.className = 'blocked-user-item flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition';
             item.dataset.userId = userId;
+
+            const encodedName = name
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
             item.innerHTML = `
                 <div class="flex items-center space-x-4">
                     <div class="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center">
@@ -625,10 +776,12 @@
                     </div>
                 </div>
                 <button type="button" class="unblock-btn text-red-600 hover:text-red-800 font-medium text-sm"
-                        data-id="${userId}" data-name="${name.replace(/"/g, '&quot;')}">
+                        data-id="${userId}"
+                        data-name="${encodedName}">
                     Разблокировать
                 </button>
             `;
+
             list.appendChild(item);
             feather.replace();
         }

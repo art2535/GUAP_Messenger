@@ -247,8 +247,13 @@ namespace Messenger.API.Controllers
 
                 await _userService.BlockUserAsync(userId, blockedUserId, token);
 
+                // Уведомляем ТОГО, КТО ЗАБЛОКИРОВАЛ (что операция прошла успешно)
+                await _hubContext.Clients.User(userId.ToString())
+                    .SendAsync("UserBlocked", blockedUserId.ToString()); // ← НОВОЕ: я кого-то заблокировал
+
+                // Уведомляем ТОГО, КОГО ЗАБЛОКИРОВАЛИ
                 await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserBlockedMe", userId.ToString(), token);
+                    .SendAsync("UserBlockedMe", userId.ToString());
 
                 return Ok(new 
                 { 
@@ -282,8 +287,13 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 await _userService.UnblockUserAsync(userId, blockedUserId, token);
 
+                // Я разблокировал кого-то
+                await _hubContext.Clients.User(userId.ToString())
+                    .SendAsync("UserUnblocked", blockedUserId.ToString());
+
+                // Меня разблокировали
                 await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserUnblockedMe", userId.ToString(), token);
+                    .SendAsync("UserUnblockedMe", userId.ToString());
 
                 return Ok(new 
                 { 
