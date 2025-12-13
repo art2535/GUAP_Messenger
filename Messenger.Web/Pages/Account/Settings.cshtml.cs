@@ -1,8 +1,9 @@
+using Messenger.Core.DTOs.Users;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
-using Messenger.Core.DTOs.Users;
 
 namespace Messenger.Web.Pages.Account
 {
@@ -19,26 +20,37 @@ namespace Messenger.Web.Pages.Account
         public UpdateUserProfileRequest Profile { get; set; } = new();
 
         [BindProperty]
-        public string? AvatarUrl { get; set; }
+        public IFormFile? AvatarFile { get; set; }
 
+        [BindProperty]
+        public bool DeleteAvatar { get; set; }
 
+        public bool HasAvatar { get; private set; }
+        public string? AvatarUrl { get; private set; }
         public JsonElement CurrentUserJson { get; private set; }
         public IReadOnlyList<JsonElement> BlockedUsers { get; private set; } = Array.Empty<JsonElement>();
 
-        public async Task<IActionResult> OnGetAsync()
+        public async Task<IActionResult> OnGetAsync(bool? refreshed = null)
         {
             var token = HttpContext.Session.GetString("JWT_TOKEN");
-
             if (string.IsNullOrEmpty(token))
             {
                 return RedirectToPage("/Authorization/Authorization");
+            }
+
+            if (refreshed == true)
+            {
+                if (HasAvatar && AvatarUrl != null)
+                {
+                    AvatarUrl += (AvatarUrl.Contains("?") ? "&" : "?") + "t=" + DateTime.Now.Ticks;
+                }
             }
 
             await LoadDataAsync();
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync()
+        public async Task<IActionResult> OnPostSaveAsync()
         {
             if (!ModelState.IsValid)
             {
@@ -47,43 +59,100 @@ namespace Messenger.Web.Pages.Account
             }
 
             var client = CreateClient();
+            string? newAvatarUrl = null;
 
-            var payload = new
+            try
             {
-                Profile.LastName,
-                Profile.FirstName,
-                Profile.MiddleName,
-                Profile.Login,
-                Profile.Phone,
-                Profile.Theme
-            };
+                if (DeleteAvatar)
+                {
+                    var deleteRes = await client.DeleteAsync("https://localhost:7001/api/users/delete-avatar");
+                    if (!deleteRes.IsSuccessStatusCode)
+                    {
+                        ModelState.AddModelError("", "Не удалось удалить аватар");
+                        await LoadDataAsync();
+                        return Page();
+                    }
+                    newAvatarUrl = null;
+                }
 
-            var content = new StringContent(
-                JsonSerializer.Serialize(payload),
-                System.Text.Encoding.UTF8,
-                "application/json");
+                if (AvatarFile != null && AvatarFile.Length > 0)
+                {
+                    if (AvatarFile.Length > 2 * 1024 * 1024)
+                    {
+                        ModelState.AddModelError("", "Файл не должен превышать 2 МБ");
+                        await LoadDataAsync();
+                        return Page();
+                    }
 
-            var response = await client.PutAsync("https://localhost:7001/api/users/update-profile", content);
+                    var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
+                    if (!allowedTypes.Contains(AvatarFile.ContentType.ToLowerInvariant()))
+                    {
+                        ModelState.AddModelError("", "Неподдерживаемый формат");
+                        await LoadDataAsync();
+                        return Page();
+                    }
 
-            if (!string.IsNullOrEmpty(AvatarUrl))
-            {
-                await client.PutAsync($"https://localhost:7001/api/users/update-profile?avatarUrl={Uri.EscapeDataString(AvatarUrl)}", null!);
+                    using var content = new MultipartFormDataContent();
+                    using var fileContent = new StreamContent(AvatarFile.OpenReadStream());
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(AvatarFile.ContentType);
+                    content.Add(fileContent, "avatarFile", AvatarFile.FileName);
+
+                    var uploadRes = await client.PostAsync("https://localhost:7001/api/users/upload-avatar", content);
+                    if (!uploadRes.IsSuccessStatusCode)
+                    {
+                        ModelState.AddModelError("", "Ошибка загрузки аватара");
+                        await LoadDataAsync();
+                        return Page();
+                    }
+
+                    var json = await uploadRes.Content.ReadAsStringAsync();
+                    var result = JsonSerializer.Deserialize<JsonElement>(json);
+                    if (result.TryGetProperty("data", out var data) && data.TryGetProperty("avatarUrl", out var url))
+                    {
+                        newAvatarUrl = url.GetString();
+                    }
+                }
+
+                var payload = new
+                {
+                    Profile.LastName,
+                    Profile.FirstName,
+                    Profile.MiddleName,
+                    Profile.Login,
+                    Profile.Phone,
+                    Profile.Theme
+                };
+
+                var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                var updateUrl = "https://localhost:7001/api/users/update-profile";
+                if (newAvatarUrl != null)
+                {
+                    updateUrl += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
+                }
+
+                var response = await client.PutAsync(updateUrl, jsonContent);
+                if (!response.IsSuccessStatusCode)
+                {
+                    ModelState.AddModelError("", "Ошибка сохранения профиля");
+                    await LoadDataAsync();
+                    return Page();
+                }
+
+                TempData["SuccessMessage"] = "Профиль успешно обновлён";
+                return RedirectToPage(new { refreshed = true });
             }
-
-            if (response.IsSuccessStatusCode)
+            catch (Exception ex)
             {
-                TempData["Success"] = "Профиль успешно обновлён";
-                return RedirectToPage();
+                ModelState.AddModelError("", "Произошла ошибка: " + ex.Message);
+                await LoadDataAsync();
+                return Page();
             }
-
-            ModelState.AddModelError("", "Ошибка сохранения профиля");
-            await LoadDataAsync();
-            return Page();
         }
 
         private async Task LoadDataAsync()
         {
             var client = CreateClient();
+
             try
             {
                 var userResp = await client.GetAsync("https://localhost:7001/api/users/info");
@@ -91,9 +160,11 @@ namespace Messenger.Web.Pages.Account
                 {
                     var json = await userResp.Content.ReadAsStringAsync();
                     var root = JsonSerializer.Deserialize<JsonElement>(json);
+
                     if (root.TryGetProperty("data", out var data))
                     {
                         CurrentUserJson = data;
+
                         Profile = new UpdateUserProfileRequest
                         {
                             LastName = data.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "",
@@ -101,13 +172,36 @@ namespace Messenger.Web.Pages.Account
                             MiddleName = data.TryGetProperty("middleName", out var mn) ? mn.GetString() : null,
                             Login = data.TryGetProperty("login", out var log) ? log.GetString() ?? "" : "",
                             Phone = data.TryGetProperty("phone", out var ph) ? ph.GetString() ?? "" : "",
-                            Theme = data.TryGetProperty("theme", out var th) ? th.GetString() : "light"
+                            Theme = data.TryGetProperty("account", out var acc) &&
+                                    acc.TryGetProperty("theme", out var th) ? th.GetString() : "light"
                         };
+
+                        string? avatarPath = null;
+                        if (data.TryGetProperty("account", out var account) &&
+                            account.TryGetProperty("avatar", out var avatarElement) &&
+                            avatarElement.ValueKind == JsonValueKind.String &&
+                            !string.IsNullOrWhiteSpace(avatarElement.GetString()))
+                        {
+                            avatarPath = avatarElement.GetString();
+                        }
+
+                        HasAvatar = !string.IsNullOrEmpty(avatarPath);
+                        AvatarUrl = !string.IsNullOrEmpty(avatarPath)
+                            ? avatarPath + "?t=" + DateTime.Now.Ticks
+                            : null;
+                    }
+                    else
+                    {
+                        CurrentUserJson = JsonDocument.Parse("{}").RootElement;
+                        HasAvatar = false;
+                        AvatarUrl = null;
                     }
                 }
                 else
                 {
                     CurrentUserJson = JsonDocument.Parse("{}").RootElement;
+                    HasAvatar = false;
+                    AvatarUrl = null;
                 }
 
                 var blockedResp = await client.GetAsync("https://localhost:7001/api/users/blocked");
@@ -115,24 +209,20 @@ namespace Messenger.Web.Pages.Account
                 {
                     var json = await blockedResp.Content.ReadAsStringAsync();
                     var root = JsonSerializer.Deserialize<JsonElement>(json);
+
                     if (root.TryGetProperty("data", out var dataArray) && dataArray.ValueKind == JsonValueKind.Array)
                     {
                         BlockedUsers = dataArray.EnumerateArray().ToList();
                     }
-                    else
-                    {
-                        BlockedUsers = Array.Empty<JsonElement>();
-                    }
-                }
-                else
-                {
-                    BlockedUsers = Array.Empty<JsonElement>();
                 }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
                 CurrentUserJson = JsonDocument.Parse("{}").RootElement;
                 BlockedUsers = Array.Empty<JsonElement>();
+                HasAvatar = false;
+                AvatarUrl = null;
             }
         }
 
@@ -149,7 +239,6 @@ namespace Messenger.Web.Pages.Account
 
             var json = await response.Content.ReadAsStringAsync();
             var root = JsonSerializer.Deserialize<JsonElement>(json);
-
             var users = new List<object>();
 
             if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
@@ -189,15 +278,11 @@ namespace Messenger.Web.Pages.Account
         private HttpClient CreateClient()
         {
             var client = _httpClientFactory.CreateClient("ApiClient");
-
             var token = HttpContext.Session.GetString("JWT_TOKEN");
-
             if (!string.IsNullOrEmpty(token))
             {
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
-
             return client;
         }
     }

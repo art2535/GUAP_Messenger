@@ -1,5 +1,6 @@
 ﻿using Messenger.Core.DTOs.Users;
 using Messenger.Core.Models;
+using Microsoft.AspNetCore.Http;
 
 namespace Messenger.Core.Interfaces
 {
@@ -17,6 +18,8 @@ namespace Messenger.Core.Interfaces
         Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default);
         Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, string? avatarUrl = null, 
             CancellationToken token = default);
+        Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default);
+        Task DeleteAvatarAsync(Guid userId, CancellationToken token = default);
         Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword, CancellationToken token = default);
         Task DeleteAccountAsync(Guid userId, CancellationToken token = default);
         Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken token = default);

@@ -72,6 +72,12 @@ namespace Messenger.API
                 }
             });
 
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars")),
+                RequestPath = "/avatars"
+            });
+
             app.UseCors("AllowWebApp");
             app.UseHttpsRedirection();
             app.UseAuthentication();

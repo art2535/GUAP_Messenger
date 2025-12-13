@@ -155,10 +155,28 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var user = await _userService.GetUserByIdAsync(userId, token);
 
+                if (user == null)
+                    return NotFound();
+
+                var response = new
+                {
+                    UserId = user.UserId,
+                    LastName = user.LastName ?? "",
+                    FirstName = user.FirstName ?? "",
+                    MiddleName = user.MiddleName,
+                    Login = user.Login ?? "",
+                    Phone = user.Phone,
+                    Account = user.Account != null ? new
+                    {
+                        Avatar = user.Account.Avatar,
+                        Theme = user.Account.Theme ?? "light"
+                    } : null
+                };
+
                 return Ok(new
                 {
                     IsSuccess = true,
-                    Data = user
+                    Data = response
                 });
             }
             catch (Exception ex)
@@ -186,6 +204,17 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
                 await _userService.UpdateProfileAsync(userId, request, avatarUrl, token);
+
+                var updatedUser = await _userService.GetUserByIdAsync(userId, token);
+                var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
+                var currentAvatar = updatedUser.Account?.Avatar;
+
+                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                {
+                    userId = userId.ToString(),
+                    avatarUrl = currentAvatar,
+                    displayName = newDisplayName
+                }, token);
 
                 return Ok(new
                 {
@@ -247,13 +276,11 @@ namespace Messenger.API.Controllers
 
                 await _userService.BlockUserAsync(userId, blockedUserId, token);
 
-                // Уведомляем ТОГО, КТО ЗАБЛОКИРОВАЛ (что операция прошла успешно)
                 await _hubContext.Clients.User(userId.ToString())
-                    .SendAsync("UserBlocked", blockedUserId.ToString()); // ← НОВОЕ: я кого-то заблокировал
+                    .SendAsync("UserBlocked", blockedUserId.ToString(), token);
 
-                // Уведомляем ТОГО, КОГО ЗАБЛОКИРОВАЛИ
                 await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserBlockedMe", userId.ToString());
+                    .SendAsync("UserBlockedMe", userId.ToString(), token);
 
                 return Ok(new 
                 { 
@@ -268,6 +295,55 @@ namespace Messenger.API.Controllers
                     IsSuccess = false,
                     Error = ex.Message
                 });
+            }
+        }
+
+        [HttpPost("upload-avatar")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [SwaggerOperation(
+            Summary = "Загрузить аватар пользователя",
+            Description = "Загружает новый аватар для текущего пользователя и возвращает его URL")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 400)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> UploadAvatar([FromForm] IFormFile avatarFile, CancellationToken token = default)
+        {
+            if (avatarFile == null || avatarFile.Length == 0)
+                return BadRequest(new { IsSuccess = false, Error = "Файл не выбран" });
+
+            if (avatarFile.Length > 2 * 1024 * 1024) // 2 МБ
+                return BadRequest(new { IsSuccess = false, Error = "Файл не должен превышать 2 МБ" });
+
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var avatarUrl = await _userService.UploadAvatarAsync(userId, avatarFile, token);
+
+                var user = await _userService.GetUserByIdAsync(userId, token);
+                var displayName = $"{user.FirstName} {user.LastName}".Trim();
+
+                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                {
+                    userId = userId.ToString(),
+                    avatarUrl,
+                    displayName
+                }, token);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Message = "Аватар успешно загружен",
+                    Data = new { avatarUrl }
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { IsSuccess = false, Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
 
@@ -287,11 +363,9 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 await _userService.UnblockUserAsync(userId, blockedUserId, token);
 
-                // Я разблокировал кого-то
                 await _hubContext.Clients.User(userId.ToString())
                     .SendAsync("UserUnblocked", blockedUserId.ToString());
 
-                // Меня разблокировали
                 await _hubContext.Clients.User(blockedUserId.ToString())
                     .SendAsync("UserUnblockedMe", userId.ToString());
 
@@ -424,6 +498,46 @@ namespace Messenger.API.Controllers
                     IsSuccess = false,
                     Error = ex.Message
                 });
+            }
+        }
+
+        [HttpDelete("delete-avatar")]
+        [SwaggerOperation(
+            Summary = "Удалить аватар текущего пользователя",
+            Description = "Удаляет аватар пользователя и возвращает дефолтный")]
+        [ProducesResponseType(typeof(object), 200)]
+        [ProducesResponseType(typeof(object), 401)]
+        [ProducesResponseType(typeof(object), 500)]
+        public async Task<IActionResult> DeleteAvatar(CancellationToken token = default)
+        {
+            try
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                // Удаляем файл и обновляем БД
+                await _userService.DeleteAvatarAsync(userId, token);
+
+                // Получаем актуальное имя (на всякий случай)
+                var user = await _userService.GetUserByIdAsync(userId, token);
+                var displayName = $"{user.FirstName} {user.LastName}".Trim();
+
+                // Уведомляем всех клиентов через SignalR
+                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                {
+                    userId = userId.ToString(),
+                    avatarUrl = (string?)null, // null = использовать дефолтный аватар
+                    displayName
+                }, token);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Message = "Аватар успешно удалён"
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
             }
         }
     }

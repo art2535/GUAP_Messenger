@@ -1,8 +1,9 @@
-﻿using Messenger.Core.Interfaces;
+﻿using Messenger.Core.DTOs.Users;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Repositories;
-using Messenger.Core.DTOs.Users;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -144,6 +145,78 @@ namespace Messenger.Infrastructure.Services
             string? userRole = await _userRepository.GetRoleByUserIdAsync(userId);
 
             return (user, jwtToken, userRole);
+        }
+
+        public async Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default)
+        {
+            var user = await _context.Users
+                .Include(u => u.Account)
+                .FirstOrDefaultAsync(u => u.UserId == userId, token);
+
+            if (user == null)
+                throw new UnauthorizedAccessException("Пользователь не найден");
+
+            if (user.Account == null)
+            {
+                user.Account = new AccountSetting
+                {
+                    SettingId = Guid.NewGuid(),
+                    AccountId = userId
+                };
+                _context.AccountSettings.Add(user.Account);
+            }
+
+            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars");
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            if (!string.IsNullOrEmpty(user.Account.Avatar))
+            {
+                var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.Account.Avatar.TrimStart('/'));
+                if (File.Exists(oldFilePath) && !user.Account.Avatar.Contains("default"))
+                {
+                    File.Delete(oldFilePath);
+                }
+            }
+
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            if (!allowedExtensions.Contains(fileExtension))
+                throw new ArgumentException("Неподдерживаемый формат изображения");
+
+            var fileName = $"{userId}{fileExtension}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            await using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream, token);
+            }
+
+            var avatarUrl = $"https://localhost:7001/avatars/{fileName}";
+
+            user.Account.Avatar = avatarUrl;
+            await _context.SaveChangesAsync(token);
+
+            return avatarUrl;
+        }
+
+        public async Task DeleteAvatarAsync(Guid userId, CancellationToken token = default)
+        {
+            var user = await _context.Users
+                .Include(u => u.Account)
+                .FirstOrDefaultAsync(u => u.UserId == userId, token);
+
+            if (user == null || user.Account == null || string.IsNullOrEmpty(user.Account.Avatar))
+                return;
+
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.Account.Avatar.TrimStart('/'));
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            user.Account.Avatar = null;
+            await _context.SaveChangesAsync(token);
         }
 
         public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)

@@ -82,5 +82,33 @@ namespace Messenger.Core.Hubs
                 name = newName
             });
         }
+
+        public async Task NotifyAvatarUpdated(string userId, string newAvatarUrl)
+        {
+            await Clients.All.SendAsync("AvatarUpdated", new
+            {
+                userId,
+                avatarUrl = newAvatarUrl
+            });
+        }
+
+        public async Task NotifyProfileNameUpdated(string userId, string newDisplayName)
+        {
+            await Clients.All.SendAsync("ProfileNameUpdated", new
+            {
+                userId,
+                displayName = newDisplayName
+            });
+        }
+
+        public async Task NotifyProfileUpdated(string userId, string? newAvatarUrl, string newDisplayName)
+        {
+            await Clients.All.SendAsync("ProfileUpdated", new
+            {
+                userId,
+                avatarUrl = newAvatarUrl,
+                displayName = newDisplayName
+            });
+        }
     }
 }

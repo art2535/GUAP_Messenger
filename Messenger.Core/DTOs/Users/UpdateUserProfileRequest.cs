@@ -25,5 +25,6 @@ namespace Messenger.Core.DTOs.Users
         public string Phone { get; set; } = string.Empty;
 
         public string? Theme { get; set; } = string.Empty;
+        public string? Avatar { get; set; } = string.Empty;
     }
 }

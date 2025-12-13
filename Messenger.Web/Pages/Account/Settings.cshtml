@@ -4,17 +4,16 @@
 @model Messenger.Web.Pages.Account.SettingsModel
 @{
     Layout = null;
-    var user = Model.CurrentUserJson.ValueKind != JsonValueKind.Undefined
-        ? Model.CurrentUserJson
-        : JsonDocument.Parse("{}").RootElement;
 
-    var hasAvatar = user.TryGetProperty("avatar", out var av) && !string.IsNullOrEmpty(av.GetString());
-    var avatarUrl = hasAvatar ? av.GetString()! : null;
+    var hasAvatar = Model.HasAvatar;
+    var avatarUrl = Model.AvatarUrl;
 
-    var lastName = user.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "";
-    var firstName = user.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "";
-    var middleName = user.TryGetProperty("middleName", out var mn) ? mn.GetString() : null;
-    var fullName = $"{lastName} {firstName.FirstOrDefault()}." + (!string.IsNullOrEmpty(middleName) ? middleName[0] : "");
+    var lastName = Model.Profile.LastName;
+    var firstName = Model.Profile.FirstName;
+    var middleName = Model.Profile.MiddleName;
+
+    var fullName = $"{lastName} {firstName.FirstOrDefault()}." +
+                   (!string.IsNullOrEmpty(middleName) ? middleName[0].ToString() + "." : "");
 }
 
 <!DOCTYPE html>
@@ -172,56 +171,98 @@
     </aside>
 
     <main class="main-content">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    showToast('@TempData["SuccessMessage"]', 'success');
+                });
+            </script>
+        }
         <h2 class="text-3xl font-bold text-gray-800 mb-8">Настройки</h2>
 
-        <form method="post" enctype="multipart/form-data" class="max-w-4xl mx-auto space-y-8">
-            <input type="hidden" asp-for="AvatarUrl" />
-
+        <form method="post" enctype="multipart/form-data" asp-page-handler="Save" class="max-w-4xl mx-auto space-y-8">
             <section id="profile" class="bg-white rounded-xl shadow-md p-8">
-                <h3 class="text-2xl font-semibold text-gray-800 mb-6">Профиль</h3>
-                <div class="grid md:grid-cols-2 gap-8">
-                    <div class="flex items-center space-x-6">
-                        @if (hasAvatar)
-                        {
-                            <img src="@avatarUrl" alt="Avatar" class="w-28 h-28 rounded-full object-cover border-4 border-gray-200 shadow-lg">
-                        }
-                        else
-                        {
-                            <div class="guap-gradient w-28 h-28 rounded-full flex items-center justify-center shadow-lg">
-                                <i data-feather="user" class="w-14 h-14 text-white"></i>
+                <h3 class="text-2xl font-semibold text-gray-800 mb-8">Профиль</h3>
+
+                <div class="flex flex-col md:flex-row gap-10 items-start">
+                    <div class="flex flex-col items-center space-y-4">
+                        <div class="relative">
+                            @if (hasAvatar && !string.IsNullOrEmpty(avatarUrl))
+                            {
+                                <img id="current-avatar"
+                                     src="@avatarUrl?t=@DateTime.Now.Ticks"
+                                     alt="Аватар"
+                                     class="w-40 h-40 rounded-full object-cover border-4 border-gray-200 shadow-xl"
+                                     onerror="document.getElementById('default-avatar').style.display='flex';">
+                            }
+                            else
+                            {
+                                <div id="current-avatar" class="guap-gradient w-40 h-40 rounded-full flex items-center justify-center shadow-xl">
+                                    <i data-feather="user" class="w-20 h-20 text-white"></i>
+                                </div>
+                            }
+
+                            <div id="default-avatar"
+                                 class="guap-gradient w-40 h-40 rounded-full flex items-center justify-center shadow-xl absolute inset-0 @(hasAvatar && !string.IsNullOrEmpty(avatarUrl) ? "hidden" : "flex")">
+                                <i data-feather="user" class="w-20 h-20 text-white"></i>
                             </div>
-                        }
-                        <div>
-                            <input type="file" id="avatarInput" accept="image/*" class="hidden">
-                            <label for="avatarInput" class="guap-gradient text-white py-3 px-6 rounded-lg hover:opacity-90 cursor-pointer font-medium inline-block">
+
+                            <div id="avatar-preview-container" class="hidden absolute inset-0 rounded-full overflow-hidden border-4 border-blue-600 shadow-2xl z-20 pointer-events-none">
+                                <img id="avatar-preview" src="" alt="Preview" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-blue-600 bg-opacity-30 flex items-center justify-center">
+                                    <span class="text-white font-bold text-xl">Предпросмотр</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col space-y-3 w-full max-w-xs">
+                            <input type="file" id="avatarInput" name="AvatarFile" accept="image/*" class="hidden">
+                            <label for="avatarInput" class="guap-gradient text-white py-3 px-8 rounded-lg hover:opacity-90 cursor-pointer font-medium text-center transition">
                                 Изменить фото
                             </label>
-                            <p class="text-sm text-gray-500 mt-2">JPG, PNG, GIF · до 2 МБ</p>
+                            <p class="text-sm text-gray-500 text-center">JPG, PNG, GIF, WEBP · до 2 МБ</p>
+
+                            <button type="button" id="cancel-preview" class="text-sm text-gray-600 hover:underline hidden">
+                                Отменить выбор
+                            </button>
+
+                            <button type="button" id="delete-avatar-trigger"
+                                    class="text-sm text-red-600 hover:text-red-800 hover:underline @(hasAvatar ? "" : "hidden")">
+                                Удалить фото
+                            </button>
                         </div>
+
+                        <input type="hidden" name="DeleteAvatar" id="delete-avatar-flag" value="false" />
                     </div>
-                    <div class="space-y-5">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
-                            <input asp-for="Profile.LastName" class="input-field" required>
+
+                    <div class="flex-1 space-y-6">
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
+                                <input asp-for="Profile.LastName" class="input-field" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
+                                <input asp-for="Profile.FirstName" class="input-field" required>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
-                            <input asp-for="Profile.FirstName" class="input-field" required>
-                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
                             <input asp-for="Profile.MiddleName" class="input-field">
                         </div>
-                    </div>
-                </div>
-                <div class="grid md:grid-cols-2 gap-6 mt-8">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Логин (email)</label>
-                        <input asp-for="Profile.Login" type="email" class="input-field" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
-                        <input asp-for="Profile.Phone" type="tel" class="input-field">
+
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Логин (email)</label>
+                                <input asp-for="Profile.Login" type="email" class="input-field" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                                <input asp-for="Profile.Phone" type="tel" class="input-field">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -432,9 +473,38 @@
                 showToast("Вы были разблокированы", "success");
             });
 
+            connection.on("ProfileUpdated", (data) => {
+                const currentUserId = '@Model.CurrentUserJson.TryGetProperty("userId", out var uid) ? uid.GetString() : ""';
+                if (data.userId === currentUserId) {
+                    updateAvatarDisplay(data.avatarUrl);
+                    hasOriginalAvatar = !!data.avatarUrl;
+                    deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
+                }
+            });
+
             connection.start()
                 .then(() => console.log("SignalR подключён"))
                 .catch(err => console.error("SignalR ошибка:", err));
+        }
+
+        function updateAvatarDisplay(avatarUrl) {
+            if (avatarUrl) {
+                currentAvatar.src = avatarUrl + '?t=' + new Date().getTime();
+                currentAvatar.style.display = 'block';
+                if (currentAvatar.tagName === 'DIV') {
+                    const img = document.createElement('img');
+                    img.id = 'current-avatar';
+                    img.src = avatarUrl + '?t=' + new Date().getTime();
+                    img.alt = 'Avatar';
+                    img.className = 'w-28 h-28 rounded-full object-cover border-4 border-gray-200 shadow-lg';
+                    currentAvatar.parentNode.replaceChild(img, currentAvatar);
+                    currentAvatar = img;
+                }
+            } else {
+                if (currentAvatar.tagName === 'IMG') {
+                    currentAvatar.src = '/images/default-avatar.png?t=' + new Date().getTime();
+                }
+            }
         }
 
         function showToast(message, type = 'info', duration = 4000) {
@@ -894,6 +964,68 @@
                 return '';
             }
         }
+
+        const avatarInput = document.getElementById('avatarInput');
+        const currentAvatar = document.getElementById('current-avatar');
+        const previewContainer = document.getElementById('avatar-preview-container');
+        const previewImg = document.getElementById('avatar-preview');
+        const cancelPreviewBtn = document.getElementById('cancel-preview');
+        const deleteAvatarTrigger = document.getElementById('delete-avatar-trigger');
+        const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
+        let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
+
+        // Превью
+        avatarInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                hidePreview();
+                return;
+            }
+            if (!file.type.startsWith('image/')) {
+                showToast('Выберите изображение', 'error');
+                avatarInput.value = '';
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('Файл не должен превышать 2 МБ', 'error');
+                avatarInput.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                previewImg.src = ev.target.result;
+                previewContainer.classList.remove('hidden');
+                cancelPreviewBtn.classList.remove('hidden');
+                deleteAvatarTrigger.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        });
+
+        cancelPreviewBtn.addEventListener('click', () => {
+            avatarInput.value = '';
+            hidePreview();
+        });
+
+        deleteAvatarTrigger.addEventListener('click', () => {
+            if (!confirm('Удалить аватар навсегда?')) return;
+            deleteAvatarFlag.value = 'true';
+            hidePreview();
+            updateAvatarDisplay(null);
+            showToast('Аватар будет удалён после сохранения', 'info');
+        });
+
+        function hidePreview() {
+            previewContainer.classList.add('hidden');
+            cancelPreviewBtn.classList.add('hidden');
+            if (hasOriginalAvatar) {
+                deleteAvatarTrigger.classList.remove('hidden');
+            }
+        }
+
+        window.addEventListener('load', async () => {
+            feather.replace();
+            await initSignalR();
+        });
     </script>
 </body>
 </html>
