@@ -15,7 +15,7 @@ Messenger.Infrastructure/Migrations/
 
 # Photos
 Messenger.Web/wwwroot/uploads/
-Messenger.API/wwwroot/uploads/
+Messenger.API/wwwroot/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
