@@ -312,7 +312,7 @@ namespace Messenger.API.Controllers
             if (avatarFile == null || avatarFile.Length == 0)
                 return BadRequest(new { IsSuccess = false, Error = "Файл не выбран" });
 
-            if (avatarFile.Length > 2 * 1024 * 1024) // 2 МБ
+            if (avatarFile.Length > 2 * 1024 * 1024)
                 return BadRequest(new { IsSuccess = false, Error = "Файл не должен превышать 2 МБ" });
 
             try
@@ -320,14 +320,10 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var avatarUrl = await _userService.UploadAvatarAsync(userId, avatarFile, token);
 
-                var user = await _userService.GetUserByIdAsync(userId, token);
-                var displayName = $"{user.FirstName} {user.LastName}".Trim();
-
-                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
                 {
                     userId = userId.ToString(),
-                    avatarUrl,
-                    displayName
+                    avatarUrl = avatarUrl
                 }, token);
 
                 return Ok(new
@@ -514,20 +510,13 @@ namespace Messenger.API.Controllers
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-                // Удаляем файл и обновляем БД
                 await _userService.DeleteAvatarAsync(userId, token);
 
-                // Получаем актуальное имя (на всякий случай)
-                var user = await _userService.GetUserByIdAsync(userId, token);
-                var displayName = $"{user.FirstName} {user.LastName}".Trim();
-
-                // Уведомляем всех клиентов через SignalR
-                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
                 {
                     userId = userId.ToString(),
-                    avatarUrl = (string?)null, // null = использовать дефолтный аватар
-                    displayName
-                }, token);
+                    avatarUrl = (string?)null
+                });
 
                 return Ok(new
                 {
