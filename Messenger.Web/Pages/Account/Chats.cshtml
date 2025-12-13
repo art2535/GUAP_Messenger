@@ -208,7 +208,22 @@
 
             <div class="p-4 border-t border-gray-200">
                 <div class="flex items-center space-x-3">
-                    <img src="https://static.photos/people/200x200/4" alt="User" class="w-10 h-10 rounded-full">
+                    <div class="relative w-10 h-10">
+                        @if (!string.IsNullOrEmpty(Model.AvatarUrl))
+                        {
+                            <img id="current-user-avatar"
+                                 src="@Model.AvatarUrl?t=@DateTime.Now.Ticks"
+                                 alt="Аватар"
+                                 class="w-10 h-10 rounded-full object-cover shadow-md">
+                        }
+                        else
+                        {
+                            <div id="current-user-avatar-placeholder"
+                                 class="guap-gradient w-10 h-10 rounded-full flex items-center justify-center shadow-md">
+                                <i data-feather="user" class="w-5 h-5 text-white"></i>
+                            </div>
+                        }
+                    </div>
                     <div>
                         <p class="font-medium">@Model.UserName</p>
                         <p class="text-xs text-gray-500">@Model.UserRole</p>
@@ -699,6 +714,39 @@
                 .withUrl(HUB_URL, { accessTokenFactory: () => token })
                 .withAutomaticReconnect([0, 2000, 10000])
                 .build();
+
+            connection.on("AvatarUpdated", function(data) {
+                if (data.userId !== '@Model.UserId') return;
+
+                const container = document.querySelector('.relative.w-10.h-10');
+                if (!container) return;
+
+                const currentImg = document.getElementById('current-user-avatar');
+                const placeholder = document.getElementById('current-user-avatar-placeholder');
+
+                if (data.avatarUrl && data.avatarUrl.trim() !== '') {
+                    if (currentImg) {
+                        currentImg.src = data.avatarUrl + '?t=' + new Date().getTime();
+                    } else {
+                        const img = document.createElement('img');
+                        img.id = 'current-user-avatar';
+                        img.className = 'w-10 h-10 rounded-full object-cover shadow-md';
+                        img.alt = 'Аватар';
+                        img.src = data.avatarUrl + '?t=' + new Date().getTime();
+                        container.innerHTML = '';
+                        container.appendChild(img);
+                    }
+                    if (placeholder) placeholder.remove();
+                } else {
+                    container.innerHTML = `
+                        <div id="current-user-avatar-placeholder"
+                             class="guap-gradient w-10 h-10 rounded-full flex items-center justify-center shadow-md">
+                            <i data-feather="user" class="w-5 h-5 text-white"></i>
+                        </div>
+                    `;
+                    feather.replace();
+                }
+            });
 
             connection.on('ReceiveMessage', msg => {
                 if (msg.chatId === currentChatId) {

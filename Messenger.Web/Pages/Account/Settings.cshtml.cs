@@ -1,7 +1,11 @@
 using Messenger.Core.DTOs.Users;
+using Messenger.Core.Hubs;
+using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -10,10 +14,15 @@ namespace Messenger.Web.Pages.Account
     public class SettingsModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IUserService _userService;
 
-        public SettingsModel(IHttpClientFactory httpClientFactory)
+        public SettingsModel(IHttpClientFactory httpClientFactory, IHubContext<ChatHub> hubContext,
+            IUserService userService)
         {
             _httpClientFactory = httpClientFactory;
+            _hubContext = hubContext;
+            _userService = userService;
         }
 
         [BindProperty]
@@ -57,6 +66,15 @@ namespace Messenger.Web.Pages.Account
                 await LoadDataAsync();
                 return Page();
             }
+
+            var userIdString = HttpContext.Session.GetString("USER_ID");
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return RedirectToPage("/Authorization/Authorization");
+            }
+
+            var user = await _userService.GetUserByIdAsync(userId);
+            if (user == null) return Page();
 
             var client = CreateClient();
             string? newAvatarUrl = null;
@@ -136,6 +154,19 @@ namespace Messenger.Web.Pages.Account
                     ModelState.AddModelError("", "Ошибка сохранения профиля");
                     await LoadDataAsync();
                     return Page();
+                }
+
+                var displayName = $"{Profile.LastName} {Profile.FirstName.FirstOrDefault()}.".Trim();
+                if (!string.IsNullOrEmpty(Profile.MiddleName))
+                    displayName += Profile.MiddleName[0] + ".";
+
+                if (newAvatarUrl != null || DeleteAvatar)
+                {
+                    await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
+                    {
+                        userId = user.UserId,
+                        avatarUrl = newAvatarUrl ?? "https://static.photos/people/200x200/4"
+                    });
                 }
 
                 TempData["SuccessMessage"] = "Профиль успешно обновлён";
