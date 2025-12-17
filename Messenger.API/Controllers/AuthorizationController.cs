@@ -1,4 +1,5 @@
-﻿using Messenger.Core.DTOs.Auth;
+﻿using Messenger.API.Responses;
+using Messenger.Core.DTOs.Auth;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -9,6 +10,8 @@ namespace Messenger.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [SwaggerTag("Контроллер для авторизации и регистрации пользователей")]
     public class AuthorizationController : ControllerBase
     {
@@ -19,14 +22,14 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        
         [HttpPost("register")]
         [SwaggerOperation(
-            Summary = "Регистрация пользователя в системе",
-            Description = "Регистрирует нового пользователя по его данным")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 201)]
-        [ProducesResponseType(typeof(object), 400)]
-        [ProducesResponseType(typeof(object), 500)]
+            Summary = "Регистрация нового пользователя",
+            Description = "Регистрирует нового пользователя и возвращает JWT-токен для аутентификации")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Регистрация прошла успешно", typeof(RegisterSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Ошибка валидации или пользователь уже существует", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера")]
         public async Task<IActionResult> RegisterUserAsync([FromBody] RegisterRequest registerRequest,
             CancellationToken cancellationToken = default)
         {
@@ -38,10 +41,14 @@ namespace Messenger.API.Controllers
 
                 if (user != null && token == null)
                 {
-                    throw new Exception($"Пользователь с email {user.Login} уже существует");
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = $"Пользователь с email {user.Login} уже существует"
+                    });
                 }
 
-                return Ok(new
+                return Ok(new RegisterSuccessResponse
                 {
                     IsSuccess = true,
                     User = user,
@@ -51,7 +58,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -61,11 +68,11 @@ namespace Messenger.API.Controllers
 
         [HttpPost("login")]
         [SwaggerOperation(
-            Summary = "Авторизация и аутентификация пользователя",
-            Description = "Авторизация и аутентификация пользователя с выдачей JWT-токена")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 400)]
-        [ProducesResponseType(typeof(object), 500)]
+            Summary = "Аутентификация пользователя",
+            Description = "Выполняет вход пользователя и возвращает JWT-токен, идентификатор, роль и полное имя")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Вход выполнен успешно", typeof(LoginSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверные учетные данные", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера")]
         public async Task<IActionResult> LoginUserAsync([FromBody] LoginRequest loginRequest,
             CancellationToken cancellationToken = default)
         {
@@ -78,7 +85,7 @@ namespace Messenger.API.Controllers
                 var fullName = string.Join(" ", new[] { user?.FirstName, user?.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));
 
-                return Ok(new
+                return Ok(new LoginSuccessResponse
                 {
                     IsSuccess = true,
                     UserId = userId,
@@ -89,7 +96,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new
+                return BadRequest(new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -100,13 +107,13 @@ namespace Messenger.API.Controllers
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpPost("logout")]
         [SwaggerOperation(
-            Summary = "Выход пользователя из системы",
-            Description = "Инвалидация JWT-токена")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 401)]
+            Summary = "Выход из системы",
+            Description = "Логический выход пользователя. Токен удаляется на стороне клиента.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Выход выполнен успешно", typeof(LogoutSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Требуется аутентификация")]
         public IActionResult LogoutUserAsync()
         {
-            return Ok(new
+            return Ok(new LogoutSuccessResponse
             {
                 IsSuccess = true,
                 Message = "Вы успешно вышли из системы"

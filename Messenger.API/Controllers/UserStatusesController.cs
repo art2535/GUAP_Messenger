@@ -1,4 +1,5 @@
-﻿using Messenger.Core.DTOs.UserStatuses;
+﻿using Messenger.API.Responses;
+using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,6 +13,8 @@ namespace Messenger.API.Controllers
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [SwaggerTag("Контроллер для управления статусами пользователей")]
     public class UserStatusesController : ControllerBase
     {
@@ -24,13 +27,12 @@ namespace Messenger.API.Controllers
 
         [HttpGet]
         [SwaggerOperation(
-            Summary = "Получение статуса текущего пользователя",
-            Description = "Возвращает текущий статус пользователя (онлайн/офлайн) и дату последней активности. " +
-                          "Требуется авторизация по JWT-токену.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 404)]
-        [ProducesResponseType(typeof(object), 500)]
+            Summary = "Получить статус текущего пользователя",
+            Description = "Возвращает текущий статус авторизованного пользователя: онлайн/офлайн и время последней активности.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно получен", typeof(GetUserStatusSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status404NotFound, "Статус пользователя не найден", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
         public async Task<IActionResult> GetUserStatusesAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -47,7 +49,7 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                return Ok(new
+                return Ok(new GetUserStatusSuccessResponse
                 {
                     IsSuccess = true,
                     Data = status
@@ -55,7 +57,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -65,14 +67,15 @@ namespace Messenger.API.Controllers
 
         [HttpPut]
         [SwaggerOperation(
-            Summary = "Обновление статуса пользователя",
-            Description = "Позволяет обновить текущий статус пользователя (например, установить 'онлайн' или 'офлайн'). " +
-                          "Поле 'LastActivity' обновляется автоматически на сервере. " +
-                          "Требуется авторизация по JWT-токену.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> UpdateStatusAsync([FromBody] UpdateStatusRequest request,
+            Summary = "Обновить статус текущего пользователя",
+            Description = "Обновляет статус онлайн/офлайн для авторизованного пользователя. " +
+                          "Поле LastActivity автоматически устанавливается на текущее время сервера (UTC).")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно обновлён", typeof(UpdateUserStatusSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> UpdateStatusAsync(
+            [FromBody] [SwaggerParameter(Description = "Новый статус пользователя", Required = true)] UpdateStatusRequest request,
             CancellationToken cancellationToken = default)
         {
             try
@@ -87,7 +90,7 @@ namespace Messenger.API.Controllers
 
                 await _userStatusService.UpdateStatusAsync(userStatus, cancellationToken);
 
-                return Ok(new
+                return Ok(new UpdateUserStatusSuccessResponse
                 {
                     IsSuccess = true,
                     Message = "Статус пользователя обновлен"
@@ -95,7 +98,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message

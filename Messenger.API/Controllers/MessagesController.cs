@@ -1,4 +1,5 @@
-﻿using Messenger.Core.DTOs.Messages;
+﻿using Messenger.API.Responses;
+using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
@@ -14,6 +15,7 @@ namespace Messenger.API.Controllers
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
     [SwaggerTag("Контроллер для управления сообщениями")]
     public class MessagesController : ControllerBase
     {
@@ -40,12 +42,22 @@ namespace Messenger.API.Controllers
 
         [HttpPost("{chatId}")]
         [SwaggerOperation(
-            Summary = "Отправить сообщение",
-            Description = "Отправляет новое сообщение в указанный чат. Требуется авторизация.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> SendMessageAsync(Guid chatId, [FromForm] string? messageText, [FromForm] string? senderName,
-            [FromForm] IFormFile[]? files, CancellationToken cancellationToken = default)
+            Summary = "Отправить сообщение в чат",
+            Description = "Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +
+                          "Сообщение рассылается всем участникам чата через SignalR.")]
+        [Consumes("multipart/form-data", "application/json")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщение успешно отправлено", typeof(SendMessageSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные или пользователь заблокирован", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status403Forbidden, "Доступ запрещён — пользователь не является участником чата")]
+        [SwaggerResponse(StatusCodes.Status404NotFound, "Чат не найден", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> SendMessageAsync(
+            [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId, 
+            [FromForm] [SwaggerParameter(Description = "Текст сообщения (опционально)")] string? messageText, 
+            [FromForm] [SwaggerParameter(Description = "Имя отправителя (необязательно, обычно берётся из токена)")] string? senderName,
+            [FromForm] [SwaggerParameter(Description = "Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files, 
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -53,10 +65,17 @@ namespace Messenger.API.Controllers
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
                 if (chat == null)
-                    return NotFound(new { error = "Чат не найден" });
+                {
+                    return NotFound(new ErrorResponse
+                    { 
+                        Error = "Чат не найден" 
+                    });
+                }
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == senderId))
-                    return Forbid();
+                { 
+                    return Forbid(); 
+                }
 
                 if (chat.Type == "private")
                 {
@@ -64,9 +83,9 @@ namespace Messenger.API.Controllers
 
                     if (await _userService.IsBlockedByAsync(recipientId, senderId, cancellationToken))
                     {
-                        return BadRequest(new
+                        return BadRequest(new ErrorResponse
                         {
-                            error = "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке"
+                            Error = "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке"
                         });
                     }
                 }
@@ -82,7 +101,12 @@ namespace Messenger.API.Controllers
                 );
 
                 if (!result.isSuccess)
-                    return BadRequest(new { error = result.error });
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        Error = result.error
+                    });
+                }
 
                 var message = result.data!;
 
@@ -138,7 +162,11 @@ namespace Messenger.API.Controllers
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ReceiveMessage", messageDto, cancellationToken);
 
-                return Ok(new { isSuccess = true, data = messageDto });
+                return Ok(new SendMessageSuccessResponse
+                { 
+                    IsSuccess = true, 
+                    Data = messageDto 
+                });
             }
             catch (Exception ex)
             {
@@ -149,10 +177,13 @@ namespace Messenger.API.Controllers
         [HttpGet("{chatId}")]
         [SwaggerOperation(
             Summary = "Получить сообщения чата",
-            Description = "Возвращает список сообщений для указанного чата.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> GetMessagesByChatAsync(Guid chatId, CancellationToken cancellationToken = default)
+            Description = "Возвращает список всех сообщений в чате с вложениями и информацией об отправителе.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщения успешно получены", typeof(GetMessagesSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> GetMessagesByChatAsync(
+            [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId, 
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -179,7 +210,7 @@ namespace Messenger.API.Controllers
                     }).ToList()
                 }).ToList();
 
-                return Ok(new
+                return Ok(new GetMessagesSuccessResponse
                 {
                     IsSuccess = true,
                     Data = dtos
@@ -187,7 +218,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -211,12 +242,15 @@ namespace Messenger.API.Controllers
 
         [HttpPost("{messageId}/status")]
         [SwaggerOperation(
-            Summary = "Добавить или обновить статус сообщения",
-            Description = "Обновляет статус сообщения (прочитано, доставлено и т.п.) для текущего пользователя.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> AddOrUpdateMessageStatusAsync(Guid messageId, 
-            [FromBody] UpdateMessageStatusRequest request, CancellationToken cancellationToken = default)
+            Summary = "Обновить статус сообщения",
+            Description = "Устанавливает статус сообщения для текущего пользователя (например, 'Delivered', 'Read').")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно обновлён", typeof(UpdateMessageStatusSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> AddOrUpdateMessageStatusAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            [FromBody] [SwaggerParameter(Description = "Новый статус сообщения", Required = true)] UpdateMessageStatusRequest request, 
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -231,7 +265,7 @@ namespace Messenger.API.Controllers
                 };
                 await _messageStatusService.AddOrUpdateStatusAsync(messageStatus, cancellationToken);
 
-                return Ok(new 
+                return Ok(new UpdateMessageStatusSuccessResponse
                 { 
                     IsSuccess = true, 
                     Message = "Статус сообщения успешно обновлен" 
@@ -239,7 +273,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new 
+                return StatusCode(500, new ErrorResponse
                 { 
                     IsSuccess = false, 
                     Error = ex.Message 
@@ -250,16 +284,19 @@ namespace Messenger.API.Controllers
         [HttpGet("{messageId}/statuses")]
         [SwaggerOperation(
             Summary = "Получить статусы сообщения",
-            Description = "Возвращает все статусы для указанного сообщения (например, кто прочитал).")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> GetMessageStatusesAsync(Guid messageId, CancellationToken cancellationToken = default)
+            Description = "Возвращает статусы прочтения/доставки сообщения от всех участников.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Статусы получены", typeof(GetMessageStatusesSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> GetMessageStatusesAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            CancellationToken cancellationToken = default)
         {
             try
             {
                 var statuses = await _messageStatusService.GetStatusesByMessageIdAsync(messageId, cancellationToken);
 
-                return Ok(new
+                return Ok(new GetMessageStatusesSuccessResponse
                 {
                     IsSuccess = true,
                     Data = statuses
@@ -267,7 +304,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -278,10 +315,13 @@ namespace Messenger.API.Controllers
         [HttpPost("{messageId}/reaction")]
         [SwaggerOperation(
             Summary = "Добавить реакцию на сообщение",
-            Description = "Добавляет реакцию (эмодзи) к сообщению.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> AddReactionAsync(Guid messageId, [FromBody] AddReactionRequest request, 
+            Description = "Добавляет эмодзи-реакцию к сообщению от имени текущего пользователя.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Реакция добавлена", typeof(AddReactionSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> AddReactionAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            [FromBody] [SwaggerParameter(Description = "Тип реакции (эмодзи)", Required = true)] AddReactionRequest request, 
             CancellationToken cancellationToken = default)
         {
             try
@@ -297,7 +337,7 @@ namespace Messenger.API.Controllers
                 };
                 await _reactionService.AddReactionAsync(reaction, cancellationToken);
 
-                return Ok(new
+                return Ok(new AddReactionSuccessResponse
                 {
                     IsSuccess = true,
                     Message = "Реакция на сообщения успешно добавлена"
@@ -305,7 +345,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -315,11 +355,18 @@ namespace Messenger.API.Controllers
 
         [HttpPut("{messageId}")]
         [SwaggerOperation(
-            Summary = "Обновить сообщение",
-            Description = "Позволяет изменить содержимое сообщения (например, отредактировать текст).")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> UpdateMessageAsync(Guid messageId, [FromBody] UpdateMessageRequest request, CancellationToken ct)
+            Summary = "Редактировать сообщение",
+            Description = "Изменяет текст существующего сообщения. Доступно только отправителю.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщение обновлено", typeof(UpdateMessageSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Текст не может быть пустым", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status403Forbidden, "Редактирование запрещено — не автор сообщения")]
+        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение не найдено", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> UpdateMessageAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            [FromBody] [SwaggerParameter(Description = "Новый текст сообщения и ID чата", Required = true)] UpdateMessageRequest request, 
+            CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.MessageText))
                 return BadRequest(new { IsSuccess = false, Error = "Текст не может быть пустым" });
@@ -329,9 +376,17 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
                 if (message == null) 
-                    return NotFound(new { IsSuccess = false, Error = "Сообщение не найдено" });
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Сообщение не найдено"
+                    });
+                }
                 if (message.SenderId != userId) 
-                    return Forbid();
+                { 
+                    return Forbid(); 
+                }
 
                 message.MessageText = request.MessageText;
                 await _messageService.UpdateMessageAsync(message, ct);
@@ -339,7 +394,11 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(request.ChatId.ToString())
                     .SendAsync("ReceiveMessage", message);
 
-                return Ok(new { IsSuccess = true, Message = "Сообщение обновлено" });
+                return Ok(new UpdateMessageSuccessResponse
+                {
+                    IsSuccess = true, 
+                    Message = "Сообщение обновлено" 
+                });
             }
             catch (Exception ex)
             {
@@ -350,16 +409,19 @@ namespace Messenger.API.Controllers
         [HttpGet("{messageId}/reactions")]
         [SwaggerOperation(
             Summary = "Получить реакции на сообщение",
-            Description = "Возвращает список всех реакций (эмодзи) на указанное сообщение.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> GetReactionsAsync(Guid messageId, CancellationToken cancellationToken = default)
+            Description = "Возвращает все реакции (эмодзи) на указанное сообщение.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Реакции получены", typeof(GetReactionsSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> GetReactionsAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            CancellationToken cancellationToken = default)
         {
             try
             {
                 var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, cancellationToken);
 
-                return Ok(new
+                return Ok(new GetReactionsSuccessResponse
                 {
                     IsSuccess = true,
                     Data = reactions
@@ -367,7 +429,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -378,29 +440,47 @@ namespace Messenger.API.Controllers
         [HttpDelete("{messageId}")]
         [SwaggerOperation(
             Summary = "Удалить сообщение",
-            Description = "Удаляет сообщение по его идентификатору.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> DeleteMessageAsync(Guid messageId, [FromQuery] Guid chatId, CancellationToken ct)
+            Description = "Удаляет сообщение. Доступно только отправителю. Уведомление рассылается через SignalR.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщение удалено", typeof(DeleteMessageSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status403Forbidden, "Удаление запрещено — не автор сообщения")]
+        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение не найдено", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> DeleteMessageAsync(
+            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
+            [FromQuery] [SwaggerParameter(Description = "Идентификатор чата (обязателен для проверки прав)")] Guid chatId, 
+            CancellationToken ct = default)
         {
             try
             {
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
                 if (message == null) 
-                    return NotFound();
+                { 
+                    return NotFound(); 
+                }
                 if (message.SenderId != userId)
-                    return Forbid();
+                { 
+                    return Forbid(); 
+                }
 
                 await _messageService.DeleteMessageAsync(messageId, ct);
                 await _hubContext.Clients.Group(chatId.ToString())
                     .SendAsync("MessageDeleted", new { messageId });
 
-                return Ok(new { IsSuccess = true, Message = "Сообщение удалено" });
+                return Ok(new DeleteMessageSuccessResponse
+                { 
+                    IsSuccess = true, 
+                    Message = "Сообщение удалено" 
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
+                return StatusCode(500, new ErrorResponse
+                { 
+                    IsSuccess = false, 
+                    Error = ex.Message 
+                });
             }
         }
     }

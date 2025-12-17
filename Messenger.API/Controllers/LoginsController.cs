@@ -1,4 +1,5 @@
-﻿using Messenger.Core.DTOs.Logins;
+﻿using Messenger.API.Responses;
+using Messenger.Core.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,6 +13,8 @@ namespace Messenger.API.Controllers
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [SwaggerTag("Контроллер для управления входами в мессенджер")]
     public class LoginsController : ControllerBase
     {
@@ -25,11 +28,11 @@ namespace Messenger.API.Controllers
         [HttpGet]
         [SwaggerOperation(
             Summary = "Получение истории входов текущего пользователя",
-            Description = "Возвращает список всех сессий (входов) пользователя, авторизованного по JWT-токену. " +
-                          "Каждая запись включает информацию о токене, IP-адресе и времени входа.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 500)]
+            Description = "Возвращает список всех сессий (входов) авторизованного пользователя. " +
+                          "Включает информацию о токене, IP-адресе, времени входа и статусе активности.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "История входов успешно получена", typeof(GetLoginsSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
         public async Task<IActionResult> GetLoginsAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -37,7 +40,7 @@ namespace Messenger.API.Controllers
                 var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
                 var logins = await _loginService.GetLoginsByUserIdAsync(userId, cancellationToken);
 
-                return Ok(new
+                return Ok(new GetLoginsSuccessResponse
                 {
                     IsSuccess = true,
                     Data = logins
@@ -45,7 +48,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -55,15 +58,16 @@ namespace Messenger.API.Controllers
 
         [HttpPost]
         [SwaggerOperation(
-            Summary = "Добавление новой записи входа (логина)",
-            Description = "Создаёт новую запись о входе пользователя в систему. " +
-                          "Требуется JWT-аутентификация. " +
-                          "В теле запроса передаются данные токена и IP-адрес пользователя.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 400)]
-        [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 500)]
-        public async Task<IActionResult> LoginAsync([FromBody] CreateLoginRequest request,
+            Summary = "Регистрация нового входа в систему",
+            Description = "Создаёт запись о новом входе пользователя (новая сессия). " +
+                          "Вызывается после успешной аутентификации. " +
+                          "Требуется действительный JWT-токен.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Запись о входе успешно создана", typeof(CreateLoginSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> LoginAsync(
+            [FromBody] [SwaggerParameter(Description = "Данные новой сессии входа", Required = true)] CreateLoginRequest request,
             CancellationToken cancellationToken = default)
         {
             try
@@ -81,7 +85,7 @@ namespace Messenger.API.Controllers
 
                 await _loginService.AddLoginAsync(login, cancellationToken);
 
-                return Ok(new
+                return Ok(new CreateLoginSuccessResponse
                 {
                     IsSuccess = true,
                     Message = "Вход успешно добавлен"
@@ -89,7 +93,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -99,14 +103,13 @@ namespace Messenger.API.Controllers
 
         [HttpPatch]
         [SwaggerOperation(
-            Summary = "Обновление записи входа (логина)",
-            Description = "Обновляет текущую запись о выходе пользователя из системы. " +
-                          "Требуется JWT-аутентификация. " +
-                          "В теле запроса передаются данные токена и IP-адрес пользователя.")]
-        [ProducesResponseType(typeof(object), 200)]
-        [ProducesResponseType(typeof(object), 400)]
-        [ProducesResponseType(typeof(object), 401)]
-        [ProducesResponseType(typeof(object), 500)]
+            Summary = "Регистрация выхода из системы",
+            Description = "Помечает текущую активную сессию пользователя как неактивную (выход). " +
+                          "Вызывается при логауте. Устанавливает время выхода и деактивирует сессию.")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Выход успешно зарегистрирован", typeof(LogoutSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status404NotFound, "Активная сессия не найдена", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
         public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -123,7 +126,7 @@ namespace Messenger.API.Controllers
                     await _loginService.UpdateLoginAsync(userLogout, cancellationToken);
                 }
 
-                return Ok(new
+                return Ok(new LogoutSuccessResponse
                 {
                     IsSuccess = true,
                     Message = "Выход успешно обновлен"
@@ -131,7 +134,7 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
                     Error = ex.Message
