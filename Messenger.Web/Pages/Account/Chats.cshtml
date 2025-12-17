@@ -383,6 +383,11 @@
         let searchTimeout = null;
         let allChatItems = [];
 
+        fileInput.onchange = function() {
+            selectedFiles = Array.from(this.files || []);
+            renderAttachedPreviews();
+        };
+
         function addBlockSystemMessage(blockerName, blockTime = null) {
             document.querySelectorAll('.system-block-message').forEach(el => el.remove());
 
@@ -608,7 +613,12 @@
             if (!currentChatId) return;
 
             const text = messageInput.value.trim();
-            if (!text && selectedFiles.length === 0) return;
+            const hasFiles = selectedFiles.length > 0;
+
+            if (!text && !hasFiles) return;
+
+            const textForPreview = text;
+            const filesForPreview = [...selectedFiles];
 
             const formData = new FormData();
             if (text) formData.append('messageText', text);
@@ -618,7 +628,6 @@
 
             try {
                 const res = await fetch(url, { method: 'POST', body: formData });
-
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
                     if (data.error?.includes("чёрном списке") || data.error?.includes("заблокирован")) {
@@ -628,43 +637,44 @@
                 }
 
                 messageInput.value = '';
+                attachedFiles.innerHTML = '';
+                selectedFiles = [];
+
+                fileInput.value = '';
+                if (fileInput.value) {
+                    fileInput.type = 'text';
+                    fileInput.type = 'file';
+                }
 
                 const currentChatItem = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
                 if (currentChatItem) {
                     const previewDiv = currentChatItem.querySelector('div.text-sm.text-gray-500');
-                    if (preview) {
-                        if (text.trim()) {
-                            preview.innerHTML = text.trim().length > 38 ? text.trim().substring(0, 35) + '...' : text.trim();
-                        } else if (selectedFiles.length > 0) {
-                            const images = selectedFiles.filter(f => f.type.startsWith('image/')).length;
-                            const videos = selectedFiles.filter(f => f.type.startsWith('video/')).length;
-                            const files = selectedFiles.length - images - videos;
+                    if (previewDiv) {
+                        if (textForPreview) {
+                            const displayText = textForPreview.length > 38
+                                ? textForPreview.substring(0, 35) + '...'
+                                : textForPreview;
+                            previewDiv.innerHTML = displayText;
+                        } else if (filesForPreview.length > 0) {
+                            const images = filesForPreview.filter(f => f.type.startsWith('image/')).length;
+                            const videos = filesForPreview.filter(f => f.type.startsWith('video/')).length;
+                            const files = filesForPreview.length - images - videos;
+
                             const parts = [];
-                            if (images > 0) 
-                                parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${images > 1 ? ' ('+images+')' : ''}`);
-                            if (videos > 0) 
-                                parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${videos > 1 ? ' ('+videos+')' : ''}`);
-                            if (files > 0) 
-                                parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
-                            preview.innerHTML = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
+                            if (images > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${images > 1 ? ' ('+images+')' : ''}`);
+                            if (videos > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${videos > 1 ? ' ('+videos+')' : ''}`);
+                            if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
+
+                            previewDiv.innerHTML = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
                             feather.replace();
                         }
                     }
                 }
 
-                attachedFiles.innerHTML = '';
-                selectedFiles = [];
-                fileInput.value = '';
-
             } catch (e) {
-                console.error(e);
+                console.error('Ошибка отправки:', e);
             }
         }
-
-        fileInput.onchange = () => {
-            selectedFiles = Array.from(fileInput.files || []);
-            renderAttachedPreviews();
-        };
 
         function renderAttachedPreviews() {
             attachedFiles.innerHTML = '';
@@ -1116,10 +1126,6 @@
         }
 
         function renderLastMessagePreview(lastMessageValue) {
-            if (!lastMessageValue || lastMessageValue === null || lastMessageValue === undefined || lastMessageValue.toString().trim() === "") {
-                return '<span class="italic text-gray-400">Нет сообщений</span>';
-            }
-
             if (typeof lastMessageValue === "string") {
                 const text = lastMessageValue.trim();
                 if (text === "") {
@@ -1129,23 +1135,28 @@
             }
 
             if (typeof lastMessageValue === "object" && lastMessageValue !== null) {
-                if (lastMessageValue.messageText?.trim()) {
+                if (lastMessageValue.messageText && lastMessageValue.messageText.trim()) {
                     const text = lastMessageValue.messageText.trim();
                     return text.length > 38 ? text.substring(0, 35) + '...' : text;
                 }
-                if (lastMessageValue.attachments?.length > 0) {
+
+                if (lastMessageValue.attachments && lastMessageValue.attachments.length > 0) {
                     const imgs = lastMessageValue.attachments.filter(a => a.fileType?.startsWith('image/')).length;
                     const vids = lastMessageValue.attachments.filter(a => a.fileType?.startsWith('video/')).length;
                     const files = lastMessageValue.attachments.length - imgs - vids;
+
                     const parts = [];
                     if (imgs > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${imgs > 1 ? ' ('+imgs+')' : ''}`);
                     if (vids > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${vids > 1 ? ' ('+vids+')' : ''}`);
                     if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
+
                     return parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
                 }
+
+                return '<i data-feather="message-square" class="w-4 h-4"></i> Сообщение';
             }
 
-            return '<i data-feather="message-square" class="w-4 h-4"></i> Сообщение';
+            return '<span class="italic text-gray-400">Нет сообщений</span>';
         }
 
         function toggleChatNameField() {
