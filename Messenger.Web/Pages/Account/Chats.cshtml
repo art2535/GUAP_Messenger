@@ -725,6 +725,47 @@
                 .withAutomaticReconnect([0, 2000, 10000])
                 .build();
 
+            connection.on("ProfileUpdated", function (data) {
+                if (data.userId !== "@Model.UserId") return;
+
+                const avatarContainer = document.querySelector(".relative.w-10.h-10");
+                if (!avatarContainer) return;
+
+                const displayNameElement = avatarContainer.parentElement.querySelector("p.font-medium");
+                if (displayNameElement) {
+                    displayNameElement.textContent = data.displayName || "Пользователь";
+                }
+
+                if (data.avatarUrl && data.avatarUrl.trim() !== "") {
+                    let img = document.getElementById("current-user-avatar");
+                    if (!img) {
+                        const placeholder = document.getElementById("current-user-avatar-placeholder");
+                        if (placeholder) placeholder.remove();
+
+                        img = document.createElement("img");
+                        img.id = "current-user-avatar";
+                        img.className = "w-10 h-10 rounded-full object-cover shadow-md";
+                        img.alt = "Аватар";
+                        avatarContainer.appendChild(img);
+                    }
+                    img.src = data.avatarUrl + "?t=" + new Date().getTime();
+                } else {
+                    let placeholder = document.getElementById("current-user-avatar-placeholder");
+                    const img = document.getElementById("current-user-avatar");
+
+                    if (img) img.remove();
+
+                    if (!placeholder) {
+                        placeholder = document.createElement("div");
+                        placeholder.id = "current-user-avatar-placeholder";
+                        placeholder.className = "guap-gradient w-10 h-10 rounded-full flex items-center justify-center shadow-md";
+                        placeholder.innerHTML = '<i data-feather="user" class="w-5 h-5 text-white"></i>';
+                        avatarContainer.appendChild(placeholder);
+                        feather.replace();
+                    }
+                }
+            });
+
             connection.on("AvatarUpdated", function(data) {
                 if (data.userId !== '@Model.UserId') return;
 

@@ -169,6 +169,8 @@ namespace Messenger.Web.Pages.Account
                     });
                 }
 
+                HttpContext.Session.SetString("USER_NAME", $"{Profile.FirstName} {Profile.LastName}");
+
                 TempData["SuccessMessage"] = "Профиль успешно обновлён";
                 return RedirectToPage(new { refreshed = true });
             }
