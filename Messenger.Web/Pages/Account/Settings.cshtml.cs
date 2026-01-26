@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Headers;
-using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -86,7 +85,7 @@ namespace Messenger.Web.Pages.Account
                     var deleteRes = await client.DeleteAsync("https://localhost:7001/api/users/delete-avatar");
                     if (!deleteRes.IsSuccessStatusCode)
                     {
-                        ModelState.AddModelError("", "                         ");
+                        ModelState.AddModelError("", "Ошибка удаления аватара");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -97,7 +96,7 @@ namespace Messenger.Web.Pages.Account
                 {
                     if (AvatarFile.Length > 2 * 1024 * 1024)
                     {
-                        ModelState.AddModelError("", "                         2   ");
+                        ModelState.AddModelError("", "Размер файла должен быть не больше 2 МБ");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -118,7 +117,7 @@ namespace Messenger.Web.Pages.Account
                     var uploadRes = await client.PostAsync("https://localhost:7001/api/users/upload-avatar", content);
                     if (!uploadRes.IsSuccessStatusCode)
                     {
-                        ModelState.AddModelError("", "                       ");
+                        ModelState.AddModelError("", "Ошибка обновления аватара");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -151,7 +150,7 @@ namespace Messenger.Web.Pages.Account
                 var response = await client.PutAsync(updateUrl, jsonContent);
                 if (!response.IsSuccessStatusCode)
                 {
-                    ModelState.AddModelError("", "                         ");
+                    ModelState.AddModelError("", "Ошибка обновления профиля");
                     await LoadDataAsync();
                     return Page();
                 }
@@ -171,12 +170,12 @@ namespace Messenger.Web.Pages.Account
 
                 HttpContext.Session.SetString("USER_NAME", $"{Profile.FirstName} {Profile.LastName}");
 
-                TempData["SuccessMessage"] = "                       ";
+                TempData["SuccessMessage"] = "Профиль успешно обновлен";
                 return RedirectToPage(new { refreshed = true });
             }
             catch (Exception ex)
             {
-                ModelState.AddModelError("", "                : " + ex.Message);
+                ModelState.AddModelError("", "Ошибка обновления профиля: " + ex.Message);
                 await LoadDataAsync();
                 return Page();
             }
@@ -251,7 +250,7 @@ namespace Messenger.Web.Pages.Account
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"                      : {ex.Message}");
+                Console.WriteLine($"Ошибка подключения к API: {ex.Message}");
                 CurrentUserJson = JsonDocument.Parse("{}").RootElement;
                 BlockedUsers = Array.Empty<JsonElement>();
                 HasAvatar = false;
@@ -292,7 +291,7 @@ namespace Messenger.Web.Pages.Account
                         users.Add(new
                         {
                             id,
-                            name = name ?? "         ",
+                            name = name ?? "Неизвестно",
                             avatar = avatar ?? "/images/default-avatar.png"
                         });
                     }

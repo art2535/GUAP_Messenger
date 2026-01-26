@@ -69,7 +69,7 @@ namespace Messenger.Web.Pages.Account
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"                       : {ex.Message}");
+                Console.WriteLine($"Ошибка получения данных: {ex.Message}");
             }
 
             return Page();
