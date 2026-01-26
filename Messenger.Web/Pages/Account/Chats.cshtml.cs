@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+п»їusing Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
@@ -69,7 +69,7 @@ namespace Messenger.Web.Pages.Account
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка загрузки профиля: {ex.Message}");
+                Console.WriteLine($"                       : {ex.Message}");
             }
 
             return Page();

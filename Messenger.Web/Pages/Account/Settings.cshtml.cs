@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.Users;
+п»їusing Messenger.Core.DTOs.Users;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -86,7 +86,7 @@ namespace Messenger.Web.Pages.Account
                     var deleteRes = await client.DeleteAsync("https://localhost:7001/api/users/delete-avatar");
                     if (!deleteRes.IsSuccessStatusCode)
                     {
-                        ModelState.AddModelError("", "Не удалось удалить аватар");
+                        ModelState.AddModelError("", "                         ");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -97,7 +97,7 @@ namespace Messenger.Web.Pages.Account
                 {
                     if (AvatarFile.Length > 2 * 1024 * 1024)
                     {
-                        ModelState.AddModelError("", "Файл не должен превышать 2 МБ");
+                        ModelState.AddModelError("", "                         2   ");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -105,7 +105,7 @@ namespace Messenger.Web.Pages.Account
                     var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
                     if (!allowedTypes.Contains(AvatarFile.ContentType.ToLowerInvariant()))
                     {
-                        ModelState.AddModelError("", "Неподдерживаемый формат");
+                        ModelState.AddModelError("", "                       ");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -118,7 +118,7 @@ namespace Messenger.Web.Pages.Account
                     var uploadRes = await client.PostAsync("https://localhost:7001/api/users/upload-avatar", content);
                     if (!uploadRes.IsSuccessStatusCode)
                     {
-                        ModelState.AddModelError("", "Ошибка загрузки аватара");
+                        ModelState.AddModelError("", "                       ");
                         await LoadDataAsync();
                         return Page();
                     }
@@ -151,7 +151,7 @@ namespace Messenger.Web.Pages.Account
                 var response = await client.PutAsync(updateUrl, jsonContent);
                 if (!response.IsSuccessStatusCode)
                 {
-                    ModelState.AddModelError("", "Ошибка сохранения профиля");
+                    ModelState.AddModelError("", "                         ");
                     await LoadDataAsync();
                     return Page();
                 }
@@ -171,12 +171,12 @@ namespace Messenger.Web.Pages.Account
 
                 HttpContext.Session.SetString("USER_NAME", $"{Profile.FirstName} {Profile.LastName}");
 
-                TempData["SuccessMessage"] = "Профиль успешно обновлён";
+                TempData["SuccessMessage"] = "                       ";
                 return RedirectToPage(new { refreshed = true });
             }
             catch (Exception ex)
             {
-                ModelState.AddModelError("", "Произошла ошибка: " + ex.Message);
+                ModelState.AddModelError("", "                : " + ex.Message);
                 await LoadDataAsync();
                 return Page();
             }
@@ -251,7 +251,7 @@ namespace Messenger.Web.Pages.Account
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+                Console.WriteLine($"                      : {ex.Message}");
                 CurrentUserJson = JsonDocument.Parse("{}").RootElement;
                 BlockedUsers = Array.Empty<JsonElement>();
                 HasAvatar = false;
@@ -279,7 +279,7 @@ namespace Messenger.Web.Pages.Account
                 foreach (var user in data.EnumerateArray())
                 {
                     var id = user.TryGetProperty("id", out var i) ? i.GetString() : null;
-                    var name = user.TryGetProperty("name", out var n) ? n.GetString() : "Без имени";
+                    var name = user.TryGetProperty("name", out var n) ? n.GetString() : "         ";
                     var avatar = user.TryGetProperty("avatar", out var a) ? a.GetString() : null;
 
                     if (string.IsNullOrEmpty(id)) continue;
@@ -292,7 +292,7 @@ namespace Messenger.Web.Pages.Account
                         users.Add(new
                         {
                             id,
-                            name = name ?? "Без имени",
+                            name = name ?? "         ",
                             avatar = avatar ?? "/images/default-avatar.png"
                         });
                     }
