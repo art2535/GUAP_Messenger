@@ -104,7 +104,7 @@ namespace Messenger.Web.Pages.Account
                     var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
                     if (!allowedTypes.Contains(AvatarFile.ContentType.ToLowerInvariant()))
                     {
-                        ModelState.AddModelError("", "                       ");
+                        ModelState.AddModelError("", "Не поддерживаемый тип файла");
                         await LoadDataAsync();
                         return Page();
                     }
