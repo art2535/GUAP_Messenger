@@ -20,4 +20,9 @@
     <ProjectReference Include="..\Messenger.Infrastructure\Messenger.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\uploads\" />
+    <Folder Include="wwwroot\avatars\" />
+  </ItemGroup>
+
 </Project>
