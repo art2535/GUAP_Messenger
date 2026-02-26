@@ -15,14 +15,13 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task<string?> GetRoleByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            var user = await _context.Users
-                .Include(u => u.Roles)
-                .FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+            var roleName = await _context.Set<Dictionary<string, object>>("UserRole")
+                .Where(ur => (Guid)ur["UserId"] == userId)
+                .Select(ur => _context.Set<Role>()
+                    .Where(r => r.RoleId == (Guid)ur["RoleId"]).Select(r => r.Name).FirstOrDefault())
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (user == null || user.Roles == null || !user.Roles.Any())
-                return null;
-
-            return user.Roles.First().Name;
+            return roleName;
         }
 
         public async Task AddUserToBlacklistAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
@@ -46,16 +45,21 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task AssignUserRoleAsync(Guid userId, Guid roleId, CancellationToken token = default)
         {
-            var user = await _context.Users
-                .Include(u => u.Roles)
-                .FirstOrDefaultAsync(u => u.UserId == userId, token);
+            var exists = await _context.Set<Dictionary<string, object>>("UserRole")
+                .AnyAsync(ur => (Guid)ur["UserId"] == userId && (Guid)ur["RoleId"] == roleId, token);
 
-            var role = await _context.Roles.FindAsync(roleId, token);
-            if (user != null && role != null)
+            if (exists)
+                return;
+
+            var entry = new Dictionary<string, object>
             {
-                user.Roles.Add(role);
-                await _context.SaveChangesAsync(token);
-            }
+                ["UserId"] = userId,
+                ["RoleId"] = roleId
+            };
+
+            _context.Set<Dictionary<string, object>>("UserRole").Add(entry);
+
+            await _context.SaveChangesAsync(token);
         }
 
         public async Task DeleteUserAsync(Guid userId, CancellationToken token = default)

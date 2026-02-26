@@ -73,18 +73,18 @@ namespace Messenger.Infrastructure.Services
         public async Task<(string token, Guid userId, string role)> LoginAsync(string login, string password, CancellationToken token = default)
         {
             var user = await _context.Users
-                .Include(u => u.Roles)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Login == login, token)
                 ?? throw new UnauthorizedAccessException($"Пользователь с логином {login} не найден");
 
-            bool isPasswordValid = ValidationService.VerifyPassword(password, user.Password);
-
-            if (!isPasswordValid)
+            if (!ValidationService.VerifyPassword(password, user.Password))
             {
                 throw new UnauthorizedAccessException("Неверный логин или пароль");
             }
 
-            var role = user.Roles.FirstOrDefault()?.Name ?? "User";
+            string? role = await _userRepository.GetRoleByUserIdAsync(user.UserId, token);
+
+            role ??= "Пользователь";
 
             string jwtToken = await new JwtService(_configuration, _context)
                 .GenerateJwtTokenAsync(user, token);
@@ -97,6 +97,7 @@ namespace Messenger.Infrastructure.Services
             CancellationToken token = default)
         {
             var existingUser = await _context.Users
+                .Include(u => u.Roles)
                 .FirstOrDefaultAsync(u => u.Login == login, token);
 
             if (existingUser != null)
@@ -139,12 +140,31 @@ namespace Messenger.Infrastructure.Services
                 await _userRepository.AssignUserRoleAsync(userId, roleId.Value, token);
             }
 
+            Guid roleToAssign;
+
+            if (roleId.HasValue)
+            {
+                roleToAssign = roleId.Value;
+            }
+            else
+            {
+                var defaultRole = await _context.Roles
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.Name == "Пользователь", token)
+                    ?? throw new InvalidOperationException("Роль по умолчанию 'Пользователь' не найдена в базе данных");
+
+                roleToAssign = defaultRole.RoleId;
+            }
+
+            await _userRepository.AssignUserRoleAsync(userId, roleToAssign, token);
+
             string jwtToken = await new JwtService(_configuration, _context)
                 .GenerateJwtTokenAsync(user, token);
 
-            string? userRole = await _userRepository.GetRoleByUserIdAsync(userId);
+            var userRoleName = await _userRepository.GetRoleByUserIdAsync(userId, token)
+                ?? "Пользователь";
 
-            return (user, jwtToken, userRole);
+            return (user, jwtToken, userRoleName);
         }
 
         public async Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default)
