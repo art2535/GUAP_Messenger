@@ -8,17 +8,19 @@ namespace Messenger.Web.Pages.Account
 {
     public class ChatsModel : PageModel
     {
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
+
         public string? UserId { get; set; }
         public string? JwtToken { get; set; }
         public string? UserName { get; set; } = string.Empty;
         public string? UserRole { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
 
-        private readonly IHttpClientFactory _httpClientFactory;
-
-        public ChatsModel(IHttpClientFactory httpClientFactory)
+        public ChatsModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -47,7 +49,7 @@ namespace Messenger.Web.Pages.Account
                 client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", token);
 
-                var response = await client.GetAsync("https://localhost:7001/api/users/info");
+                var response = await client.GetAsync($"{_configuration["URL:API:HTTPS"]}/api/users/info");
 
                 if (response.IsSuccessStatusCode)
                 {

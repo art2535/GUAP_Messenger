@@ -15,13 +15,15 @@ namespace Messenger.Web.Pages.Account
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IUserService _userService;
+        private readonly IConfiguration _configuration;
 
         public SettingsModel(IHttpClientFactory httpClientFactory, IHubContext<ChatHub> hubContext,
-            IUserService userService)
+            IUserService userService, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
             _hubContext = hubContext;
             _userService = userService;
+            _configuration = configuration;
         }
 
         [BindProperty]
@@ -82,7 +84,7 @@ namespace Messenger.Web.Pages.Account
             {
                 if (DeleteAvatar)
                 {
-                    var deleteRes = await client.DeleteAsync("https://localhost:7001/api/users/delete-avatar");
+                    var deleteRes = await client.DeleteAsync($"{_configuration["URL:API:HTTPS"]}/api/users/delete-avatar");
                     if (!deleteRes.IsSuccessStatusCode)
                     {
                         ModelState.AddModelError("", "Ошибка удаления аватара");
@@ -114,7 +116,7 @@ namespace Messenger.Web.Pages.Account
                     fileContent.Headers.ContentType = new MediaTypeHeaderValue(AvatarFile.ContentType);
                     content.Add(fileContent, "avatarFile", AvatarFile.FileName);
 
-                    var uploadRes = await client.PostAsync("https://localhost:7001/api/users/upload-avatar", content);
+                    var uploadRes = await client.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/users/upload-avatar", content);
                     if (!uploadRes.IsSuccessStatusCode)
                     {
                         ModelState.AddModelError("", "Ошибка обновления аватара");
@@ -141,7 +143,7 @@ namespace Messenger.Web.Pages.Account
                 };
 
                 var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-                var updateUrl = "https://localhost:7001/api/users/update-profile";
+                var updateUrl = $"{_configuration["URL:API:HTTPS"]}/api/users/update-profile";
                 if (newAvatarUrl != null)
                 {
                     updateUrl += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
@@ -187,7 +189,7 @@ namespace Messenger.Web.Pages.Account
 
             try
             {
-                var userResp = await client.GetAsync("https://localhost:7001/api/users/info");
+                var userResp = await client.GetAsync($"{_configuration["URL:API:HTTPS"]}/api/users/info");
                 if (userResp.IsSuccessStatusCode)
                 {
                     var json = await userResp.Content.ReadAsStringAsync();
@@ -236,7 +238,7 @@ namespace Messenger.Web.Pages.Account
                     AvatarUrl = null;
                 }
 
-                var blockedResp = await client.GetAsync("https://localhost:7001/api/users/blocked");
+                var blockedResp = await client.GetAsync($"{_configuration["URL:API:HTTPS"]}/api/users/blocked");
                 if (blockedResp.IsSuccessStatusCode)
                 {
                     var json = await blockedResp.Content.ReadAsStringAsync();
@@ -264,7 +266,7 @@ namespace Messenger.Web.Pages.Account
                 return new JsonResult(new List<object>());
 
             var client = CreateClient();
-            var response = await client.GetAsync($"https://localhost:7001/api/users/search?query={Uri.EscapeDataString(query)}");
+            var response = await client.GetAsync($"{_configuration["URL:API:HTTPS"]}/api/users/search?query={Uri.EscapeDataString(query)}");
 
             if (!response.IsSuccessStatusCode)
                 return new JsonResult(new List<object>());

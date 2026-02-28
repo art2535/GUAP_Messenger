@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+п»їusing Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
 
@@ -7,10 +7,12 @@ namespace Messenger.Web.Pages.Authorization
     public class LogoutModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
-        public LogoutModel(IHttpClientFactory httpClientFactory)
+        public LogoutModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         public async Task<IActionResult> OnPostAsync()
@@ -20,7 +22,7 @@ namespace Messenger.Web.Pages.Authorization
             if (!string.IsNullOrEmpty(token))
             {
                 var client = _httpClientFactory.CreateClient();
-                var request = new HttpRequestMessage(HttpMethod.Patch, "https://localhost:7001/api/logins");
+                var request = new HttpRequestMessage(HttpMethod.Patch, $"{_configuration["URL:API:HTTPS"]}/api/logins");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 try
@@ -29,12 +31,12 @@ namespace Messenger.Web.Pages.Authorization
                     if (!response.IsSuccessStatusCode)
                     {
                         var error = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Ошибка API при выходе: {response.StatusCode} — {error}");
+                        Console.WriteLine($"РћС€РёР±РєР° API РїСЂРё РІС‹С…РѕРґРµ: {response.StatusCode}   {error}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Не удалось связаться с API при выходе: " + ex.Message);
+                    Console.WriteLine("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРІСЏР·Р°С‚СЊСЃСЏ СЃ API РїСЂРё РІС‹С…РѕРґРµ: " + ex.Message);
                 }
             }
 

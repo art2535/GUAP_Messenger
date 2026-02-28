@@ -9,6 +9,8 @@ namespace Messenger.Web.Pages.Authorization
 {
     public class RegistrationModel : PageModel
     {
+        private readonly IConfiguration _configuration;
+
         [BindProperty]
         [Required(ErrorMessage = "Логин не может быть пустым")]
         public string Email { get; set; } = string.Empty;
@@ -39,6 +41,11 @@ namespace Messenger.Web.Pages.Authorization
         [BindProperty]
         public string? ErrorMessage { get; private set; } = string.Empty;
 
+        public RegistrationModel(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         public async Task<IActionResult> OnPostAsync()
         {
             if (!ModelState.IsValid)
@@ -64,7 +71,7 @@ namespace Messenger.Web.Pages.Authorization
                     var content = new StringContent(JsonSerializer.Serialize(registerRequest), Encoding.UTF8,
                         "application/json");
 
-                    var response = await httpClient.PostAsync("https://localhost:7001/api/Authorization/register", content);
+                    var response = await httpClient.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/Authorization/register", content);
                     if (!response.IsSuccessStatusCode)
                     {
                         ErrorMessage = "Регистрация не прошла";

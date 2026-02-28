@@ -16,6 +16,7 @@ namespace Messenger.Web.Pages.Authorization
     public class AuthorizationModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
         public string BodyClass => "auth-page";
 
@@ -32,9 +33,10 @@ namespace Messenger.Web.Pages.Authorization
 
         public string? ErrorMessage { get; private set; } = string.Empty;
 
-        public AuthorizationModel(IHttpClientFactory httpClientFactory)
+        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         public IActionResult OnGet()
@@ -68,7 +70,7 @@ namespace Messenger.Web.Pages.Authorization
 
                     var content = new StringContent(JsonSerializer.Serialize(loginRequest), Encoding.UTF8, "application/json");
 
-                    var response = await httpClient.PostAsync("https://localhost:7001/api/authorization/login", content);
+                    var response = await httpClient.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/authorization/login", content);
 
                     if (!response.IsSuccessStatusCode)
                     {
@@ -101,7 +103,7 @@ namespace Messenger.Web.Pages.Authorization
                         };
 
                         var logContent = new StringContent(JsonSerializer.Serialize(logRequest), Encoding.UTF8, "application/json");
-                        var logResponse = await httpClient.PostAsync("https://localhost:7001/api/logins", logContent);
+                        var logResponse = await httpClient.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/logins", logContent);
 
                         if (!logResponse.IsSuccessStatusCode)
                         {

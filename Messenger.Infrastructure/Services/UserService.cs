@@ -82,9 +82,7 @@ namespace Messenger.Infrastructure.Services
                 throw new UnauthorizedAccessException("Неверный логин или пароль");
             }
 
-            string? role = await _userRepository.GetRoleByUserIdAsync(user.UserId, token);
-
-            role ??= "Пользователь";
+            string role = await _userRepository.GetRoleByUserIdAsync(user.UserId, token) ?? "Пользователь";
 
             string jwtToken = await new JwtService(_configuration, _context)
                 .GenerateJwtTokenAsync(user, token);
@@ -212,7 +210,10 @@ namespace Messenger.Infrastructure.Services
                 await file.CopyToAsync(stream, token);
             }
 
-            var avatarUrl = $"https://localhost:7001/avatars/{fileName}";
+            var baseUrl = _configuration["URL:API:HTTPS"]
+                ?? throw new Exception("URL не указан в конфигурационном файле");
+
+            var avatarUrl = $"{baseUrl}/avatars/{fileName}";
 
             user.Account.Avatar = avatarUrl;
             await _context.SaveChangesAsync(token);
