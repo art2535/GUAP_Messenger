@@ -1349,6 +1349,8 @@
                 const json = await res.json();
                 if (!res.ok || !json.isSuccess) throw new Error(json.error || 'Ошибка');
                 document.getElementById('create-chat-modal').classList.remove('show');
+
+                await loadChats();
             } catch (err) {
                 showToast('Ошибка: ' + err.message, 'error');
             }
@@ -1662,6 +1664,10 @@
                     document.getElementById('chat-title').textContent = 'Выберите чат';
                     document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
                     document.getElementById('chat-info-avatar').src = 'https://static.photos/people/200x200/default';
+
+                    if (!document.querySelector('.chat-item')) {
+                        chatsList.innerHTML = '<div class="p-4 text-gray-500">Чатов нет</div>';
+                    }
 
                     showToast('Чат успешно удалён', 'success');
                 } catch (err) {

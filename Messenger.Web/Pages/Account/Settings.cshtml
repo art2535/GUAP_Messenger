@@ -460,7 +460,6 @@
 
             connection.on("UserUnblocked", (unblockedUserId) => {
                 removeFromBlockedList(unblockedUserId);
-                showToast("Вы разблокировали пользователя", "success");
             });
 
             connection.on("UserBlockedMe", async (blockerId) => {
