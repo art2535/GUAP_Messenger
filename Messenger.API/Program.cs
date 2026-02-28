@@ -50,9 +50,16 @@ namespace Messenger.API
                 app.UseSwaggerInterface();
             }
 
+            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+
+            if (!Directory.Exists(uploadsPath))
+            {
+                Directory.CreateDirectory(uploadsPath);
+            }
+
             app.UseStaticFiles(new StaticFileOptions
             {
-                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+                FileProvider = new PhysicalFileProvider(uploadsPath),
                 RequestPath = "/uploads",
                 OnPrepareResponse = ctx =>
                 {
@@ -72,9 +79,16 @@ namespace Messenger.API
                 }
             });
 
+            var avatarsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars");
+
+            if (!Directory.Exists(avatarsPath))
+            {
+                Directory.CreateDirectory(avatarsPath);
+            }
+
             app.UseStaticFiles(new StaticFileOptions
             {
-                FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars")),
+                FileProvider = new PhysicalFileProvider(avatarsPath),
                 RequestPath = "/avatars"
             });
 
