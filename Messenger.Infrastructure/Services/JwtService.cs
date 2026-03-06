@@ -21,6 +21,14 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> GenerateJwtTokenAsync(User user, CancellationToken token = default)
         {
+            var useKeycloak = _configuration.GetValue("Auth:UseKeycloak", false);
+
+            if (useKeycloak)
+            {
+                throw new InvalidOperationException(
+                    "В режиме Keycloak токен должен выдаваться фронтендом / authorization server, а не API.");
+            }
+
             string? key = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.User)
                 ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.Machine)
                 ?? _configuration["Jwt:Key"];
@@ -33,7 +41,6 @@ namespace Messenger.Infrastructure.Services
             try
             {
                 var keyBytes = Convert.FromBase64String(key);
-                Console.WriteLine($"JwtService: Ключ для создания токена: {key} (длина: {keyBytes.Length} байт)");
             }
             catch (FormatException)
             {

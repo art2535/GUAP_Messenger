@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using System.Reflection;
 using System.Security.Cryptography;
 
 namespace Messenger.API.Extensions
@@ -93,11 +92,11 @@ namespace Messenger.API.Extensions
                 });
         }
 
-        public static void SetTheEnvironmentVariable(bool forMachine = true)
+        public static void SetTheEnvironmentVariable(bool forMachine = false)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+                .AddJsonFile("appsettings.Development.json", true)
                 .AddEnvironmentVariables()
                 .Build();
 

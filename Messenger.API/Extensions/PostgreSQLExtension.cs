@@ -1,6 +1,5 @@
 ﻿using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection;
 
 namespace Messenger.API.Extensions
 {
@@ -29,12 +28,11 @@ namespace Messenger.API.Extensions
                 options.UseNpgsql(connectionString));
         }
 
-        public static void SetTheEnvironmentVariable(bool forMachine = true)
+        public static void SetTheEnvironmentVariable(bool forMachine = false)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true)
-                .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+                .AddJsonFile("appsettings.Development.json", true)
                 .AddEnvironmentVariables()
                 .Build();
 
@@ -43,7 +41,7 @@ namespace Messenger.API.Extensions
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 throw new InvalidOperationException(
-                    "Не удалось найти строку подключения 'DefaultConnection' в secrets.json или appsettings.json."
+                    "Не удалось найти строку подключения 'DefaultConnection' в appsettings.Development.json!"
                 );
             }
 

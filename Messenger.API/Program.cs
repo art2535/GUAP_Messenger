@@ -12,15 +12,9 @@ namespace Messenger.API
 
             if (!builder.Environment.IsDevelopment())
             {
-                JwtExtension.SetTheEnvironmentVariable(forMachine: false);
-                PostgreSQLExtension.SetTheEnvironmentVariable(forMachine: false);
+                JwtExtension.SetTheEnvironmentVariable();
+                PostgreSQLExtension.SetTheEnvironmentVariable();
             }
-
-            builder.Configuration
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-                .AddUserSecrets<Program>(optional: true)
-                .AddEnvironmentVariables();
 
             builder.Services.AddControllers();
 
@@ -36,7 +30,10 @@ namespace Messenger.API
             {
                 options.AddPolicy("AllowWebApp", policy =>
                 {
-                    policy.WithOrigins("https://localhost:7010")
+                    var webUrl = builder.Configuration.GetValue<string>("URL:Web:HTTPS")
+                        ?? throw new Exception("URL не прописан в appsettings.Development.json");
+
+                    policy.WithOrigins(webUrl)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
