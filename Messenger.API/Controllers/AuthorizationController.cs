@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Text.Json;
 
 namespace Messenger.API.Controllers
 {
@@ -16,10 +17,14 @@ namespace Messenger.API.Controllers
     public class AuthorizationController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public AuthorizationController(IUserService userService)
+        public AuthorizationController(IUserService userService, IConfiguration configuration, IHttpClientFactory httpClientFactory)
         {
             _userService = userService;
+            _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
         }
 
         
@@ -102,6 +107,44 @@ namespace Messenger.API.Controllers
                     Error = ex.Message
                 });
             }
+        }
+
+        [HttpPost("refresh")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+        {
+            var client = _httpClientFactory.CreateClient();
+
+            var formData = new Dictionary<string, string>
+            {
+                { "grant_type", "refresh_token" },
+                { "refresh_token", request.RefreshToken },
+                { "client_id", _configuration["AzureAd:ClientId"] ?? "messager" },
+                { "client_secret", _configuration["AzureAd:ClientSecret"] }
+            };
+
+            var content = new FormUrlEncodedContent(formData);
+
+            var keycloakTokenUrl = "https://sso.guap.ru/realms/master/protocol/openid-connect/token";
+
+            var response = await client.PostAsync(keycloakTokenUrl, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                return BadRequest(new { error = "Failed to refresh token", details = errorContent });
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var tokenResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+
+            return Ok(new
+            {
+                access_token = tokenResponse["access_token"],
+                id_token = tokenResponse.GetValueOrDefault("id_token"),
+                refresh_token = tokenResponse.GetValueOrDefault("refresh_token"),
+                expires_in = tokenResponse["expires_in"]
+            });
         }
 
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]

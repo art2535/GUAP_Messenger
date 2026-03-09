@@ -3,6 +3,11 @@ using Messenger.Core.Models;
 
 namespace Messenger.API.Responses
 {
+    public class RefreshTokenRequest
+    {
+        public string RefreshToken { get; set; } = string.Empty;
+    }
+
     public class RegisterSuccessResponse
     {
         public bool IsSuccess { get; set; }
