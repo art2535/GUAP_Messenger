@@ -169,12 +169,17 @@
 </head>
 <body class="h-screen">
 
-    <script>
-        const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
-        if (!JWT_TOKEN || JWT_TOKEN === '') {
-            document.write('<div class="p-8 text-center text-red-600 text-xl">Ошибка авторизации. <a href="/Authorization/Login" class="underline">Войти заново</a></div>');
+    @* <script>
+        // const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
+        // if (!JWT_TOKEN || JWT_TOKEN === '') {
+        //     document.write('<div class="p-8 text-center text-red-600 text-xl">Ошибка авторизации. <a href="/Authorization/Authorization" class="underline">Войти заново</a></div>');
+        // }
+
+        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
+        if (!isAuthenticated) {
+            window.location.href = "/Authorization";
         }
-    </script>
+    </script> *@
 
     <div class="flex h-full">
         <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
@@ -363,7 +368,14 @@
 
         const API_BASE = 'https://localhost:7001/api';
         const HUB_URL = 'https://localhost:7001/hubs/chat';
-        const token = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
+
+        let token = '@HttpContext.Session.GetString("ID_TOKEN")' || '@HttpContext.Session.GetString("ACCESS_TOKEN")' ||
+            '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
+
+        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
+        if (!isAuthenticated) {
+            window.location.href = "/Authorization/Authorization";
+        }
 
         const chatsList = document.getElementById('chats-list');
         const messagesContainer = document.getElementById('messages-container');
@@ -382,6 +394,68 @@
         let lastQuery = '';
         let searchTimeout = null;
         let allChatItems = [];
+
+        async function refreshTokenIfNeeded() {
+            try {
+                const testRes = await fetch(`${API_BASE}/users/info`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (testRes.ok) return token;
+            } catch {}
+
+            const refresh = '@HttpContext.Session.GetString("REFRESH_TOKEN")';
+            if (!refresh) {
+                console.error('Нет refresh_token');
+                window.location.href = "/Authorization/Authorization";
+                return null;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/authorization/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken: refresh })
+                });
+
+                if (!res.ok) throw new Error('Refresh failed');
+
+                const data = await res.json();
+                if (data.access_token) {
+                    token = data.access_token;
+                    localStorage.setItem('access_token', token);
+                    console.log('Токен обновлён');
+                    return token;
+                } else {
+                    console.error('Refresh failed', data);
+                    window.location.href = "/Authorization/Authorization";
+                }
+            } catch (e) {
+                console.error('Ошибка обновления токена', e);
+                window.location.href = "/Authorization/Authorization";
+            }
+            return null;
+        }
+
+        token = await refreshTokenIfNeeded() || token;
+
+        setInterval(refreshTokenIfNeeded, 3 * 60 * 1000);
+
+        async function fetchWithAuth(url, options = {}) {
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                ...options.headers
+            };
+
+            const response = await fetch(url, { ...options, headers });
+
+            if (response.status === 401 || response.status === 403) {
+                console.warn('Токен истёк или недействителен - редирект на логин');
+                window.location.href = "/Authorization/Authorization";
+                return null;
+            }
+
+            return response;
+        }
 
         fileInput.onchange = function() {
             selectedFiles = Array.from(this.files || []);
@@ -627,13 +701,23 @@
             const url = `${API_BASE}/messages/${currentChatId}?access_token=${encodeURIComponent(token)}`;
 
             try {
-                const res = await fetch(url, { method: 'POST', body: formData });
-                if (!res.ok) {
+                const res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res) return;
+
+                if (res.ok) {
+                    messageInput.value = '';
+                    attachedFiles.innerHTML = '';
+                    selectedFiles = [];
+                    fileInput.value = '';
+                } else {
                     const data = await res.json().catch(() => ({}));
                     if (data.error?.includes("чёрном списке") || data.error?.includes("заблокирован")) {
                         blockChat("Вы в чёрном списке этого пользователя");
                     }
-                    return;
                 }
 
                 messageInput.value = '';
@@ -720,6 +804,12 @@
         }
 
         async function startSignalR() {
+            if (!token) {
+                console.error("Нет токена для SignalR");
+                updateConnectionStatus('Нет токена', 'red');
+                return;
+            }
+
             connection = new signalR.HubConnectionBuilder()
                 .withUrl(HUB_URL, { accessTokenFactory: () => token })
                 .withAutomaticReconnect([0, 2000, 10000])
@@ -1113,7 +1203,9 @@
 
         async function loadChats() {
             try {
-                const res = await fetch(`${API_BASE}/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const res = await fetchWithAuth(`${API_BASE}/chats`);
+                if (!res) return;
+
                 const json = await res.json();
                 chatsList.innerHTML = !json.isSuccess || !json.data?.length ? '<div class="p-4 text-gray-500">Чатов нет</div>' : '';
                 json.data?.forEach(chat => {
