@@ -1,5 +1,6 @@
 using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
 
 namespace Messenger.API
@@ -24,14 +25,66 @@ namespace Messenger.API
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRepositories();
             builder.Services.AddServices();
-            builder.Services.AddJwtService(builder.Configuration);
+
+            builder.Services.AddHttpClient();
+
+            var useKeycloak = builder.Configuration.GetValue("Auth:UseKeycloak", false);
+
+            if (builder.Environment.IsDevelopment() && !useKeycloak)
+            {
+                builder.Services.AddJwtService(builder.Configuration);
+            }
+            else
+            {
+                builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                    .AddJwtBearer(options =>
+                    {
+                        options.Authority = "https://sso.guap.ru/realms/master";
+                        options.Audience = "messager";
+                        options.TokenValidationParameters.ValidateIssuer = true;
+                        options.TokenValidationParameters.ValidIssuer = "https://sso.guap.ru/realms/master";
+
+                        options.TokenValidationParameters.ValidateAudience = true;
+                        options.TokenValidationParameters.ValidAudiences = new[]
+                        {
+                            "messager",
+                            "account",
+                            "https://sso.guap.ru/realms/master"
+                        };
+                        options.TokenValidationParameters.ValidAudience = "messager";
+
+                        options.TokenValidationParameters.ValidateLifetime = false;
+                        options.TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(10);
+
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnAuthenticationFailed = ctx =>
+                            {
+                                Console.WriteLine($"JWT Auth failed: {ctx.Exception.Message}");
+                                return Task.CompletedTask;
+                            },
+                            OnTokenValidated = ctx =>
+                            {
+                                Console.WriteLine("JWT Token validated");
+                                return Task.CompletedTask;
+                            }
+                        };
+                    });
+            }
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+            });
 
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowWebApp", policy =>
                 {
                     var webUrl = builder.Configuration.GetValue<string>("URL:Web:HTTPS")
-                        ?? throw new Exception("URL не прописан в appsettings.Development.json");
+                        ?? throw new InvalidOperationException("URL не прописан в appsettings.Development.json");
 
                     policy.WithOrigins(webUrl)
                         .AllowAnyHeader()
