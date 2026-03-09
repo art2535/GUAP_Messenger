@@ -32,7 +32,7 @@
 
     .auth-wrapper {
         position: absolute;
-        top: 120px;
+        top: 105px;
         left: 0;
         width: 100%;
         height: calc(100vh - 160px);
@@ -78,21 +78,36 @@
                 <span asp-validation-for="Password" class="text-red-500 text-sm"></span>
             </div>
 
-            <div class="flex items-center justify-between">
-                <div class="flex items-center">
-                    <input id="remember-me" type="checkbox" asp-for="IsRememberedMe"
-                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                    <label for="remember-me" class="ml-2 block text-sm text-gray-700">Запомнить меня</label>
+            <div>
+                <button type="submit"
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium">
+                    Войти
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-6">
+            <div class="relative">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-300"></div>
                 </div>
-                <a href="forgot-password.html"
-                   class="text-sm text-blue-600 hover:text-blue-500">Забыли пароль?</a>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 bg-white text-gray-500">
+                        или
+                    </span>
+                </div>
             </div>
 
-            <button type="submit"
-                    class="w-full guap-gradient text-white py-2 px-4 rounded-lg hover:opacity-90 transition duration-300 font-medium">
-                Войти
-            </button>
-        </form>
+            <div class="mt-6">
+                <a href="/Authorization/Authorization?handler=EtaLogin"
+                   class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-medium">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM4.5 9.5a.5.5 0 011 0v3a.5.5 0 01-1 0v-3zm5 0a.5.5 0 011 0v3a.5.5 0 01-1 0v-3zm5 0a.5.5 0 011 0v3a.5.5 0 01-1 0v-3z" clip-rule="evenodd" />
+                    </svg>
+                    Войти через ЕТА ГУАП
+                </a>
+            </div>
+        </div>
 
         <div class="flex space-x-4 justify-center text-sm">
             <span>Ещё нет аккаунта?</span>

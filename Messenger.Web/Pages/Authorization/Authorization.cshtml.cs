@@ -1,7 +1,9 @@
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Web.DTOs;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
@@ -28,9 +30,6 @@ namespace Messenger.Web.Pages.Authorization
         [Required(ErrorMessage = "Пароль не может быть пустым")]
         public string Password { get; set; } = string.Empty;
 
-        [BindProperty]
-        public bool IsRememberedMe { get; set; }
-
         public string? ErrorMessage { get; private set; } = string.Empty;
 
         public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
@@ -41,13 +40,6 @@ namespace Messenger.Web.Pages.Authorization
 
         public IActionResult OnGet()
         {
-            var sessionToken = HttpContext.Session.GetString("JWT_TOKEN");
-
-            if (!string.IsNullOrEmpty(sessionToken))
-            {
-                return RedirectToPage("/Account/Chats");
-            }
-
             return Page();
         }
 
@@ -111,6 +103,15 @@ namespace Messenger.Web.Pages.Authorization
                             return Page();
                         }
 
+                        Response.Cookies.Append("JWT_TOKEN", userResponse.Token, new CookieOptions
+                        {
+                            HttpOnly = true,
+                            Secure = true,
+                            SameSite = SameSiteMode.Lax,
+                            Path = "/",
+                            Expires = DateTimeOffset.UtcNow.AddHours(24)
+                        });
+
                         HttpContext.Session.SetString("JWT_TOKEN", userResponse.Token);
                         HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
                         HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
@@ -128,6 +129,21 @@ namespace Messenger.Web.Pages.Authorization
                     return Page();
                 }
             }
+        }
+
+        public IActionResult OnGetEtaLogin()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                return RedirectToPage("/Account/Chats");
+            }
+
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Page("/Account/Chats") ?? "/"
+            };
+
+            return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
         }
 
         public static string GetLocalIPv4()
