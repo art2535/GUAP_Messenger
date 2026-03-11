@@ -369,13 +369,14 @@
         const API_BASE = 'https://localhost:7001/api';
         const HUB_URL = 'https://localhost:7001/hubs/chat';
 
-        let token = '@HttpContext.Session.GetString("ID_TOKEN")' || '@HttpContext.Session.GetString("ACCESS_TOKEN")' ||
-            '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
+        let token = '@HttpContext.Session.GetString("ACCESS_TOKEN")' || '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
 
         const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
         if (!isAuthenticated) {
             window.location.href = "/Authorization/Authorization";
         }
+
+        console.log("Access Token:", token.substring(0, 20) + "...");
 
         const chatsList = document.getElementById('chats-list');
         const messagesContainer = document.getElementById('messages-container');
@@ -395,51 +396,6 @@
         let searchTimeout = null;
         let allChatItems = [];
 
-        async function refreshTokenIfNeeded() {
-            try {
-                const testRes = await fetch(`${API_BASE}/users/info`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (testRes.ok) return token;
-            } catch {}
-
-            const refresh = '@HttpContext.Session.GetString("REFRESH_TOKEN")';
-            if (!refresh) {
-                console.error('Нет refresh_token');
-                window.location.href = "/Authorization/Authorization";
-                return null;
-            }
-
-            try {
-                const res = await fetch(`${API_BASE}/authorization/refresh`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refreshToken: refresh })
-                });
-
-                if (!res.ok) throw new Error('Refresh failed');
-
-                const data = await res.json();
-                if (data.access_token) {
-                    token = data.access_token;
-                    localStorage.setItem('access_token', token);
-                    console.log('Токен обновлён');
-                    return token;
-                } else {
-                    console.error('Refresh failed', data);
-                    window.location.href = "/Authorization/Authorization";
-                }
-            } catch (e) {
-                console.error('Ошибка обновления токена', e);
-                window.location.href = "/Authorization/Authorization";
-            }
-            return null;
-        }
-
-        token = await refreshTokenIfNeeded() || token;
-
-        setInterval(refreshTokenIfNeeded, 3 * 60 * 1000);
-
         async function fetchWithAuth(url, options = {}) {
             const headers = {
                 'Authorization': `Bearer ${token}`,
@@ -449,7 +405,7 @@
             const response = await fetch(url, { ...options, headers });
 
             if (response.status === 401 || response.status === 403) {
-                console.warn('Токен истёк или недействителен - редирект на логин');
+                console.warn('Токен недействителен — редирект на логин');
                 window.location.href = "/Authorization/Authorization";
                 return null;
             }
@@ -479,6 +435,42 @@
             feather.replace();
             scrollToBottom();
         }
+
+        async function loadAvatar() {
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/users/info`);
+                if (!res || !res.ok) return;
+
+                const json = await res.json();
+                if (json.data?.account?.avatar) {
+                    const avatarUrl = json.data.account.avatar;
+                    const img = document.getElementById("current-user-avatar");
+                    if (img) {
+                        img.src = avatarUrl + "?t=" + new Date().getTime();
+                    } else {
+                        const container = document.querySelector(".relative.w-10.h-10");
+                        if (container) {
+                            const placeholder = document.getElementById("current-user-avatar-placeholder");
+                            if (placeholder) placeholder.remove();
+                            const newImg = document.createElement("img");
+                            newImg.id = "current-user-avatar";
+                            newImg.className = "w-10 h-10 rounded-full object-cover shadow-md";
+                            newImg.alt = "Аватар";
+                            newImg.src = avatarUrl + "?t=" + new Date().getTime();
+                            container.appendChild(newImg);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Ошибка загрузки аватара:", err);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadAvatar();
+            loadChats();
+            startSignalR();
+        });
 
         function blockChat(blockerName = "Этот пользователь", blockTime = null) {
             messageInput.disabled = true;
@@ -810,9 +802,25 @@
                 return;
             }
 
+            async function getFreshToken() {
+                let freshToken = '@HttpContext.Session.GetString("ACCESS_TOKEN")' || '';
+                if (!freshToken) {
+                    console.warn("Токен пропал из session — редирект");
+                    window.location.href = "/Authorization/Authorization";
+                    return null;
+                }
+                return freshToken;
+            }
+
             connection = new signalR.HubConnectionBuilder()
-                .withUrl(HUB_URL, { accessTokenFactory: () => token })
-                .withAutomaticReconnect([0, 2000, 10000])
+                .withUrl(HUB_URL, {
+                    accessTokenFactory: async () => {
+                        token = await getFreshToken() || token;
+                        console.log("SignalR → свежий токен:", token.substring(0, 20) + "...");
+                        return token;
+                    }
+                })
+                .withAutomaticReconnect([0, 2000, 10000, 30000])
                 .build();
 
             connection.on("ProfileUpdated", function (data) {
@@ -1066,10 +1074,11 @@
 
             try {
                 await connection.start();
+                console.log("SignalR подключён");
                 updateConnectionStatus('Онлайн', 'green');
                 joinAllMyChats();
             } catch (err) {
-                console.error(err);
+                console.error("Ошибка подключения SignalR:", err);
                 updateConnectionStatus('Ошибка', 'red');
                 setTimeout(startSignalR, 5000);
             }

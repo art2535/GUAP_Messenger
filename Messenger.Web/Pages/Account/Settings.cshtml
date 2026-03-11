@@ -315,30 +315,26 @@
                         <div id="blocked-users-list" class="space-y-3 mb-6">
                             @if (Model.BlockedUsers.Any())
                             {
-                                foreach (var blocked in Model.BlockedUsers)
+                                @foreach (var blocked in Model.BlockedUsers)
                                 {
-                                    var id = blocked.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "";
-                                    var name = blocked.TryGetProperty("name", out var n) ? n.GetString() ?? "Неизвестно" : "Неизвестно";
-                                    var login = blocked.TryGetProperty("login", out var l) ? l.GetString() : null;
-
                                     <div class="blocked-user-item flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
-                                         data-user-id="@id">
+                                         data-user-id="@blocked.Id">
                                         <div class="flex items-center space-x-4">
                                             <div class="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center">
                                                 <i data-feather="user-x" class="w-6 h-6 text-gray-500"></i>
                                             </div>
                                             <div>
-                                                <p class="font-medium text-gray-800">@name</p>
-                                                @if (!string.IsNullOrEmpty(login))
+                                                <p class="font-medium text-gray-800">@(blocked.Name ?? "Неизвестно")</p>
+                                                @if (!string.IsNullOrEmpty(blocked.Login))
                                                 {
-                                                    <p class="text-sm text-gray-500">@login</p>
+                                                    <p class="text-sm text-gray-500">@blocked.Login</p>
                                                 }
                                             </div>
                                         </div>
                                         <button type="button"
                                                 class="unblock-btn text-red-600 hover:text-red-800 font-medium text-sm"
-                                                data-id="@id"
-                                                data-name="@HtmlEncoder.Default.Encode(name)">
+                                                data-id="@blocked.Id"
+                                                data-name="@HtmlEncoder.Default.Encode(blocked.Name ?? "")">
                                             Разблокировать
                                         </button>
                                     </div>
@@ -473,7 +469,8 @@
             });
 
             connection.on("ProfileUpdated", (data) => {
-                const currentUserId = '@Model.CurrentUserJson.TryGetProperty("userId", out var uid) ? uid.GetString() : ""';
+                const currentUserId = '@(Model.CurrentUser?.UserId ?? "")';
+
                 if (data.userId === currentUserId) {
                     updateAvatarDisplay(data.avatarUrl);
                     hasOriginalAvatar = !!data.avatarUrl;
@@ -485,6 +482,11 @@
                 .then(() => console.log("SignalR подключён"))
                 .catch(err => console.error("SignalR ошибка:", err));
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            feather.replace();
+            initSignalR(); // если нужно
+        });
 
         function updateAvatarDisplay(avatarUrl) {
             if (avatarUrl) {
