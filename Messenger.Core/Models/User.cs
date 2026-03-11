@@ -26,19 +26,23 @@ public partial class User
     public string? MiddleName { get; set; }
 
     [Column("Birth_Date")]
-    public DateOnly BirthDate { get; set; }
+    public DateOnly? BirthDate { get; set; }
 
     [Column("Registration_Date")]
     public DateOnly RegistrationDate { get; set; }
 
     [StringLength(50)]
-    public string Login { get; set; } = null!;
+    public string? Login { get; set; }
 
     [StringLength(255)]
-    public string Password { get; set; } = null!;
+    public string? Password { get; set; }
 
     [StringLength(18)]
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
+
+    [Column("External_ID")]
+    [StringLength(255)]
+    public string? ExternalId { get; set; }
 
     [ForeignKey("AccountId")]
     [InverseProperty("Users")]
