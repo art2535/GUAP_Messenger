@@ -2,6 +2,7 @@ using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Messenger.API
 {
@@ -36,48 +37,28 @@ namespace Messenger.API
             }
             else
             {
-                builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                builder.Services
+                    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .AddJwtBearer(options =>
                     {
                         options.Authority = "https://sso.guap.ru/realms/master";
-                        options.Audience = "messager";
-                        options.TokenValidationParameters.ValidateIssuer = true;
-                        options.TokenValidationParameters.ValidIssuer = "https://sso.guap.ru/realms/master";
+                        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
 
-                        options.TokenValidationParameters.ValidateAudience = true;
-                        options.TokenValidationParameters.ValidAudiences = new[]
+                        options.TokenValidationParameters = new TokenValidationParameters
                         {
-                            "messager",
-                            "account",
-                            "https://sso.guap.ru/realms/master"
-                        };
-                        options.TokenValidationParameters.ValidAudience = "messager";
+                            ValidateIssuer = true,
+                            ValidIssuer = "https://sso.guap.ru/realms/master",
 
-                        options.TokenValidationParameters.ValidateLifetime = false;
-                        options.TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(10);
+                            ValidateAudience = true,
+                            ValidAudiences = ["messager", "account"],
 
-                        options.Events = new JwtBearerEvents
-                        {
-                            OnAuthenticationFailed = ctx =>
-                            {
-                                Console.WriteLine($"JWT Auth failed: {ctx.Exception.Message}");
-                                return Task.CompletedTask;
-                            },
-                            OnTokenValidated = ctx =>
-                            {
-                                Console.WriteLine("JWT Token validated");
-                                return Task.CompletedTask;
-                            }
+                            ValidateLifetime = true,
+                            ClockSkew = TimeSpan.FromMinutes(5),
+
+                            ValidateIssuerSigningKey = true
                         };
                     });
             }
-
-            builder.Services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-            });
 
             builder.Services.AddCors(options =>
             {
