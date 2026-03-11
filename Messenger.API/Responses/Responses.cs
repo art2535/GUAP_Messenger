@@ -3,9 +3,15 @@ using Messenger.Core.Models;
 
 namespace Messenger.API.Responses
 {
-    public class RefreshTokenRequest
+    public class ExternalLoginRequest
     {
-        public string RefreshToken { get; set; } = string.Empty;
+        public string ExternalId { get; set; } = null!;
+        public string Email { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
+        public string IpAddress { get; set; } = string.Empty;
+        public string FakePasswordForInternalUse { get; set; } = string.Empty;
     }
 
     public class RegisterSuccessResponse
