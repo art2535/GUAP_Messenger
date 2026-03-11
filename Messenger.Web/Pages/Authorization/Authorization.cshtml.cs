@@ -140,11 +140,86 @@ namespace Messenger.Web.Pages.Authorization
 
             var properties = new AuthenticationProperties
             {
-                RedirectUri = Url.Page("/Account/Chats") ?? "/"
+                RedirectUri = Url.Page("/Authorization/Authorization", "Callback")
             };
 
             return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
         }
+
+        public async Task<IActionResult> OnGetCallbackAsync()
+        {
+            var externalId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+            
+            if (string.IsNullOrEmpty(externalId))
+            {
+                return RedirectToPage("/Authorization/Authorization", new { error = "Нет externalId" });
+            }
+
+            var firstName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")?.Value ?? "ЕТА";
+            var lastName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")?.Value ?? "Пользователь";
+            var email = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value ?? "";
+
+            try
+            {
+                using var httpClient = _httpClientFactory.CreateClient();
+                var request = new
+                {
+                    ExternalId = externalId,
+                    Email = email ?? "",
+                    FirstName = firstName ?? "ЕТА",
+                    LastName = lastName ?? "Пользователь",
+                    MiddleName = "",
+                    IpAddress = GetLocalIPv4(),
+                    FakePasswordForInternalUse = $"external_{externalId.Substring(0, 8)}"
+                };
+
+                var options = new JsonSerializerOptions
+                {
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    WriteIndented = true
+                };
+
+                var json = JsonSerializer.Serialize(request, options);
+
+                var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+
+                var response = await httpClient.PostAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/authorization/external/callback", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var userResponse = JsonSerializer.Deserialize<LoginResponse>(responseJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (!string.IsNullOrEmpty(userResponse?.Token))
+                    {
+                        Response.Cookies.Append("JWT_TOKEN", userResponse.Token, new CookieOptions
+                        {
+                            HttpOnly = true,
+                            Secure = true,
+                            SameSite = SameSiteMode.Lax,
+                            Path = "/",
+                            Expires = DateTimeOffset.UtcNow.AddHours(24)
+                        });
+
+                        HttpContext.Session.SetString("JWT_TOKEN", userResponse.Token);
+                        HttpContext.Session.SetString("USER_EMAIL", email);
+                        HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
+                        HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
+                        HttpContext.Session.SetString("USER_NAME", userResponse.FullName ?? firstName + " " + lastName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"API ОШИБКА: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            }
+
+            return RedirectToPage("/Account/Chats");
+        }
+
 
         public static string GetLocalIPv4()
         {
