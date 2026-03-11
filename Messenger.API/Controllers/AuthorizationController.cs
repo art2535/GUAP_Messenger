@@ -1,11 +1,9 @@
 ﻿using Messenger.API.Responses;
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.Interfaces;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Text.Json;
 
 namespace Messenger.API.Controllers
 {
@@ -17,14 +15,17 @@ namespace Messenger.API.Controllers
     public class AuthorizationController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ILoginService _loginService;
         private readonly IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
 
-        public AuthorizationController(IUserService userService, IConfiguration configuration, IHttpClientFactory httpClientFactory)
+        public AuthorizationController(IUserService userService, IConfiguration configuration, 
+            IHttpClientFactory httpClientFactory, ILoginService loginService)
         {
             _userService = userService;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _loginService = loginService;
         }
 
         
@@ -109,58 +110,53 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpPost("refresh")]
-        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
-        {
-            var client = _httpClientFactory.CreateClient();
-
-            var formData = new Dictionary<string, string>
-            {
-                { "grant_type", "refresh_token" },
-                { "refresh_token", request.RefreshToken },
-                { "client_id", _configuration["AzureAd:ClientId"] ?? "messager" },
-                { "client_secret", _configuration["AzureAd:ClientSecret"] }
-            };
-
-            var content = new FormUrlEncodedContent(formData);
-
-            var keycloakTokenUrl = "https://sso.guap.ru/realms/master/protocol/openid-connect/token";
-
-            var response = await client.PostAsync(keycloakTokenUrl, content);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                return BadRequest(new { error = "Failed to refresh token", details = errorContent });
-            }
-
-            var json = await response.Content.ReadAsStringAsync();
-            var tokenResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-
-            return Ok(new
-            {
-                access_token = tokenResponse["access_token"],
-                id_token = tokenResponse.GetValueOrDefault("id_token"),
-                refresh_token = tokenResponse.GetValueOrDefault("refresh_token"),
-                expires_in = tokenResponse["expires_in"]
-            });
-        }
-
-        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-        [HttpPost("logout")]
+        [HttpPost("external/callback")]
         [SwaggerOperation(
-            Summary = "Выход из системы",
-            Description = "Логический выход пользователя. Токен удаляется на стороне клиента.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Выход выполнен успешно", typeof(LogoutSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Требуется аутентификация")]
-        public IActionResult LogoutUserAsync()
+            Summary = "Аутентификация пользователя через ЕТА",
+            Description = "Выполняет запись входа в базу данных")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Вход выполнен успешно", typeof(LoginSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверные учетные данные", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ExternalCallbackAsync([FromBody] ExternalLoginRequest request,
+            CancellationToken cancellationToken = default)
         {
-            return Ok(new LogoutSuccessResponse
+            try
             {
-                IsSuccess = true,
-                Message = "Вы успешно вышли из системы"
-            });
+                var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
+
+                if (user == null)
+                {
+                    user = await _userService.RegisterExternalUserAsync(request.ExternalId, request.Email, request.FirstName,
+                        request.LastName, request.MiddleName);
+                }
+
+                var fakePassword = $"external_{request.ExternalId.Substring(0, 8)}";
+
+                var (token, userId, role) =
+                    await _userService.LoginAsync(user.Login, request.FakePasswordForInternalUse, cancellationToken);
+
+                var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
+                    .Where(s => !string.IsNullOrEmpty(s)));
+
+                return Ok(new LoginSuccessResponse
+                {
+                    IsSuccess = true,
+                    UserId = userId,
+                    Role = role,
+                    Token = token,
+                    FullName = fullName
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ОШИБКА: {ex.Message}");
+                return BadRequest(new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
     }
 }
