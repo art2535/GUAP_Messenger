@@ -25,5 +25,8 @@ namespace Messenger.Core.Interfaces
         Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken token = default);
         Task<IEnumerable<Role>> GetRolesAsync(CancellationToken token = default);
         Task<IEnumerable<UserSearch>> SearchUsersAsync(string query, CancellationToken token = default);
+        Task<User?> GetUserByExternalIdAsync(string externalId);
+        Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, string lastName, 
+            string? middleName = null);
     }
 }
