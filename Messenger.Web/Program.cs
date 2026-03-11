@@ -1,5 +1,6 @@
 using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Messenger.Web.Middleware;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
@@ -12,6 +13,8 @@ namespace Messenger.Web
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddPostgreSQL(builder.Configuration);
+
+            builder.Services.AddRazorPages();
 
             var useKeycloak = builder.Configuration.GetValue("Auth:UseKeycloak", false);
 
@@ -54,57 +57,47 @@ namespace Messenger.Web
                     options.TokenValidationParameters.ValidateIssuer = true;
                     options.TokenValidationParameters.NameClaimType = "name";
                     options.TokenValidationParameters.RoleClaimType = "role";
+                    options.CallbackPath = "/signin-oidc";
 
                     options.Events = new OpenIdConnectEvents
                     {
                         OnRedirectToIdentityProvider = ctx =>
                         {
-                            Console.WriteLine("Redirecting to Keycloak: " + ctx.ProtocolMessage.IssuerAddress);
+                            Console.WriteLine("Редирект на Keycloak");
                             return Task.CompletedTask;
                         },
-                        OnAuthenticationFailed = ctx =>
-                        {
-                            Console.WriteLine("Authentication failed: " + ctx.Exception?.Message);
-                            return Task.CompletedTask;
-                        },
+
                         OnTokenValidated = ctx =>
                         {
-                            Console.WriteLine("Token validated");
+                            Console.WriteLine("Token валидирован!");
+                            return Task.CompletedTask;
+                        },
+
+                        OnTicketReceived = ctx =>
+                        {
+                            Console.WriteLine("OnTicketReceived СРАБОТАЛ!");
+                            return Task.CompletedTask;
+                        },
+
+                        OnAuthenticationFailed = ctx =>
+                        {
+                            Console.WriteLine($"OIDC Failed: {ctx.Exception.Message}");
+                            ctx.Response.Redirect("/Authorization/Authorization?error=auth_failed");
+                            ctx.HandleResponse();
                             return Task.CompletedTask;
                         }
-                    };
-
-                    options.Events.OnTicketReceived = context =>
-                    {
-                        return Task.CompletedTask;
-                    };
-
-                    options.Events.OnRedirectToIdentityProvider = context =>
-                    {
-                        Console.WriteLine("Keycloak: " + context.ProtocolMessage.IssuerAddress);
-                        return Task.CompletedTask;
-                    };
-
-                    options.Events.OnAuthenticationFailed = context =>
-                    {
-                        context.Response.Redirect("/Authorization/Authorization?error=" + Uri.EscapeDataString(context.Exception.Message));
-                        context.HandleResponse();
-                        return Task.CompletedTask;
                     };
                 });
             }
 
             builder.Services.AddAuthorization();
 
-            builder.Services.AddRazorPages(options =>
-            {
-                options.Conventions.AuthorizeFolder("/Account");
-            });
-
             builder.Services.AddServices();
             builder.Services.AddRepositories();
             builder.Services.AddSignalRService();
             builder.Services.AddHttpClient();
+
+            builder.Services.AddDistributedMemoryCache();
 
             builder.Services.AddSession(options =>
             {
@@ -135,6 +128,10 @@ namespace Messenger.Web
             app.UseRouting();
 
             app.UseAuthentication();
+            if (useKeycloak)
+            {
+                app.UseMiddleware<TokenRefreshMiddleware>();
+            }
             app.UseAuthorization();
 
             app.MapRazorPages();
