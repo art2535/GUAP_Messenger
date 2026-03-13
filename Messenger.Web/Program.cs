@@ -16,79 +16,70 @@ namespace Messenger.Web
 
             builder.Services.AddRazorPages();
 
-            var useKeycloak = builder.Configuration.GetValue("Auth:UseKeycloak", false);
-
-            if (builder.Environment.IsDevelopment() && !useKeycloak)
+            builder.Services.AddAuthentication(options =>
             {
-                builder.Services.AddJwtService(builder.Configuration);
-            }
-            else
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+                options.DefaultSignOutScheme = OpenIdConnectDefaults.AuthenticationScheme;
+                options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            })
+            .AddCookie(options =>
             {
-                builder.Services.AddAuthentication(options =>
-                {
-                    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                    options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
-                    options.DefaultSignOutScheme = OpenIdConnectDefaults.AuthenticationScheme;
-                    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                })
-                .AddCookie(options =>
-                {
-                    options.LoginPath = "/Authorization";
-                    options.ExpireTimeSpan = TimeSpan.FromHours(12);
-                    options.SlidingExpiration = true;
-                    options.Cookie.SameSite = SameSiteMode.Lax;
-                    options.Cookie.HttpOnly = true;
-                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-                })
-                .AddOpenIdConnect(options =>
-                {
-                    options.Authority = "https://sso.guap.ru/realms/master";
-                    options.ClientId = builder.Configuration["AzureAd:ClientId"];
-                    options.ClientSecret = builder.Configuration["AzureAd:ClientSecret"];
-                    options.CallbackPath = builder.Configuration["AzureAd:CallbackPath"];
-                    options.SignedOutCallbackPath = builder.Configuration["AzureAd:SignedOutCallbackPath"];
-                    options.ResponseType = "code";
-                    options.SaveTokens = true;
-                    options.GetClaimsFromUserInfoEndpoint = true;
-                    options.Scope.Add("openid");
-                    options.Scope.Add("profile");
-                    options.Scope.Add("email");
-                    options.TokenValidationParameters.ValidateIssuer = true;
-                    options.TokenValidationParameters.NameClaimType = "name";
-                    options.TokenValidationParameters.RoleClaimType = "role";
-                    options.CallbackPath = "/signin-oidc";
+                options.LoginPath = "/Authorization";
+                options.ExpireTimeSpan = TimeSpan.FromHours(12);
+                options.SlidingExpiration = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            })
+            .AddOpenIdConnect(options =>
+            {
+                options.Authority = "https://sso.guap.ru/realms/master";
+                options.ClientId = builder.Configuration["AzureAd:ClientId"];
+                options.ClientSecret = builder.Configuration["AzureAd:ClientSecret"];
+                options.CallbackPath = builder.Configuration["AzureAd:CallbackPath"];
+                options.SignedOutCallbackPath = builder.Configuration["AzureAd:SignedOutCallbackPath"];
+                options.ResponseType = "code";
+                options.SaveTokens = true;
+                options.GetClaimsFromUserInfoEndpoint = true;
+                options.Scope.Add("openid");
+                options.Scope.Add("profile");
+                options.Scope.Add("email");
+                options.TokenValidationParameters.ValidateIssuer = true;
+                options.TokenValidationParameters.NameClaimType = "name";
+                options.TokenValidationParameters.RoleClaimType = "role";
+                options.CallbackPath = "/signin-oidc";
 
-                    options.Events = new OpenIdConnectEvents
+                options.Events = new OpenIdConnectEvents
+                {
+                    OnRedirectToIdentityProvider = ctx =>
                     {
-                        OnRedirectToIdentityProvider = ctx =>
-                        {
-                            Console.WriteLine("Редирект на Keycloak");
-                            return Task.CompletedTask;
-                        },
+                        Console.WriteLine("Редирект на Keycloak");
+                        return Task.CompletedTask;
+                    },
 
-                        OnTokenValidated = ctx =>
-                        {
-                            Console.WriteLine("Token валидирован!");
-                            return Task.CompletedTask;
-                        },
+                    OnTokenValidated = ctx =>
+                    {
+                        Console.WriteLine("Token валидирован!");
+                        return Task.CompletedTask;
+                    },
 
-                        OnTicketReceived = ctx =>
-                        {
-                            Console.WriteLine("OnTicketReceived СРАБОТАЛ!");
-                            return Task.CompletedTask;
-                        },
+                    OnTicketReceived = ctx =>
+                    {
+                        Console.WriteLine("OnTicketReceived СРАБОТАЛ!");
+                        return Task.CompletedTask;
+                    },
 
-                        OnAuthenticationFailed = ctx =>
-                        {
-                            Console.WriteLine($"OIDC Failed: {ctx.Exception.Message}");
-                            ctx.Response.Redirect("/Authorization/Authorization?error=auth_failed");
-                            ctx.HandleResponse();
-                            return Task.CompletedTask;
-                        }
-                    };
-                });
-            }
+                    OnAuthenticationFailed = ctx =>
+                    {
+                        Console.WriteLine($"OIDC Failed: {ctx.Exception.Message}");
+                        ctx.Response.Redirect("/Authorization/Authorization?error=auth_failed");
+                        ctx.HandleResponse();
+                        return Task.CompletedTask;
+                    }
+                };
+            });
 
             builder.Services.AddAuthorization();
 
@@ -128,10 +119,7 @@ namespace Messenger.Web
             app.UseRouting();
 
             app.UseAuthentication();
-            if (useKeycloak)
-            {
-                app.UseMiddleware<TokenRefreshMiddleware>();
-            }
+            app.UseMiddleware<TokenRefreshMiddleware>();
             app.UseAuthorization();
 
             app.MapRazorPages();

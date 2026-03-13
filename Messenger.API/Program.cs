@@ -12,12 +12,6 @@ namespace Messenger.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            if (!builder.Environment.IsDevelopment())
-            {
-                JwtExtension.SetTheEnvironmentVariable();
-                PostgreSQLExtension.SetTheEnvironmentVariable();
-            }
-
             builder.Services.AddControllers();
 
             builder.Services.AddSignalRService();
@@ -29,36 +23,27 @@ namespace Messenger.API
 
             builder.Services.AddHttpClient();
 
-            var useKeycloak = builder.Configuration.GetValue("Auth:UseKeycloak", false);
+            builder.Services
+                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.Authority = "https://sso.guap.ru/realms/master";
+                    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
 
-            if (builder.Environment.IsDevelopment() && !useKeycloak)
-            {
-                builder.Services.AddJwtService(builder.Configuration);
-            }
-            else
-            {
-                builder.Services
-                    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                    .AddJwtBearer(options =>
+                    options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        options.Authority = "https://sso.guap.ru/realms/master";
-                        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+                        ValidateIssuer = true,
+                        ValidIssuer = "https://sso.guap.ru/realms/master",
 
-                        options.TokenValidationParameters = new TokenValidationParameters
-                        {
-                            ValidateIssuer = true,
-                            ValidIssuer = "https://sso.guap.ru/realms/master",
+                        ValidateAudience = true,
+                        ValidAudiences = ["messager", "account"],
 
-                            ValidateAudience = true,
-                            ValidAudiences = ["messager", "account"],
+                        ValidateLifetime = true,
+                        ClockSkew = TimeSpan.FromMinutes(5),
 
-                            ValidateLifetime = true,
-                            ClockSkew = TimeSpan.FromMinutes(5),
-
-                            ValidateIssuerSigningKey = true
-                        };
-                    });
-            }
+                        ValidateIssuerSigningKey = true
+                    };
+                });
 
             builder.Services.AddCors(options =>
             {
@@ -125,8 +110,10 @@ namespace Messenger.API
 
             app.UseCors("AllowWebApp");
             app.UseHttpsRedirection();
+
             app.UseAuthentication();
             app.UseAuthorization();
+
             app.MapControllers();
 
             app.MapHub<ChatHub>("/hubs/chat");
