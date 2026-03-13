@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
 
@@ -17,7 +18,7 @@ namespace Messenger.Web.Pages.Authorization
 
         public async Task<IActionResult> OnPostAsync()
         {
-            var token = HttpContext.Session.GetString("JWT_SECRET");
+            var token = await HttpContext.GetTokenAsync("access_token");
 
             if (!string.IsNullOrEmpty(token))
             {
