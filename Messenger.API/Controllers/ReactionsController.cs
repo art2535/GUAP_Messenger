@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Reactions;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -19,10 +19,12 @@ namespace Messenger.API.Controllers
     public class ReactionsController : ControllerBase
     {
         private readonly IReactionService _reactionService;
+        private readonly IUserService _userService;
 
-        public ReactionsController(IReactionService reactionService)
+        public ReactionsController(IReactionService reactionService, IUserService userService)
         {
             _reactionService = reactionService;
+            _userService = userService;
         }
 
         [HttpGet("{messageId}")]
@@ -73,13 +75,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var reaction = new Reaction
                 {
                     ReactionId = Guid.NewGuid(),
                     MessageId = messageId,
-                    UserId = userId,
+                    UserId = user!.UserId,
                     ReactionType = request.ReactionType
                 };
 

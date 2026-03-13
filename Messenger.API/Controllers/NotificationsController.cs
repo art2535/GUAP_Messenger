@@ -1,11 +1,11 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Notifications;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -18,10 +18,12 @@ namespace Messenger.API.Controllers
     public class NotificationsController : ControllerBase
     {
         private readonly INotificationService _notificationService;
+        private readonly IUserService _userService;
 
-        public NotificationsController(INotificationService notificationService)
+        public NotificationsController(INotificationService notificationService, IUserService userService)
         {
             _notificationService = notificationService;
+            _userService = userService;
         }
 
         [HttpPost]
@@ -86,12 +88,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var notifications = await _notificationService.GetNotificationsAsync(userId, cancellationToken);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var notifications = await _notificationService.GetNotificationsAsync(user!.UserId, cancellationToken);
 
                 return Ok(new GetNotificationsSuccessResponse
                 { 
-                    IsSuccess = true, 
+                    IsSuccess = true,
                     Data = notifications 
                 });
             }

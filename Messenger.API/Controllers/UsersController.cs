@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Users;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -7,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -144,8 +144,14 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByIdAsync(userId);
-                if (user == null)
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var currentUser = await _userService.GetUserByIdAsync(user!.UserId);
+                if (currentUser == null)
                 {
                     return NotFound(new ErrorResponse
                     {
@@ -154,7 +160,7 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                var name = $"{user.FirstName} {user.LastName}".Trim() ?? "Удалённый пользователь";
+                var name = $"{currentUser.FirstName} {currentUser.LastName}".Trim() ?? "Удалённый пользователь";
 
                 return Ok(new GetUserNameSuccessResponse 
                 { 
@@ -184,26 +190,34 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var user = await _userService.GetUserByIdAsync(userId, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                if (user == null)
-                { 
-                    return NotFound(); 
+                var currentUser = await _userService.GetUserByIdAsync(user!.UserId);
+                if (currentUser == null)
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Пользователь не найден"
+                    });
                 }
 
                 var response = new
                 {
-                    UserId = user.UserId,
-                    LastName = user.LastName ?? "",
-                    FirstName = user.FirstName ?? "",
-                    MiddleName = user.MiddleName,
-                    Login = user.Login ?? "",
-                    Phone = user.Phone,
-                    Account = user.Account != null ? new
+                    UserId = currentUser.UserId,
+                    LastName = currentUser.LastName ?? "",
+                    FirstName = currentUser.FirstName ?? "",
+                    MiddleName = currentUser.MiddleName,
+                    Login = currentUser.Login ?? "",
+                    Phone = currentUser.Phone,
+                    Account = currentUser.Account != null ? new
                     {
-                        Avatar = user.Account.Avatar,
-                        Theme = user.Account.Theme ?? "light"
+                        Avatar = currentUser.Account.Avatar,
+                        Theme = currentUser.Account.Theme ?? "light"
                     } : null
                 };
 
@@ -237,17 +251,21 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                await _userService.UpdateProfileAsync(userId, request, avatarUrl, token);
+                await _userService.UpdateProfileAsync(user!.UserId, request, avatarUrl, token);
 
-                var updatedUser = await _userService.GetUserByIdAsync(userId, token);
+                var updatedUser = await _userService.GetUserByIdAsync(user!.UserId, token);
                 var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
                 var currentAvatar = updatedUser.Account?.Avatar;
 
                 await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
                 {
-                    userId = userId.ToString(),
+                    userId = user!.UserId.ToString(),
                     avatarUrl = currentAvatar,
                     displayName = newDisplayName
                 }, token);
@@ -279,8 +297,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var blockedUsers = await _userService.GetBlockedUsersAsync(userId, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var blockedUsers = await _userService.GetBlockedUsersAsync(user!.UserId, token);
 
                 var result = blockedUsers.Select(u => new
                 {
@@ -321,9 +344,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                if (userId == blockedUserId)
+                if (user!.UserId == blockedUserId)
                 {
                     return BadRequest(new ErrorResponse
                     {
@@ -332,13 +359,13 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                await _userService.BlockUserAsync(userId, blockedUserId, token);
+                await _userService.BlockUserAsync(user!.UserId, blockedUserId, token);
 
-                await _hubContext.Clients.User(userId.ToString())
+                await _hubContext.Clients.User(user!.UserId.ToString())
                     .SendAsync("UserBlocked", blockedUserId.ToString(), token);
 
                 await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserBlockedMe", userId.ToString(), token);
+                    .SendAsync("UserBlockedMe", user!.UserId.ToString(), token);
 
                 return Ok(new BlockUserSuccessResponse
                 { 
@@ -389,12 +416,17 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var avatarUrl = await _userService.UploadAvatarAsync(userId, avatarFile, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var avatarUrl = await _userService.UploadAvatarAsync(user!.UserId, avatarFile, token);
 
                 await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
                 {
-                    userId = userId.ToString(),
+                    userId = user!.UserId.ToString(),
                     avatarUrl = avatarUrl
                 }, token);
 
@@ -436,14 +468,19 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                await _userService.UnblockUserAsync(userId, blockedUserId, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                await _hubContext.Clients.User(userId.ToString())
+                await _userService.UnblockUserAsync(user!.UserId, blockedUserId, token);
+
+                await _hubContext.Clients.User(user!.UserId.ToString())
                     .SendAsync("UserUnblocked", blockedUserId.ToString());
 
                 await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserUnblockedMe", userId.ToString());
+                    .SendAsync("UserUnblockedMe", user!.UserId.ToString());
 
                 return Ok(new UnblockUserSuccessResponse
                 { 
@@ -475,8 +512,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                await _userService.ChangePasswordAsync(userId, request.OldPassword, request.NewPassword, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                await _userService.ChangePasswordAsync(user!.UserId, request.OldPassword, request.NewPassword, token);
 
                 return Ok(new ChangePasswordSuccessResponse
                 {
@@ -506,8 +548,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                await _userService.AssignRoleAsync(userId, roleId, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                await _userService.AssignRoleAsync(user!.UserId, roleId, token);
 
                 return Ok(new AssignRoleSuccessResponse
                 {
@@ -538,9 +585,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                var isBlocked = await _userService.IsBlockedByAsync(userId, currentUserId, token);
+                var isBlocked = await _userService.IsBlockedByAsync(userId, user!.UserId, token);
 
                 return Ok(new IsBlockedByResponse 
                 { 
@@ -568,8 +619,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                await _userService.DeleteAccountAsync(userId, token);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                await _userService.DeleteAccountAsync(user!.UserId, token);
 
                 return Ok(new DeleteAccountSuccessResponse
                 {
@@ -598,13 +654,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                await _userService.DeleteAvatarAsync(userId, token);
+                await _userService.DeleteAvatarAsync(user!.UserId, token);
 
                 await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
                 {
-                    userId = userId.ToString(),
+                    userId = user!.UserId.ToString(),
                     avatarUrl = (string?)null
                 });
 

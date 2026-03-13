@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Chats;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -7,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -41,8 +41,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var chats = await _chatService.GetUserChatsWithLastMessageAsync(userId, cancellationToken);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var chats = await _chatService.GetUserChatsWithLastMessageAsync(user!.UserId, cancellationToken);
 
                 return Ok(new GetUserChatsSuccessResponse
                 {
@@ -75,7 +80,11 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
@@ -88,7 +97,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
-                if (!participants.Any(p => p.UserId == currentUserId))
+                if (!participants.Any(p => p.UserId == user!.UserId))
                     return Forbid();
 
                 var participantDtos = participants.Select(p => new
@@ -100,14 +109,16 @@ namespace Messenger.API.Controllers
 
                 string displayName = chat.Type == "group"
                     ? chat.Name
-                    : await GetPrivateChatDisplayNameAsync(chatId, currentUserId, ct);
+                    : await GetPrivateChatDisplayNameAsync(chatId, user!.UserId, ct);
 
                 var result = new
                 {
                     chatId = chat.ChatId,
                     name = displayName,
                     type = chat.Type,
-                    avatar = chat.Type == "group" ? (string?)null : await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.id != currentUserId)?.id ?? currentUserId, ct),
+                    avatar = chat.Type == "group" ? (string?)null : 
+                        await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.id != user!.UserId)?.id 
+                        ?? user!.UserId, ct),
                     participants = participantDtos
                 };
 
@@ -177,7 +188,11 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 string chatNameForDb = request.Type == "group"
                     ? request.Name.Trim()
@@ -186,12 +201,12 @@ namespace Messenger.API.Controllers
                 var chat = await _chatService.CreateChatAsync(
                     name: chatNameForDb,
                     type: request.Type,
-                    creatorId: currentUserId,
+                    creatorId: user!.UserId,
                     ct);
 
                 foreach (var userId in request.UserIds.Distinct())
                 {
-                    if (userId == currentUserId) 
+                    if (userId == user!.UserId) 
                         continue;
 
                     await _chatService.AddParticipantToChatAsync(chat.ChatId, userId, "участник", ct);
@@ -199,7 +214,7 @@ namespace Messenger.API.Controllers
 
                 string displayName = request.Type == "group"
                     ? request.Name.Trim()
-                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
+                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, user!.UserId, ct);
 
                 var chatForClients = new
                 {
@@ -211,7 +226,7 @@ namespace Messenger.API.Controllers
                     type = chat.Type
                 };
 
-                var allUsers = request.UserIds.Append(currentUserId).Distinct();
+                var allUsers = request.UserIds.Append(user!.UserId).Distinct();
                 foreach (var userId in allUsers)
                 {
                     await _hubContext.Clients.User(userId.ToString()).SendAsync("NewChat", chatForClients, ct);
@@ -272,7 +287,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByIdAsync(userId, cancellationToken);
+                var (currentUser, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var user = await _userService.GetUserByIdAsync(currentUser!.UserId, cancellationToken);
                 if (user == null)
                 { 
                     return NotFound(new ErrorResponse 

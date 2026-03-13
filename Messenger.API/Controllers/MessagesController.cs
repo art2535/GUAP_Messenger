@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -61,7 +62,11 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var senderId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
                 if (chat == null)
@@ -72,16 +77,16 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                if (!chat.ChatParticipants.Any(p => p.UserId == senderId))
+                if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
                 { 
                     return Forbid(); 
                 }
 
                 if (chat.Type == "private")
                 {
-                    var recipientId = chat.ChatParticipants.First(p => p.UserId != senderId).UserId;
+                    var recipientId = chat.ChatParticipants.First(p => p.UserId != user!.UserId).UserId;
 
-                    if (await _userService.IsBlockedByAsync(recipientId, senderId, cancellationToken))
+                    if (await _userService.IsBlockedByAsync(recipientId, user!.UserId, cancellationToken))
                     {
                         return BadRequest(new ErrorResponse
                         {
@@ -92,7 +97,7 @@ namespace Messenger.API.Controllers
 
                 var result = await _messageService.SendMessageAsync(
                     chatId: chatId,
-                    senderId: senderId,
+                    senderId: user!.UserId,
                     receiverId: null,
                     content: messageText?.Trim(),
                     hasAttachments: files?.Any() == true,
@@ -152,7 +157,7 @@ namespace Messenger.API.Controllers
                 {
                     MessageId = message.MessageId,
                     ChatId = message.ChatId,
-                    SenderId = senderId,
+                    SenderId = user!.UserId,
                     SenderName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Пользователь",
                     MessageText = message.MessageText,
                     SentAt = message.SendTime,
@@ -254,12 +259,16 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var messageStatus = new MessageStatus
                 {
                     MessageId = messageId,
-                    UserId = userId,
+                    UserId = user!.UserId,
                     Status = request.Status,
                     ChangeDate = DateTime.UtcNow
                 };
@@ -326,13 +335,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var reaction = new Reaction
                 {
                     ReactionId = Guid.NewGuid(),
                     MessageId = messageId,
-                    UserId = userId,
+                    UserId = user!.UserId,
                     ReactionType = request.ReactionType
                 };
                 await _reactionService.AddReactionAsync(reaction, cancellationToken);
@@ -369,11 +382,22 @@ namespace Messenger.API.Controllers
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.MessageText))
-                return BadRequest(new { IsSuccess = false, Error = "Текст не может быть пустым" });
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = "Текст не может быть пустым"
+                });
+            }
 
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
                 if (message == null) 
                 {
@@ -383,7 +407,7 @@ namespace Messenger.API.Controllers
                         Error = "Сообщение не найдено"
                     });
                 }
-                if (message.SenderId != userId) 
+                if (message.SenderId != user!.UserId) 
                 { 
                     return Forbid(); 
                 }
@@ -453,13 +477,18 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
                 if (message == null) 
                 { 
                     return NotFound(); 
                 }
-                if (message.SenderId != userId)
+                if (message.SenderId != user!.UserId)
                 { 
                     return Forbid(); 
                 }
