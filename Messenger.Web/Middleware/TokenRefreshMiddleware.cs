@@ -21,8 +21,7 @@ namespace Messenger.Web.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            if (context.Request.Path.StartsWithSegments("/Account") &&
-                context.User.Identity?.IsAuthenticated == true)
+            if (context.User.Identity?.IsAuthenticated == true)
             {
                 string? accessToken = await context.GetTokenAsync("access_token");
                 string? refreshToken = await context.GetTokenAsync("refresh_token");
@@ -37,7 +36,7 @@ namespace Messenger.Web.Middleware
                         var jwt = jwtHandler.ReadJwtToken(accessToken);
                         var timeLeft = jwt.ValidTo - DateTime.UtcNow;
 
-                        if (timeLeft < TimeSpan.FromMinutes(3))
+                        if (timeLeft < TimeSpan.FromMinutes(1))
                         {
                             Console.WriteLine($"[TokenRefresh] Токен истекает через {timeLeft.TotalSeconds} сек — обновляем");
 
