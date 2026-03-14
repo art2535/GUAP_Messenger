@@ -1,6 +1,6 @@
 ﻿using Messenger.API.Responses;
+using Messenger.Core.DTOs.Auth;
 using Messenger.Core.Interfaces;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -10,7 +10,7 @@ namespace Messenger.API.Controllers
     [Route("api/[controller]")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для авторизации и регистрации пользователей")]
+    [SwaggerTag("Контроллер для авторизации пользователей через ЕТА ГУАП")]
     public class AuthorizationController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -24,10 +24,9 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Аутентификация пользователя через ЕТА",
             Description = "Выполняет запись входа в базу данных")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Вход выполнен успешно", typeof(LoginSuccessResponse))]
+        [SwaggerResponse(StatusCodes.Status200OK, "Вход выполнен успешно", typeof(LoginEtaResponse))]
         [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверные учетные данные", typeof(ErrorResponse))]
         [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера")]
-        [AllowAnonymous]
         public async Task<IActionResult> ExternalCallbackAsync([FromBody] ExternalLoginRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -35,23 +34,16 @@ namespace Messenger.API.Controllers
             {
                 var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
 
-                if (user == null)
-                {
-                    user = await _userService.RegisterExternalUserAsync(request.ExternalId, request.Email, request.FirstName,
+                user ??= await _userService.RegisterExternalUserAsync(request.ExternalId, request.Email, request.FirstName,
                         request.LastName, request.MiddleName);
-                }
-
-                var fakePassword = $"external_{request.ExternalId.Substring(0, 8)}";
 
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));
 
-                return Ok(new LoginSuccessResponse
+                return Ok(new LoginEtaResponse
                 {
                     IsSuccess = true,
                     UserId = user!.UserId,
-                    Role = null,
-                    Token = null,
                     FullName = fullName
                 });
             }
