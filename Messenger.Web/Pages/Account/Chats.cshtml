@@ -168,19 +168,6 @@
     </style>
 </head>
 <body class="h-screen">
-
-    @* <script>
-        // const JWT_TOKEN = '@(HttpContext.Session.GetString("JWT_TOKEN") ?? "")';
-        // if (!JWT_TOKEN || JWT_TOKEN === '') {
-        //     document.write('<div class="p-8 text-center text-red-600 text-xl">Ошибка авторизации. <a href="/Authorization/Authorization" class="underline">Войти заново</a></div>');
-        // }
-
-        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
-        if (!isAuthenticated) {
-            window.location.href = "/Authorization";
-        }
-    </script> *@
-
     <div class="flex h-full">
         <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -1027,34 +1014,37 @@
             connection.on('ParticipantAdded', ({ chatId, user }) => {
                 if (chatId !== currentChatId) return;
 
-                if (currentChatInfo && !currentChatInfo.participants.some(p => p.id === user.id)) {
-                    currentChatInfo.participants.push(user);
+                const addedName = user?.name || user?.fullName || user?.login || 'Новый участник';
+                showToast(`${addedName} добавлен в чат`, 'success');
 
-                    document.getElementById('participants-count').textContent = `(${currentChatInfo.participants.length})`;
+                if (document.getElementById('chat-info-modal').classList.contains('show')) {
+                    if (currentChatInfo && !currentChatInfo.participants.some(p => p.id === user.id)) {
+                        currentChatInfo.participants.push(user);
 
-                    if (document.getElementById('chat-info-modal').classList.contains('show')) {
+                        const list = document.getElementById('participants-list');
                         const div = document.createElement('div');
                         div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
                         div.dataset.userId = user.id;
                         div.innerHTML = `
                             <div class="flex items-center gap-4">
-                                <img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
+                                <img src="${user.avatar || 'https://static.photos/people/200x200/default'}"
+                                     class="w-12 h-12 rounded-full object-cover">
                                 <div>
-                                    <p class="font-semibold">${user.name || user.fullName}</p>
+                                    <p class="font-semibold">${addedName}</p>
                                 </div>
                             </div>
-                            ${currentChatInfo.type === 'group' ? `
                             <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
                                     onclick="removeParticipantFromChat('${user.id}', this)">
                                 <i data-feather="x" class="w-5 h-5"></i>
-                            </button>` : ''}
+                            </button>
                         `;
-                        document.getElementById('participants-list').appendChild(div);
+                        list.appendChild(div);
                         feather.replace();
+
+                        document.getElementById('participants-count').textContent =
+                            `(${currentChatInfo.participants.length})`;
                     }
                 }
-
-                showToast(`${user.name} добавлен в чат`, 'success');
             });
 
             connection.on('ChatDeleted', (chatId) => {
