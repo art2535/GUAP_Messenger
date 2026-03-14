@@ -43,18 +43,15 @@ namespace Messenger.API.Controllers
 
                 var fakePassword = $"external_{request.ExternalId.Substring(0, 8)}";
 
-                var (token, userId, role) =
-                    await _userService.LoginAsync(user.Login, request.FakePasswordForInternalUse, cancellationToken);
-
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));
 
                 return Ok(new LoginSuccessResponse
                 {
                     IsSuccess = true,
-                    UserId = userId,
-                    Role = role,
-                    Token = token,
+                    UserId = user!.UserId,
+                    Role = null,
+                    Token = null,
                     FullName = fullName
                 });
             }

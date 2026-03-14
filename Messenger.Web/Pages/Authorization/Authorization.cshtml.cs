@@ -1,16 +1,12 @@
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
-using Messenger.Web.DTOs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text;
-using System.Text.Json;
 
 namespace Messenger.Web.Pages.Authorization
 {
@@ -73,6 +69,14 @@ namespace Messenger.Web.Pages.Authorization
 
             try
             {
+                var accessToken = await HttpContext.GetTokenAsync("access_token");
+
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    ErrorMessage = "Не удалось получить access token после авторизации";
+                    return Page();
+                }
+
                 using var httpClient = _httpClientFactory.CreateClient();
                 var request = new LoginEtaRequest
                 {
@@ -90,31 +94,9 @@ namespace Messenger.Web.Pages.Authorization
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    var userResponse = JsonSerializer.Deserialize<LoginResponse>(responseJson,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                    if (!string.IsNullOrEmpty(userResponse?.Token))
-                    {
-                        Response.Cookies.Append("JWT_TOKEN", userResponse.Token, new CookieOptions
-                        {
-                            HttpOnly = true,
-                            Secure = true,
-                            SameSite = SameSiteMode.Lax,
-                            Path = "/",
-                            Expires = DateTimeOffset.UtcNow.AddHours(24)
-                        });
-
-                        HttpContext.Session.SetString("JWT_TOKEN", userResponse.Token);
-                        HttpContext.Session.SetString("USER_EMAIL", email);
-                        HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
-                        HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
-                        HttpContext.Session.SetString("USER_NAME", userResponse.FullName ?? firstName + " " + lastName);
-                    }
-
                     var loginRequest = new CreateLoginRequest
                     {
-                        Token = userResponse.Token,
+                        Token = accessToken,
                         IpAddress = GetLocalIPv4()
                     };
 
@@ -123,6 +105,7 @@ namespace Messenger.Web.Pages.Authorization
                     if (!loginResponse.IsSuccessStatusCode)
                     {
                         ErrorMessage = "Ошибка записи входа в аккаунт";
+                        return Page();
                     }
                 }
             }
@@ -134,7 +117,6 @@ namespace Messenger.Web.Pages.Authorization
 
             return RedirectToPage("/Account/Chats");
         }
-
 
         public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
         {
