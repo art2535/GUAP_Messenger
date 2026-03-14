@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Messenger.Web.Pages.Account
 {
@@ -34,14 +35,18 @@ namespace Messenger.Web.Pages.Account
         public UserProfileDto? CurrentUser { get; private set; }
         public List<BlockedUserDto> BlockedUsers { get; private set; } = new();
 
+        public string? ErrorMessage { get; private set; }
+        public string AccessToken { get; set; } = string.Empty;
+
         public async Task OnGetAsync()
         {
+            AccessToken = await HttpContext.GetTokenAsync("access_token") ?? "";
             await LoadProfileAsync();
         }
 
         private async Task LoadProfileAsync()
         {
-            var client = CreateAuthorizedClient();
+            var client = await CreateAuthorizedClient();
 
             try
             {
@@ -49,52 +54,63 @@ namespace Messenger.Web.Pages.Account
                 if (profileRes.IsSuccessStatusCode)
                 {
                     var json = await profileRes.Content.ReadAsStringAsync();
-                    var root = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
 
-                    if (root?.TryGetValue("data", out var dataObj) == true &&
-                        dataObj is JsonElement dataElement &&
-                        dataElement.ValueKind == JsonValueKind.Object)
+                    var options = new JsonSerializerOptions
                     {
-                        var data = dataElement.GetRawText();
-                        CurrentUser = JsonSerializer.Deserialize<UserProfileDto>(data);
+                        PropertyNameCaseInsensitive = true,
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                    };
 
-                        if (CurrentUser != null)
+                    var response = JsonSerializer.Deserialize<ApiResponse<UserProfileDto>>(json, options);
+
+                    if (response?.IsSuccess == true && response.Data != null)
+                    {
+                        CurrentUser = response.Data;
+
+                        Profile = new UpdateUserProfileRequest
                         {
-                            Profile = new UpdateUserProfileRequest
-                            {
-                                LastName = CurrentUser.LastName ?? "",
-                                FirstName = CurrentUser.FirstName ?? "",
-                                MiddleName = CurrentUser.MiddleName,
-                                Login = CurrentUser.Login ?? "",
-                                Phone = CurrentUser.Phone,
-                                Theme = CurrentUser.Account?.Theme ?? "light"
-                            };
+                            LastName = CurrentUser.LastName ?? "",
+                            FirstName = CurrentUser.FirstName ?? "",
+                            MiddleName = CurrentUser.MiddleName ?? "",
+                            Login = CurrentUser.Login ?? "",
+                            Phone = CurrentUser.Phone ?? "",
+                            Theme = CurrentUser.Account?.Theme ?? "light"
+                        };
 
-                            AvatarUrl = CurrentUser.Account?.Avatar;
-                            HasAvatar = !string.IsNullOrWhiteSpace(AvatarUrl);
-                            if (HasAvatar)
-                                AvatarUrl += "?t=" + DateTimeOffset.Now.ToUnixTimeSeconds();
+                        AvatarUrl = CurrentUser.Account?.Avatar;
+                        HasAvatar = !string.IsNullOrWhiteSpace(AvatarUrl);
+                        if (HasAvatar)
+                        {
+                            AvatarUrl += "?t=" + DateTimeOffset.Now.ToUnixTimeSeconds();
                         }
                     }
+                    else
+                    {
+                        ErrorMessage = "Профиль не найден в ответе API (isSuccess или data отсутствует)";
+                    }
+                }
+                else
+                {
+                    ErrorMessage = $"Ошибка API /users/info: {profileRes.StatusCode}";
                 }
 
                 var blockedRes = await client.GetAsync("api/users/blocked");
                 if (blockedRes.IsSuccessStatusCode)
                 {
                     var json = await blockedRes.Content.ReadAsStringAsync();
-                    var root = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-                    if (root?.TryGetValue("data", out var dataObj) == true &&
-                        dataObj is JsonElement dataArray &&
-                        dataArray.ValueKind == JsonValueKind.Array)
+                    var response = JsonSerializer.Deserialize<ApiResponse<List<BlockedUserDto>>>(json, options);
+
+                    if (response?.IsSuccess == true && response.Data != null)
                     {
-                        BlockedUsers = JsonSerializer.Deserialize<List<BlockedUserDto>>(dataArray.GetRawText()) ?? new();
+                        BlockedUsers = response.Data;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка загрузки настроек: {ex.Message}");
+                ErrorMessage = "Ошибка при загрузке настроек: " + ex.Message;
             }
         }
 
@@ -106,7 +122,7 @@ namespace Messenger.Web.Pages.Account
                 return Page();
             }
 
-            var client = CreateAuthorizedClient();
+            var client = await CreateAuthorizedClient();
 
             try
             {
@@ -114,7 +130,11 @@ namespace Messenger.Web.Pages.Account
 
                 if (DeleteAvatar)
                 {
-                    await client.DeleteAsync("api/users/delete-avatar");
+                    var deleteRes = await client.DeleteAsync("api/users/delete-avatar");
+                    if (!deleteRes.IsSuccessStatusCode)
+                    {
+                        ModelState.AddModelError("", "Не удалось удалить аватар");
+                    }
                     newAvatarUrl = null;
                 }
                 else if (AvatarFile != null && AvatarFile.Length > 0)
@@ -128,93 +148,72 @@ namespace Messenger.Web.Pages.Account
 
                     var content = new MultipartFormDataContent();
                     var fileContent = new StreamContent(AvatarFile.OpenReadStream());
-                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(AvatarFile.ContentType);
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(AvatarFile.ContentType ?? "image/jpeg");
                     content.Add(fileContent, "avatarFile", AvatarFile.FileName);
 
                     var uploadRes = await client.PostAsync("api/users/upload-avatar", content);
                     if (uploadRes.IsSuccessStatusCode)
                     {
                         var json = await uploadRes.Content.ReadAsStringAsync();
-                        var result = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-                        if (result?.TryGetValue("data", out var dataObj) == true &&
-                            dataObj is JsonElement data &&
-                            data.TryGetProperty("avatarUrl", out var url))
-                        {
-                            newAvatarUrl = url.GetString();
-                        }
+                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var result = JsonSerializer.Deserialize<ApiResponse<AvatarUploadResponse>>(json, options);
+
+                        newAvatarUrl = result?.Data?.AvatarUrl;
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("", "Ошибка загрузки аватара");
                     }
                 }
 
                 var payload = new
                 {
-                    Profile.LastName,
-                    Profile.FirstName,
-                    Profile.MiddleName,
-                    Profile.Login,
-                    Profile.Phone,
-                    Profile.Theme
+                    LastName = Profile.LastName,
+                    FirstName = Profile.FirstName,
+                    MiddleName = Profile.MiddleName,
+                    Login = Profile.Login,
+                    Phone = Profile.Phone,
+                    Theme = Profile.Theme
                 };
 
                 var jsonContent = JsonContent.Create(payload);
                 var updateUrl = "api/users/update-profile";
                 if (!string.IsNullOrEmpty(newAvatarUrl))
-                    updateUrl += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
-
-                var response = await client.PutAsync(updateUrl, jsonContent);
-
-                if (!response.IsSuccessStatusCode)
                 {
-                    ModelState.AddModelError("", "Ошибка обновления профиля");
-                    await LoadProfileAsync();
-                    return Page();
+                    updateUrl += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
                 }
 
-                TempData["SuccessMessage"] = "Настройки успешно сохранены";
-                return RedirectToPage(new { refreshed = true });
+                var response = await client.PutAsync(updateUrl, jsonContent);
+                if (response.IsSuccessStatusCode)
+                {
+                    TempData["SuccessMessage"] = "Настройки успешно сохранены";
+                    return RedirectToPage(new { refreshed = true });
+                }
+                else
+                {
+                    ModelState.AddModelError("", $"Ошибка обновления профиля: {response.StatusCode}");
+                    var errContent = await response.Content.ReadAsStringAsync();
+                }
             }
             catch (Exception ex)
             {
                 ModelState.AddModelError("", $"Ошибка сохранения: {ex.Message}");
-                await LoadProfileAsync();
-                return Page();
             }
+
+            await LoadProfileAsync();
+            return Page();
         }
 
-        private HttpClient CreateAuthorizedClient()
+        private async Task<HttpClient> CreateAuthorizedClient()
         {
             var client = _httpClientFactory.CreateClient();
-            var token = HttpContext.Session.GetString("ACCESS_TOKEN") ?? "";
+            var token = await HttpContext.GetTokenAsync("access_token");
             if (!string.IsNullOrEmpty(token))
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
-            client.BaseAddress = new Uri(_configuration["URL:API:HTTPS"] ?? "https://localhost:7001/");
+            client.BaseAddress = new Uri(_configuration["URL:API:HTTPS"]);
             return client;
         }
-    }
-
-    public class UserProfileDto
-    {
-        public string? UserId { get; set; }
-        public string? LastName { get; set; }
-        public string? FirstName { get; set; }
-        public string? MiddleName { get; set; }
-        public string? Login { get; set; }
-        public string? Phone { get; set; }
-        public AccountDto? Account { get; set; }
-    }
-
-    public class AccountDto
-    {
-        public string? Avatar { get; set; }
-        public string? Theme { get; set; }
-    }
-
-    public class BlockedUserDto
-    {
-        public string? Id { get; set; }
-        public string? Name { get; set; }
-        public string? Login { get; set; }
-        public string? Avatar { get; set; }
     }
 }
