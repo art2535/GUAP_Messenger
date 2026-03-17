@@ -1000,19 +1000,39 @@
                 const existing = document.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`);
 
                 if (!existing) {
+                    let displayName = chat.name || 'Новый чат';
+                    let displayAvatar = chat.avatar || 'https://static.photos/people/200x200/default';
+
+                    if (chat.type === 'private' || chat.isPrivate) {
+                        const currentUserId = '@Model.UserId'.toLowerCase();
+
+                        if (chat.participants && chat.participants.length > 0) {
+                            const interlocutor = chat.participants.find(p =>
+                                (p.id && p.id.toLowerCase() !== currentUserId) ||
+                                (p.userId && p.userId.toLowerCase() !== currentUserId)
+                            );
+
+                            if (interlocutor) {
+                                displayName = interlocutor.fullName || interlocutor.name || displayName;
+                                displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
+                            }
+                        }
+                    }
+
                     const div = document.createElement('div');
                     div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                     div.dataset.chatId = chat.chatId;
                     div.innerHTML = `
                         <div class="relative">
-                            <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
+                            <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
                             <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-medium truncate">${chat.name || 'Новый чат'}</h3>
+                            <h3 class="font-medium truncate">${displayName}</h3>
                             <p class="text-sm text-gray-500 truncate">Чат создан</p>
                         </div>
                     `;
+
                     div.onclick = () => openChat(div);
 
                     chatsList.prepend(div);

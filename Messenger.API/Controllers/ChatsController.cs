@@ -219,16 +219,24 @@ namespace Messenger.API.Controllers
                 foreach (var userId in request.UserIds.Distinct())
                 {
                     var dbParticipant = await _userService.GetUserByIdAsync(userId, ct);
-
                     if (dbParticipant == null || string.IsNullOrEmpty(dbParticipant.ExternalId)) continue;
+
+                    string individualizedName = request.Type == "group"
+                        ? request.Name.Trim()
+                        : await GetPrivateChatDisplayNameAsync(chat.ChatId, userId, ct);
+
+                    string? individualizedAvatar = null;
+                    if (request.Type == "private")
+                    {
+                        var otherId = (userId == user!.UserId) ? request.UserIds[0] : user!.UserId;
+                        individualizedAvatar = await GetOtherUserAvatarAsync(otherId, ct);
+                    }
 
                     var chatForSingleUser = new
                     {
                         chatId = chat.ChatId,
-                        name = displayName,
-                        avatar = request.Type == "private"
-                            ? await GetOtherUserAvatarAsync(userId == user!.UserId ? request.UserIds[0] : user!.UserId, ct)
-                            : null,
+                        name = individualizedName,
+                        avatar = individualizedAvatar,
                         type = chat.Type
                     };
 
