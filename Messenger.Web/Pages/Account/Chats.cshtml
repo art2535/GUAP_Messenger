@@ -194,8 +194,20 @@
                 </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto" id="chats-list">
-                <div class="text-gray-500 p-4">Загрузка чатов...</div>
+            <div class="flex-1 overflow-y-auto relative" id="chats-list">
+                <div id="chats-status-container" class="flex flex-col items-center justify-center">
+                    <div id="chats-loading" class="text-gray-500 p-4">Загрузка чатов...</div>
+
+                    <div id="empty-state" class="hidden flex-col items-center justify-center p-8 text-center text-gray-500">
+                        <div class="bg-gray-100 p-4 rounded-full mb-4">
+                            <i data-feather="message-square" class="w-8 h-8"></i>
+                        </div>
+                        <p class="text-lg font-medium">Чатов нет</p>
+                        <p class="text-sm">Начните общение прямо сейчас</p>
+                    </div>
+                </div>
+
+                <div id="chats-container"></div>
             </div>
 
             <div class="p-4 border-t border-gray-200">
@@ -997,7 +1009,9 @@
             });
 
             connection.on('NewChat', chat => {
-                const existing = document.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`);
+                // Ищем в chats-container
+                const container = document.getElementById('chats-container');
+                const existing = container.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`);
 
                 if (!existing) {
                     let displayName = chat.name || 'Новый чат';
@@ -1005,7 +1019,6 @@
 
                     if (chat.type === 'private' || chat.isPrivate) {
                         const currentUserId = '@Model.UserId'.toLowerCase();
-
                         if (chat.participants && chat.participants.length > 0) {
                             const interlocutor = chat.participants.find(p =>
                                 (p.id && p.id.toLowerCase() !== currentUserId) ||
@@ -1035,9 +1048,15 @@
 
                     div.onclick = () => openChat(div);
 
-                    chatsList.prepend(div);
+                    // ВСТАВЛЯЕМ В КОНТЕЙНЕР
+                    container.prepend(div);
+
+                    // ОБНОВЛЯЕМ СОСТОЯНИЕ (скроет "Чатов нет")
+                    toggleEmptyState();
+
                     cacheChatItems();
                     filterChats();
+                    feather.replace();
 
                     connection.invoke("JoinChat", chat.chatId).catch(err => console.error(err));
                 }
@@ -1121,12 +1140,19 @@
             });
 
             connection.on('ChatDeleted', (chatId) => {
-                document.querySelector(`.chat-item[data-chat-id="${chatId}"]`)?.remove();
+                const chatElement = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                if (chatElement) {
+                    chatElement.remove();
+                    toggleEmptyState();
+                }
 
                 if (currentChatId === chatId) {
                     currentChatId = null;
                     currentChatInfo = null;
-                    messagesContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500"><p>Чат был удалён</p></div>';
+                    messagesContainer.innerHTML = `
+                        <div class="flex items-center justify-center h-full text-gray-500">
+                            <p>Чат был удалён</p>
+                        </div>`;
                     document.getElementById('chat-title').textContent = 'Выберите чат';
                 }
 
@@ -1214,6 +1240,25 @@
                 }
             } catch (err) {
                 console.warn("Не удалось загрузить мой чёрный список", err);
+            }
+        }
+
+        function toggleEmptyState() {
+            const container = document.getElementById('chats-container');
+            const emptyState = document.getElementById('empty-state');
+
+            const chatCount = container.querySelectorAll('.chat-item').length;
+
+            if (chatCount > 0) {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            } else {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+
+                if (typeof feather !== 'undefined') {
+                    feather.replace();
+                }
             }
         }
 
@@ -1373,16 +1418,33 @@
         }, 300);
 
         async function loadChats() {
+            const container = document.getElementById('chats-container');
+            const loading = document.getElementById('chats-loading');
+            const emptyState = document.getElementById('empty-state');
+
             try {
                 const res = await fetchWithAuth(`${API_BASE}/chats`);
                 if (!res) return;
 
                 const json = await res.json();
-                chatsList.innerHTML = !json.isSuccess || !json.data?.length ? '<div class="p-4 text-gray-500">Чатов нет</div>' : '';
-                json.data?.forEach(chat => {
+
+                if (loading) loading.style.display = 'none';
+                container.innerHTML = '';
+
+                if (!json.isSuccess || !json.data?.length) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.classList.add('flex');
+                    return;
+                }
+
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                json.data.forEach(chat => {
                     const div = document.createElement('div');
                     div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                     div.dataset.chatId = chat.chatId || chat.id;
+
                     div.innerHTML = `
                         <div class="relative">
                             <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
@@ -1396,12 +1458,16 @@
                         </div>
                     `;
                     div.onclick = () => openChat(div);
-                    chatsList.appendChild(div);
+                    container.appendChild(div);
                 });
+
                 cacheChatItems();
                 filterChats();
-            } catch {
-                chatsList.innerHTML = '<div class="p-4 text-red-500">Ошибка загрузки</div>';
+                feather.replace();
+            } catch (err) {
+                console.error("Ошибка загрузки:", err);
+                const status = document.getElementById('chats-status-container');
+                if (status) status.innerHTML = '<div class="p-4 text-red-500">Ошибка загрузки</div>';
             }
         }
 
