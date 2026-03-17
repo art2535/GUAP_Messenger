@@ -20,12 +20,21 @@ namespace Messenger.Core.Hubs
 
         public override async Task OnConnectedAsync()
         {
-            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userId != null)
+            var userId = Context.User?.FindFirst("sub")?.Value
+                      ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
-                await Clients.All.SendAsync("UserOnline", userId);
+                await base.OnConnectedAsync();
+                return;
             }
+
+            userId = userId.Trim().ToLowerInvariant();
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
+
+            await Clients.All.SendAsync("UserOnline", userId);
+
             await base.OnConnectedAsync();
         }
 
@@ -37,6 +46,16 @@ namespace Messenger.Core.Hubs
                 await Clients.All.SendAsync("UserOffline", userId);
             }
             await base.OnDisconnectedAsync(exception);
+        }
+
+        public async Task YouBlocked(string blockedUserId)
+        {
+            await Clients.Caller.SendAsync("YouBlocked", blockedUserId);
+        }
+
+        public async Task YouUnblocked(string unblockedUserId)
+        {
+            await Clients.Caller.SendAsync("YouUnblocked", unblockedUserId);
         }
 
         public async Task NotifyBlocked(string blockedUserId)
@@ -67,6 +86,11 @@ namespace Messenger.Core.Hubs
                 chatId,
                 user = userInfo
             });
+        }
+
+        public async Task NewChat(object chatInfo)
+        {
+            await Task.CompletedTask;
         }
 
         public async Task NotifyChatDeleted(Guid chatId)

@@ -216,20 +216,24 @@ namespace Messenger.API.Controllers
                     ? request.Name.Trim()
                     : await GetPrivateChatDisplayNameAsync(chat.ChatId, user!.UserId, ct);
 
-                var chatForClients = new
+                foreach (var userId in request.UserIds.Distinct())
                 {
-                    chatId = chat.ChatId,
-                    name = displayName,
-                    avatar = request.Type == "private"
-                        ? await GetOtherUserAvatarAsync(request.UserIds[0], ct)
-                        : (string?)null,
-                    type = chat.Type
-                };
+                    var dbParticipant = await _userService.GetUserByIdAsync(userId, ct);
 
-                var allUsers = request.UserIds.Append(user!.UserId).Distinct();
-                foreach (var userId in allUsers)
-                {
-                    await _hubContext.Clients.User(userId.ToString()).SendAsync("NewChat", chatForClients, ct);
+                    if (dbParticipant == null || string.IsNullOrEmpty(dbParticipant.ExternalId)) continue;
+
+                    var chatForSingleUser = new
+                    {
+                        chatId = chat.ChatId,
+                        name = displayName,
+                        avatar = request.Type == "private"
+                            ? await GetOtherUserAvatarAsync(userId == user!.UserId ? request.UserIds[0] : user!.UserId, ct)
+                            : null,
+                        type = chat.Type
+                    };
+
+                    await _hubContext.Clients.User(dbParticipant.ExternalId.ToLowerInvariant())
+                        .SendAsync("NewChat", chatForSingleUser, ct);
                 }
 
                 return Ok(new CreateChatSuccessResponse 
@@ -319,20 +323,21 @@ namespace Messenger.API.Controllers
                     avatar = addedUser.Account?.Avatar
                 };
 
-                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ParticipantAdded", new
-                {
-                    chatId,
-                    user = userInfo
-                }, ct);
+                await _hubContext.Clients.Group(chatId.ToString()).
+                    SendAsync("ParticipantAdded", new { chatId, user = userInfo }, ct);
 
                 var chatForNewUser = new
                 {
                     chatId = chat.ChatId,
                     name = chat.Type == "group" ? chat.Name : await GetPrivateChatDisplayNameAsync(chatId, userId, ct),
-                    avatar = chat.Type == "private" ? await GetOtherUserAvatarAsync(userId, ct) : null,
                     type = chat.Type
                 };
-                await _hubContext.Clients.User(userId.ToString()).SendAsync("NewChat", chatForNewUser, ct);
+
+                if (addedUser?.ExternalId != null)
+                {
+                    await _hubContext.Clients.User(addedUser.ExternalId.ToLowerInvariant())
+                        .SendAsync("NewChat", chatForNewUser, ct);
+                }
 
                 return Ok(new AddParticipantSuccessResponse
                 {
@@ -386,7 +391,14 @@ namespace Messenger.API.Controllers
                 }
 
                 chat.Name = request.Name;
+
                 await _chatService.UpdateChatAsync(chat, ct);
+
+                await _hubContext.Clients.All.SendAsync("ChatUpdated", new
+                {
+                    chatId,
+                    name = request.Name
+                }, ct);
 
                 return Ok(new UpdateChatSuccessResponse
                 { 
@@ -430,6 +442,8 @@ namespace Messenger.API.Controllers
 
                 await _chatService.DeleteChatAsync(chat, cancellationToken);
 
+                await _hubContext.Clients.All.SendAsync("ChatDeleted", chatId, cancellationToken);
+
                 return Ok(new DeleteChatSuccessResponse
                 {
                     IsSuccess = true,
@@ -460,15 +474,25 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var chatParticipants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
+                var userToDelete = await _userService.GetUserByIdAsync(userId, cancellationToken);
+
+                if (userToDelete == null)
+                {
+                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Пользователь не найден" });
+                }
 
                 await _chatService.DeleteParticipantFromChatAsync(chatId, userId, cancellationToken);
 
-                await _hubContext.Clients.Group(chatId.ToString())
+                await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
                     .SendAsync("ParticipantRemoved", new { chatId, userId }, cancellationToken);
 
-                await _hubContext.Clients.User(userId.ToString())
-                    .SendAsync("YouWereRemovedFromChat", chatId, cancellationToken);
+                if (!string.IsNullOrEmpty(userToDelete.ExternalId))
+                {
+                    var signalRId = userToDelete.ExternalId.ToLowerInvariant();
+
+                    await _hubContext.Clients.User(signalRId)
+                        .SendAsync("YouWereRemovedFromChat", chatId, cancellationToken);
+                }
 
                 return Ok(new RemoveParticipantSuccessResponse
                 {

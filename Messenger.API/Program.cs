@@ -39,10 +39,15 @@ namespace Messenger.API
                         ValidAudiences = ["messager", "account"],
 
                         ValidateLifetime = true,
-                        ClockSkew = TimeSpan.FromMinutes(5),
+                        ClockSkew = TimeSpan.FromMinutes(10),
+
+                        NameClaimType = "sub",
+                        RoleClaimType = "role",
 
                         ValidateIssuerSigningKey = true
                     };
+
+                    options.MapInboundClaims = false;
                 });
 
             builder.Services.AddCors(options =>
@@ -106,6 +111,24 @@ namespace Messenger.API
             {
                 FileProvider = new PhysicalFileProvider(avatarsPath),
                 RequestPath = "/avatars"
+            });
+
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path.StartsWithSegments("/hubs/chat") ||
+                    context.Request.Path.StartsWithSegments("/hubs/userstatus") ||
+                    context.Request.Path.StartsWithSegments("/hubs/notification"))
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    if (!string.IsNullOrEmpty(accessToken) &&
+                        (context.Request.Headers["Authorization"].Count == 0 ||
+                         !context.Request.Headers["Authorization"].ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        context.Request.Headers["Authorization"] = $"Bearer {accessToken}";
+                    }
+                }
+
+                await next();
             });
 
             app.UseCors("AllowWebApp");
