@@ -84,14 +84,24 @@ namespace Messenger.API.Controllers
 
                 if (chat.Type == "private")
                 {
-                    var recipientId = chat.ChatParticipants.First(p => p.UserId != user!.UserId).UserId;
+                    var recipientId = chat.ChatParticipants.FirstOrDefault(p => p.UserId != user!.UserId)?.UserId;
 
-                    if (await _userService.IsBlockedByAsync(recipientId, user!.UserId, cancellationToken))
+                    if (recipientId != null)
                     {
-                        return BadRequest(new ErrorResponse
+                        bool blockedByRecipient = await _userService.IsBlockedByAsync(recipientId.Value, user!.UserId, cancellationToken);
+
+                        bool blockedByMe = await _userService.IsBlockedByAsync(user!.UserId, recipientId.Value, cancellationToken);
+
+                        if (blockedByRecipient || blockedByMe)
                         {
-                            Error = "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке"
-                        });
+                            return BadRequest(new ErrorResponse
+                            {
+                                IsSuccess = false,
+                                Error = blockedByMe
+                                    ? "Вы не можете отправить сообщение, так как заблокировали этого пользователя."
+                                    : "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке."
+                            });
+                        }
                     }
                 }
 

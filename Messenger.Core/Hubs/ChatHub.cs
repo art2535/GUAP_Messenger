@@ -58,6 +58,14 @@ namespace Messenger.Core.Hubs
             await Clients.Caller.SendAsync("YouUnblocked", unblockedUserId);
         }
 
+        public async Task NotifyBlockStatus(string actorId, string targetId, bool isBlocked)
+        {
+            await Clients.Group($"User_{actorId.ToLowerInvariant()}")
+                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
+            await Clients.Group($"User_{targetId.ToLowerInvariant()}")
+                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
+        }
+
         public async Task NotifyBlocked(string blockedUserId)
         {
             await Clients.User(blockedUserId).SendAsync("UserBlockedMe", Context.UserIdentifier);

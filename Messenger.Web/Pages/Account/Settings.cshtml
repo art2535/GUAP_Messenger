@@ -437,84 +437,45 @@
     </div>
 
     <script>
-        feather.replace();
-
         const HUB_URL = 'https://localhost:7001/hubs/chat';
         const API_URL = 'https://localhost:7001/api';
-
         let connection = null;
+        let searchTimer;
+        let confirmCallback = null;
+м
+        const avatarInput = document.getElementById('avatarInput');
+        let currentAvatar = document.getElementById('current-avatar');
+        const previewContainer = document.getElementById('avatar-preview-container');
+        const previewImg = document.getElementById('avatar-preview');
+        const cancelPreviewBtn = document.getElementById('cancel-preview');
+        const deleteAvatarTrigger = document.getElementById('delete-avatar-trigger');
+        const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
+        let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
 
         function getJwtToken() {
             const meta = document.querySelector('meta[name="access-token"]');
             return meta ? meta.content : '';
         }
 
-        async function initSignalR() {
+        async function apiFetch(endpoint, options = {}) {
             const token = getJwtToken();
-            if (!token) return;
-
-            connection = new signalR.HubConnectionBuilder()
-                .withUrl(HUB_URL, { accessTokenFactory: () => token })
-                .withAutomaticReconnect()
-                .configureLogging(signalR.LogLevel.Information)
-                .build();
-
-            connection.on("UserBlocked", (blockedUserId) => {
-                fetchUserAndAddToBlocked(blockedUserId);
-            });
-
-            connection.on("UserUnblocked", (unblockedUserId) => {
-                removeFromBlockedList(unblockedUserId);
-            });
-
-            connection.on("UserBlockedMe", async (blockerId) => {
-                await fetchUserAndAddToBlocked(blockerId);
-                showToast("Вы были заблокированы пользователем", "info");
-            });
-
-            connection.on("UserUnblockedMe", (unblockerId) => {
-                removeFromBlockedList(unblockerId);
-                showToast("Вы были разблокированы", "success");
-            });
-
-            connection.on("ProfileUpdated", (data) => {
-                const currentUserId = '@(Model.CurrentUser?.UserId ?? "")';
-
-                if (data.userId === currentUserId) {
-                    updateAvatarDisplay(data.avatarUrl);
-                    hasOriginalAvatar = !!data.avatarUrl;
-                    deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
-                }
-            });
-
-            connection.start()
-                .then(() => console.log("SignalR подключён"))
-                .catch(err => console.error("SignalR ошибка:", err));
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Ошибка: ${response.statusText}`);
+            }
+            return response.json();
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
-            feather.replace();
-            initSignalR();
-        });
-
-        function updateAvatarDisplay(avatarUrl) {
-            if (avatarUrl) {
-                currentAvatar.src = avatarUrl + '?t=' + new Date().getTime();
-                currentAvatar.style.display = 'block';
-                if (currentAvatar.tagName === 'DIV') {
-                    const img = document.createElement('img');
-                    img.id = 'current-avatar';
-                    img.src = avatarUrl + '?t=' + new Date().getTime();
-                    img.alt = 'Avatar';
-                    img.className = 'w-28 h-28 rounded-full object-cover border-4 border-gray-200 shadow-lg';
-                    currentAvatar.parentNode.replaceChild(img, currentAvatar);
-                    currentAvatar = img;
-                }
-            } else {
-                if (currentAvatar.tagName === 'IMG') {
-                    currentAvatar.src = '/images/default-avatar.png?t=' + new Date().getTime();
-                }
-            }
+        function decodeHtml(html) {
+            const txt = document.createElement('textarea');
+            txt.innerHTML = html;
+            return txt.value;
         }
 
         function showToast(message, type = 'info', duration = 4000) {
@@ -522,13 +483,13 @@
             if (!toastContainer) {
                 toastContainer = document.createElement('div');
                 toastContainer.id = 'toast-container';
-                toastContainer.className = 'fixed top-4 right-4 z-50 flex flex-col gap-3';
+                toastContainer.className = 'fixed top-4 right-4 z-[9999] flex flex-col gap-3';
                 document.body.appendChild(toastContainer);
             }
 
             const toast = document.createElement('div');
             toast.className = 'px-6 py-4 rounded-xl shadow-2xl text-white font-medium min-w-80 max-w-sm transform translate-x-full opacity-0 transition-all duration-500 ease-out flex items-center gap-3';
-
+        
             const colors = {
                 success: 'bg-green-600',
                 error: 'bg-red-600',
@@ -539,488 +500,217 @@
 
             toast.innerHTML = `
                 <div class="flex-1">${message}</div>
-                <button class="ml-4 text-white/70 hover:text-white">
-                    <i data-feather="x" class="w-5 h-5"></i>
-                </button>
+                <button class="ml-4 text-white/70 hover:text-white"><i data-feather="x" class="w-5 h-5"></i></button>
             `;
 
             toastContainer.insertBefore(toast, toastContainer.firstChild);
-
-            requestAnimationFrame(() => {
-                toast.classList.remove('translate-x-full', 'opacity-0');
-            });
-
-            const timeoutId = setTimeout(() => {
-                toast.style.transform = 'translateX(120%)';
-                toast.style.opacity = '0';
-                toast.addEventListener('transitionend', () => toast.remove());
-            }, duration);
-
-            toast.querySelector('button').addEventListener('click', (e) => {
-                e.stopPropagation();
-                clearTimeout(timeoutId);
-                toast.style.transform = 'translateX(120%)';
-                toast.style.opacity = '0';
-                toast.addEventListener('transitionend', () => toast.remove());
-            });
-
             feather.replace();
+
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
+
+            const removeToast = () => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                toast.addEventListener('transitionend', () => toast.remove());
+            };
+
+            const timeoutId = setTimeout(removeToast, duration);
+            toast.querySelector('button').onclick = () => { clearTimeout(timeoutId); removeToast(); };
         }
 
-        async function fetchUserAndAddToBlocked(userId) {
-            if (document.querySelector(`[ data-user-id="${userId}"]`)) {
-                return;
-            }
-
-            const token = getJwtToken();
-            if (!token) {
-                addToBlockedList(userId, "Пользователь", "");
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/users/${userId}/name`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                let name = "Пользователь";
-                if (res.ok) {
-                    const data = await res.json();
-                    name = (data.data || "").trim() || "Пользователь";
-                }
-
-                addToBlockedList(userId, name, "");
-            } catch (err) {
-                console.error("Ошибка загрузки имени:", err);
-                addToBlockedList(userId, "Пользователь", "");
-            }
-        }
-
-        function removeFromBlockedList(userId) {
-            const item = document.querySelector(`.blocked-user-item[data-user-id="${userId}"]`);
-            if (item) {
-                item.remove();
-                if (!document.querySelector('.blocked-user-item')) {
-                    document.getElementById('blocked-users-list').innerHTML =
-                        '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
-                }
-            }
-        }
-
-        let confirmCallback = null;
         function openConfirm(title, message) {
             document.getElementById('confirmTitle').textContent = title;
             document.getElementById('confirmMessage').textContent = message;
             document.getElementById('confirmModal').classList.add('active');
             return new Promise(resolve => confirmCallback = resolve);
         }
+
         function closeConfirm(result = false) {
             document.getElementById('confirmModal').classList.remove('active');
-            if (confirmCallback) {
-                confirmCallback(result);
-                confirmCallback = null;
-            }
+            if (confirmCallback) { confirmCallback(result); confirmCallback = null; }
         }
-        
-        document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
-
-        document.querySelectorAll('.modal-overlay').forEach(m => {
-            m.addEventListener('click', e => {
-                if (e.target === m) {
-                    m.classList.remove('active');
-                    if (m.id === 'confirmModal') closeConfirm(false);
-                }
-            });
-        });
 
         function openChangePasswordModal() { document.getElementById('changePasswordModal').classList.add('active'); }
         function closeChangePasswordModal() { document.getElementById('changePasswordModal').classList.remove('active'); }
-
         function openDeleteAccountModal() { document.getElementById('deleteAccountModal').classList.add('active'); }
         function closeDeleteAccountModal() { document.getElementById('deleteAccountModal').classList.remove('active'); }
 
-        document.getElementById('changePasswordForm').onsubmit = async e => {
-            e.preventDefault();
-            const current = document.getElementById('currentPassword').value;
-            const newPass = document.getElementById('newPassword').value;
-            const confirmPass = document.getElementById('confirmPassword').value;
-
-            if (newPass !== confirmPass) {
-                showToast('Пароли не совпадают', 'error');
-                return;
-            }
-
+        async function initSignalR() {
             const token = getJwtToken();
-            if (!token) { showToast('Сессия истекла', 'error'); return; }
+            if (!token) return;
+
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl(HUB_URL, { accessTokenFactory: () => token })
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on('UserBlockStatusChanged', (data) => {
+                const currentUserId = '@Model.CurrentUser.UserId'.toLowerCase();
+                if (data.actorId.toLowerCase() === currentUserId) {
+                    loadBlockedUsers();
+                }
+            });
+
+            connection.on("UserBlocked", (blockedUserId) => fetchUserAndAddToBlocked(blockedUserId));
+            connection.on("UserUnblocked", (unblockedUserId) => removeFromBlockedList(unblockedUserId));
+        
+            connection.on("UserBlockedMe", (blockerId) => {
+                showToast("Вы были заблокированы пользователем", "warning");
+            });
+
+            connection.on("ProfileUpdated", (data) => {
+                const currentUserId = '@(Model.CurrentUser?.UserId.ToString() ?? "")'.toLowerCase();
+                if (data.userId.toLowerCase() === currentUserId) {
+                    updateAvatarDisplay(data.avatarUrl);
+                    hasOriginalAvatar = !!data.avatarUrl;
+                    deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
+                }
+            });
 
             try {
-                const res = await fetch('/Account/Settings?handler=ChangePassword', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
-                    body: JSON.stringify({ currentPassword: current, newPassword: newPass })
-                });
-
-                if (res.ok) {
-                    showToast('Пароль успешно изменён', 'success');
-                    closeChangePasswordModal();
-                    document.getElementById('changePasswordForm').reset();
-                } else {
-                    const err = await res.text();
-                    showToast(err || 'Ошибка смены пароля', 'error');
-                }
-            } catch {
-                showToast('Ошибка соединения', 'error');
-            }
-        };
-
-        async function deleteAccount() {
-            const password = document.getElementById('deletePassword').value;
-            if (!password.length === 0) {
-                showToast('Введите пароль', 'error');
-                return;
-            }
-
-            const token = getJwtToken();
-            if (!token) { showToast('Сессия истекла', 'error'); return; }
-
-            try {
-                const res = await fetch('/Account/Settings?handler=DeleteAccount', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
-                    body: JSON.stringify({ password })
-                });
-
-                if (res.ok) {
-                    showToast('Аккаунт удалён. Перенаправление...', 'info');
-                    setTimeout(() => window.location.href = '/Account/Login', 2000);
-                } else {
-                    const err = await res.text();
-                    showToast(err || 'Неверный пароль', 'error');
-                }
-            } catch {
-                showToast('Ошибка соединения', 'error');
+                await connection.start();
+                console.log("SignalR connected");
+            } catch (err) {
+                console.error("SignalR Error:", err);
             }
         }
 
-        let searchTimer;
-        document.getElementById('user-search-input').addEventListener('input', function () {
+        async function loadBlockedUsers() {
+            try {
+                const response = await apiFetch('/users/blocked');
+                const users = response.data || response; 
+                const list = document.getElementById('blocked-users-list');
+
+                if (!users || users.length === 0) {
+                    list.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
+                    return;
+                }
+
+                list.innerHTML = users.map(user => `
+                    <div class="blocked-user-item flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition" data-user-id="${user.id}">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                <i data-feather="user-x" class="w-6 h-6 text-gray-500"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-800">${user.fullName || user.name || 'Пользователь'}</p>
+                                ${user.userName ? `<p class="text-sm text-gray-500">@@${user.userName}</p>` : ''}
+                            </div>
+                        </div>
+                        <button type="button" class="unblock-btn text-red-600 hover:text-red-800 font-medium text-sm" 
+                                data-id="${user.id}" data-name="${user.fullName || user.name}">
+                            Разблокировать
+                        </button>
+                    </div>
+                `).join('');
+                feather.replace();
+            } catch (err) {
+                console.error("Load blocked error:", err);
+            }
+        }
+
+        async function fetchUserAndAddToBlocked(userId) {
+            if (document.querySelector(`[data-user-id="${userId}"]`)) return;
+            loadBlockedUsers();
+        }
+
+        function removeFromBlockedList(userId) {
+            const item = document.querySelector(`.blocked-user-item[data-user-id="${userId}"]`);
+            if (item) {
+                item.remove();
+                const list = document.getElementById('blocked-users-list');
+                if (!list.querySelector('.blocked-user-item')) {
+                    list.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
+                }
+            }
+        }
+
+        async function handleUnblockClick(userId, userName, btnElement) {
+            const ok = await openConfirm('Разблокировка', `Разблокировать пользователя «${userName}»?`);
+            if (!ok) return;
+
+            try {
+                await apiFetch(`/users/unblock/${userId}`, { method: 'POST' });
+                showToast(`«${userName}» разблокирован`, 'success');
+                removeFromBlockedList(userId);
+            } catch (err) {
+                showToast(err.message || 'Ошибка разблокировки', 'error');
+            }
+        }
+
+        document.getElementById('user-search-input').addEventListener('input', function() {
             clearTimeout(searchTimer);
             const query = this.value.trim();
             const results = document.getElementById('search-results');
-            results.innerHTML = '';
-            results.classList.add('hidden');
-
-            if (query.length < 2) return;
+        
+            if (query.length < 2) {
+                results.classList.add('hidden');
+                return;
+            }
 
             searchTimer = setTimeout(async () => {
                 try {
-                    const res = await fetch(`${API_URL}/users/search?query=${encodeURIComponent(query)}`, {
-                        headers: {
-                            'Authorization': `Bearer ${getJwtToken()}`
-                        }
-                    });
+                    const response = await apiFetch(`/users/search?query=${encodeURIComponent(query)}`);
+                    const users = response.data || response;
 
-                    if (!res.ok) {
-                        throw new Error(`Сервер вернул статус ${res.status}`);
-                    }
-
-                    const responseData = await res.json();
-
-                    let users = [];
-
-                    if (responseData?.isSuccess === true && Array.isArray(responseData.data)) {
-                        users = responseData.data;
-                    } else {
-                        console.warn("Ответ не содержит ожидаемый массив в data:", responseData);
-                        results.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Ничего не найдено или ошибка формата</div>';
-                        results.classList.remove('hidden');
-                        return;
-                    }
-
-                    if (users.length === 0) {
+                    if (!users || users.length === 0) {
                         results.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Ничего не найдено</div>';
-                        results.classList.remove('hidden');
-                        return;
-                    }
-
-                    users.forEach(user => {
-                        const item = document.createElement('div');
-                        item.className = 'flex items-center space-x-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0';
-                        item.innerHTML = `
-                            <img src="${user.avatar || '/images/default-avatar.png'}"
-                                 class="w-10 h-10 rounded-full object-cover"
-                                 onerror="this.src='/images/default-avatar.png'">
-                            <div>
-                                <p class="font-medium">${user.name || 'Без имени'}</p>
+                    } else {
+                        results.innerHTML = users.map(u => `
+                            <div class="flex items-center space-x-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" 
+                                 onclick="confirmBlock('${u.id}', '${u.fullName || u.name}')">
+                                <img src="${u.avatarUrl || '/images/default-avatar.png'}" class="w-10 h-10 rounded-full object-cover">
+                                <div><p class="font-medium">${u.fullName || u.name}</p></div>
                             </div>
-                        `;
-                        item.onclick = () => {
-                            this.value = '';
-                            results.classList.add('hidden');
-                            confirmBlock(user.id, user.name || 'Без имени', user.login || '');
-                        };
-                        results.appendChild(item);
-                    });
-
+                        `).join('');
+                    }
                     results.classList.remove('hidden');
-
                 } catch (err) {
-                    console.error("Поиск пользователей ошибка:", err);
-                    showToast('Ошибка поиска', 'error');
+                    console.error(err);
                 }
             }, 300);
         });
 
-        async function confirmBlock(userId, userName, userLogin = '') {
+        async function confirmBlock(userId, userName) {
             const ok = await openConfirm('Блокировка', `Заблокировать пользователя «${userName}»?`);
             if (!ok) return;
 
-            const token = getJwtToken();
-            if (!token) {
-                showToast('Сессия истекла', 'error');
-                return;
-            }
-
             try {
-                const res = await fetch(`${API_URL}/users/block/${userId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (res.ok) {
-                    showToast(`«${userName}» добавлен в чёрный список`, 'success');
-
-                    addToBlockedList(userId, userName, userLogin);
-
-                    document.getElementById('user-search-input').value = '';
-                    document.getElementById('search-results').classList.add('hidden');
-                }
-                else if (res.status === 409) {
-                    showToast('Пользователь уже в чёрном списке', 'info');
-                }
-                else {
-                    const errText = await res.text();
-                    showToast(errText || 'Не удалось заблокировать', 'error');
-                }
+                await apiFetch(`/users/block/${userId}`, { method: 'POST' });
+                showToast(`«${userName}» заблокирован`, 'success');
+                document.getElementById('user-search-input').value = '';
+                document.getElementById('search-results').classList.add('hidden');
+                loadBlockedUsers();
             } catch (err) {
-                console.error('Ошибка при блокировке:', err);
-                showToast('Ошибка сети или сервера', 'error');
+                showToast(err.message || 'Ошибка при блокировке', 'error');
             }
         }
 
-        function decodeHtml(html) {
-            const txt = document.createElement('textarea');
-            txt.innerHTML = html;
-            return txt.value;
-        }
-
-
-        window.addEventListener('load', async () => {
-            feather.replace();
-
-            const blockedList = document.getElementById('blocked-users-list');
-            if (blockedList) {
-                blockedList.addEventListener('click', async (e) => {
-                    const btn = e.target.closest('.unblock-btn');
-                    if (!btn) return;
-
-                    const userId = btn.dataset.id;
-                    const userName = decodeHtml(btn.dataset.name);
-
-                    const ok = await openConfirm('Разблокировка', `Разблокировать пользователя «${userName}»?`);
-                    if (!ok) return;
-
-                    const token = getJwtToken();
-                    if (!token) return showToast('Сессия истекла', 'error');
-
-                    try {
-                        const res = await fetch(`${API_URL}/users/unblock/${userId}`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-
-                        if (res.ok) {
-                            showToast(`«${userName}» разблокирован`, 'success');
-                            btn.closest('.blocked-user-item').remove();
-
-                            if (!document.querySelector('.blocked-user-item')) {
-                                blockedList.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
-                            }
-                        } else {
-                            showToast('Ошибка разблокировки', 'error');
-                        }
-                    } catch {
-                        showToast('Ошибка сети', 'error');
-                    }
-                });
-            }
-
-            await initSignalR();
-        });
-
-        function addToBlockedList(userId, name, login = '') {
-            if (document.querySelector(`[data-user-id="${userId}"]`)) {
-                return;
-            }
-
-            const list = document.getElementById('blocked-users-list');
-            const emptyMsg = list.querySelector('p');
-            if (emptyMsg) emptyMsg.remove();
-
-            const item = document.createElement('div');
-            item.className = 'blocked-user-item flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition';
-            item.dataset.userId = userId;
-
-            const encodedName = name
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-
-            item.innerHTML = `
-                <div class="flex items-center space-x-4">
-                    <div class="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center">
-                        <i data-feather="user-x" class="w-6 h-6 text-gray-500"></i>
-                    </div>
-                    <div>
-                        <p class="font-medium text-gray-800">${name}</p>
-                        ${login ? `<p class="text-sm text-gray-500">${login}</p>` : ''}
-                    </div>
-                </div>
-                <button type="button" class="unblock-btn text-red-600 hover:text-red-800 font-medium text-sm"
-                        data-id="${userId}"
-                        data-name="${encodedName}">
-                    Разблокировать
-                </button>
-            `;
-
-            list.appendChild(item);
-            feather.replace();
-        }
-
-        document.addEventListener('click', e => {
-            const input = document.getElementById('user-search-input');
-            const results = document.getElementById('search-results');
-            if (!input.contains(e.target) && !results.contains(e.target)) {
-                results.classList.add('hidden');
-            }
-        });
-
-        document.querySelectorAll('a[href^="#"]').forEach(a => {
-            a.addEventListener('click', e => {
-                e.preventDefault();
-                const target = document.querySelector(a.getAttribute('href'));
-                if (target) {
-                    document.querySelector('.main-content').scrollTo({ top: target.offsetTop - 100, behavior: 'smooth' });
-                }
-            });
-        });
-
-        document.getElementById('changePasswordForm').onsubmit = async function(e) {
-            e.preventDefault();
-
-            const oldPass = document.getElementById('currentPassword').value.trim();
-            const newPass = document.getElementById('newPassword').value;
-            const confirmPass = document.getElementById('confirmPassword').value;
-
-            if (!oldPass) return showToast('Введите текущий пароль', 'error');
-            if (newPass !== confirmPass) return showToast('Пароли не совпадают', 'error');
-            if (newPass.length < 6) return showToast('Новый пароль должен быть не менее 6 символов', 'error');
-
-            const token = getJwtToken();
-            if (!token) return showToast('Сессия истекла. Войдите заново.', 'error');
-
-            try {
-                const response = await fetch(`${API_URL}/users/change-password`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        oldPassword: oldPass,
-                        newPassword: newPass
-                    })
-                });
-
-                if (response.ok) {
-                    showToast('Пароль успешно изменён!', 'success');
-                    closeChangePasswordModal();
-                    this.reset();
-                } else {
-                    const error = await response.text();
-                    showToast(error || 'Не удалось сменить пароль', 'error');
-                }
-            } catch (err) {
-                showToast('Ошибка соединения с сервером', 'error');
-            }
-        };
-
-        async function deleteAccount() {
-            const password = document.getElementById('deletePassword').value.trim();
-
-            if (!password) {
-                showToast('Введите пароль для подтверждения', 'error');
-                return;
-            }
-
-            const confirmed = await openConfirm(
-                'Удаление аккаунта',
-                'Вы уверены? Это действие нельзя отменить. Введите пароль ещё раз.'
-            );
-            if (!confirmed) return;
-
-            try {
-                const token = getJwtToken();
-
-                const response = await fetch(`${API_URL}/users/delete-account`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (response.ok) {
-                    showToast('Аккаунт успешно удалён. До свидания!', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/Authorization/Logout';
-                    }, 2500);
-                } else {
-                    const error = await response.text();
-                    showToast(error || 'Неверный пароль или ошибка сервера', 'error');
-                }
-            } catch (err) {
-                console.error(err);
-                showToast('Не удалось подключиться к серверу', 'error');
+        function updateAvatarDisplay(avatarUrl) {
+            const fallback = '/images/default-avatar.png';
+            const urlWithCache = avatarUrl ? `${avatarUrl}?t=${new Date().getTime()}` : fallback;
+        
+            if (currentAvatar.tagName === 'IMG') {
+                currentAvatar.src = urlWithCache;
+            } else {
+                const img = document.createElement('img');
+                img.id = 'current-avatar';
+                img.className = currentAvatar.className;
+                img.src = urlWithCache;
+                currentAvatar.replaceWith(img);
+                currentAvatar = img;
             }
         }
-
-        const avatarInput = document.getElementById('avatarInput');
-        const currentAvatar = document.getElementById('current-avatar');
-        const previewContainer = document.getElementById('avatar-preview-container');
-        const previewImg = document.getElementById('avatar-preview');
-        const cancelPreviewBtn = document.getElementById('cancel-preview');
-        const deleteAvatarTrigger = document.getElementById('delete-avatar-trigger');
-        const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
-        let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
 
         avatarInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
-            if (!file) {
-                hidePreview();
+            if (!file) return hidePreview();
+        
+            if (!file.type.startsWith('image/') || file.size > 2 * 1024 * 1024) {
+                showToast('Выберите изображение до 2 МБ', 'error');
+                this.value = '';
                 return;
             }
-            if (!file.type.startsWith('image/')) {
-                showToast('Выберите изображение', 'error');
-                avatarInput.value = '';
-                return;
-            }
-            if (file.size > 2 * 1024 * 1024) {
-                showToast('Файл не должен превышать 2 МБ', 'error');
-                avatarInput.value = '';
-                return;
-            }
+
             const reader = new FileReader();
             reader.onload = (ev) => {
                 previewImg.src = ev.target.result;
@@ -1031,31 +721,64 @@
             reader.readAsDataURL(file);
         });
 
-        cancelPreviewBtn.addEventListener('click', () => {
-            avatarInput.value = '';
-            hidePreview();
-        });
-
-        deleteAvatarTrigger.addEventListener('click', () => {
-            if (!confirm('Удалить аватар навсегда?')) return;
-            deleteAvatarFlag.value = 'true';
-            hidePreview();
-            updateAvatarDisplay(null);
-            showToast('Аватар будет удалён после сохранения', 'info');
-        });
-
         function hidePreview() {
             previewContainer.classList.add('hidden');
             cancelPreviewBtn.classList.add('hidden');
-            if (hasOriginalAvatar) {
-                deleteAvatarTrigger.classList.remove('hidden');
-            }
+            if (hasOriginalAvatar) deleteAvatarTrigger.classList.remove('hidden');
         }
 
-        window.addEventListener('load', async () => {
+        cancelPreviewBtn.onclick = () => { avatarInput.value = ''; hidePreview(); };
+
+        deleteAvatarTrigger.onclick = async () => {
+            if (!confirm('Удалить аватар?')) return;
+            deleteAvatarFlag.value = 'true';
+            updateAvatarDisplay(null);
+            hidePreview();
+            showToast('Аватар будет удален после сохранения', 'info');
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
-            await initSignalR();
+            initSignalR();
+            loadBlockedUsers();
+
+            document.getElementById('blocked-users-list').addEventListener('click', (e) => {
+                const btn = e.target.closest('.unblock-btn');
+                if (btn) handleUnblockClick(btn.dataset.id, btn.dataset.name, btn);
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#user-search-input') && !e.target.closest('#search-results')) {
+                    document.getElementById('search-results').classList.add('hidden');
+                }
+            });
+
+            document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
+            document.querySelectorAll('.modal-overlay').forEach(m => {
+                m.onclick = (e) => { if (e.target === m) { m.classList.remove('active'); if (m.id === 'confirmModal') closeConfirm(false); } };
+            });
         });
+
+        document.getElementById('changePasswordForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const oldPass = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirmPass = document.getElementById('confirmPassword').value;
+
+            if (newPass !== confirmPass) return showToast('Пароли не совпадают', 'error');
+
+            try {
+                await apiFetch('/users/change-password', {
+                    method: 'POST',
+                    body: JSON.stringify({ oldPassword: oldPass, newPassword: newPass })
+                });
+                showToast('Пароль изменен', 'success');
+                closeChangePasswordModal();
+                this.reset();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        };
     </script>
 </body>
 </html>

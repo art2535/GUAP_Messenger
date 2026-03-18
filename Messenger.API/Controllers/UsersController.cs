@@ -361,11 +361,7 @@ namespace Messenger.API.Controllers
 
                 await _userService.BlockUserAsync(user!.UserId, blockedUserId, token);
 
-                await _hubContext.Clients.User(user!.UserId.ToString())
-                    .SendAsync("UserBlocked", blockedUserId.ToString(), token);
-
-                await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserBlockedMe", user!.UserId.ToString(), token);
+                await NotifyBlockStatus(user.UserId, blockedUserId, true);
 
                 return Ok(new BlockUserSuccessResponse
                 { 
@@ -476,11 +472,7 @@ namespace Messenger.API.Controllers
 
                 await _userService.UnblockUserAsync(user!.UserId, blockedUserId, token);
 
-                await _hubContext.Clients.User(user!.UserId.ToString())
-                    .SendAsync("UserUnblocked", blockedUserId.ToString());
-
-                await _hubContext.Clients.User(blockedUserId.ToString())
-                    .SendAsync("UserUnblockedMe", user!.UserId.ToString());
+                await NotifyBlockStatus(user.UserId, blockedUserId, false);
 
                 return Ok(new UnblockUserSuccessResponse
                 { 
@@ -682,6 +674,22 @@ namespace Messenger.API.Controllers
                     Error = ex.Message 
                 });
             }
+        }
+
+        private async Task NotifyBlockStatus(Guid actorId, Guid targetId, bool isBlocked)
+        {
+            var actorExternalId = actorId.ToString().ToLowerInvariant();
+            var targetExternalId = targetId.ToString().ToLowerInvariant();
+
+            var payload = new
+            {
+                actorId = actorExternalId,
+                targetId = targetExternalId,
+                isBlocked = isBlocked
+            };
+
+            await _hubContext.Clients.Group($"User_{actorExternalId}").SendAsync("UserBlockStatusChanged", payload);
+            await _hubContext.Clients.Group($"User_{targetExternalId}").SendAsync("UserBlockStatusChanged", payload);
         }
     }
 }

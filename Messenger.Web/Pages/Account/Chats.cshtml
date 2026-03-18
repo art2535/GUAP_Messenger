@@ -266,17 +266,29 @@
                 </div>
             </div>
 
-            <div class="p-3 border-t border-gray-200 bg-white">
-                <div class="flex items-center space-x-2">
-                    <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700"><i data-feather="paperclip" class="w-5 h-5"></i></label>
-                    <input id="file-input" type="file" class="hidden" multiple>
-                    <input id="message-input" type="text" placeholder="Напишите сообщение..."
-                           class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
-                    <button id="send-button" class="text-gray-500 hover:text-gray-700">
-                        <i data-feather="send" class="w-5 h-5"></i>
-                    </button>
+            <div id="chat-input-area" class="p-3 border-t border-gray-200 bg-white">
+                <div id="blocked-notice" class="hidden flex items-center justify-center p-3 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium italic">
+                    <i data-feather="slash" class="w-4 h-4 mr-2"></i>
+                    <span id="blocked-notice-text">Отправка сообщений ограничена</span>
                 </div>
-                <div id="attached-files" class="mt-2 flex flex-wrap gap-2"></div>
+
+                <div id="input-section-container" class="p-3 border-t border-gray-200 bg-white">
+                    <div id="blocked-ui" class="hidden p-4 bg-gray-50 text-center text-red-500 font-medium italic">
+                        Чат заблокирован
+                    </div>
+
+                    <div id="normal-input-ui">
+                        <div class="flex items-center space-x-2">
+                            <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700"><i data-feather="paperclip" class="w-5 h-5"></i></label>
+                            <input id="file-input" type="file" class="hidden" multiple>
+                            <input id="message-input" type="text" placeholder="Напишите сообщение..." class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
+                            <button id="send-button" class="text-gray-500 hover:text-gray-700">
+                                <i data-feather="send" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        <div id="attached-files" class="mt-2 flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -369,6 +381,7 @@
         const HUB_URL = 'https://localhost:7001/hubs/chat';
 
         let myBlockedUsers = new Set();
+        let allChats = [];
 
         let token = '@HttpContext.Session.GetString("ACCESS_TOKEN")' || '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
 
@@ -418,6 +431,33 @@
             selectedFiles = Array.from(this.files || []);
             renderAttachedPreviews();
         };
+
+        function refreshBlockStatus() {
+            const blockedUi = document.getElementById('blocked-ui');
+            const normalUi = document.getElementById('normal-input-ui');
+
+            if (!currentChatId || !currentChatInfo) return;
+
+            if (currentChatInfo.type === 'private') {
+                const myId = "@Model.UserId".toLowerCase();
+                const partner = currentChatInfo.participants.find(p => p.id.toLowerCase() !== myId);
+
+                if (partner) {
+                    const partnerId = partner.id.toLowerCase();
+                    const iBlockedHim = myBlockedUsers.has(partnerId);
+
+                    if (iBlockedHim || currentChatInfo.isBlockedByPartner) {
+                        normalUi.classList.add('hidden');
+                        blockedUi.classList.remove('hidden');
+                        blockedUi.innerText = iBlockedHim ? "Вы заблокировали этого пользователя" : "Пользователь ограничил доступ";
+                        return;
+                    }
+                }
+            }
+
+            normalUi.classList.remove('hidden');
+            blockedUi.classList.add('hidden');
+        }
 
         function addBlockSystemMessage(blockerName, blockTime = null) {
             document.querySelectorAll('.system-block-message').forEach(el => el.remove());
@@ -515,6 +555,36 @@
 
         function cacheChatItems() {
             allChatItems = Array.from(chatsList.querySelectorAll('.chat-item'));
+        }
+
+        function updateChatInputState() {
+            const notice = document.getElementById('blocked-notice');
+            const noticeText = document.getElementById('blocked-notice-text');
+            const formContainer = document.getElementById('message-form-container');
+
+            if (!currentChatId || !currentChatInfo) return;
+
+            if (currentChatInfo.type === 'private') {
+                const myUserId = "@Model.UserId";
+                const recipient = currentChatInfo.participants.find(p => p.id !== myUserId);
+
+                if (recipient) {
+                    const iBlockedHim = myBlockedUsers.has(recipient.id);
+                    const heBlockedMe = currentChatInfo.isBlockedByPartner;
+
+                    if (iBlockedHim || heBlockedMe) {
+                        formContainer.classList.add('hidden');
+                        notice.classList.remove('hidden');
+                        noticeText.innerText = iBlockedHim
+                            ? "Вы заблокировали этого пользователя"
+                            : "Пользователь ограничил доступ к переписке";
+                        return;
+                    }
+                }
+            }
+
+            formContainer.classList.remove('hidden');
+            notice.classList.add('hidden');
         }
 
         function filterChats() {
@@ -905,6 +975,41 @@
                 }
             });
 
+            connection.on("UserBlockStatusChanged", (data) => {
+                console.log("Получен сигнал блокировки:", data);
+
+                const chat = allChats.find(c =>
+                    c.type === 'private' &&
+                    c.participants.some(p => p.id.toLowerCase() === data.actorId.toLowerCase()) &&
+                    c.participants.some(p => p.id.toLowerCase() === data.targetId.toLowerCase())
+                );
+
+                if (chat) {
+                    chat.isBlocked = data.isBlocked;
+
+                    if (currentChatId === chat.chatId) {
+                        if (data.isBlocked) {
+                            const isBlockedByMe = data.actorId.toLowerCase() === currentUserId.toLowerCase();
+
+                            if (isBlockedByMe) {
+                                addBlockSystemMessage("Вы");
+                            } else {
+                                const blocker = chat.participants.find(p => p.id.toLowerCase() === data.actorId.toLowerCase());
+                                const blockerName = blocker ? blocker.name : "Пользователь";
+                                addBlockSystemMessage(blockerName);
+                            }
+
+                            document.getElementById('message-input').disabled = true;
+                            document.getElementById('send-button').classList.add('opacity-50', 'pointer-events-none');
+                        } else {
+                            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
+                            document.getElementById('message-input').disabled = false;
+                            document.getElementById('send-button').classList.remove('opacity-50', 'pointer-events-none');
+                        }
+                    }
+                }
+            });
+
             connection.on('ReceiveMessage', msg => {
                 if (msg.chatId === currentChatId) {
                     appendMessage(msg);
@@ -1048,10 +1153,8 @@
 
                     div.onclick = () => openChat(div);
 
-                    // ВСТАВЛЯЕМ В КОНТЕЙНЕР
                     container.prepend(div);
 
-                    // ОБНОВЛЯЕМ СОСТОЯНИЕ (скроет "Чатов нет")
                     toggleEmptyState();
 
                     cacheChatItems();
@@ -1178,6 +1281,26 @@
             }
         }
 
+        function updateBlockingUI(isBlocked) {
+            const input = document.getElementById('message-input');
+            const btn = document.getElementById('send-button');
+            const attachBtn = document.querySelector('button[onclick*="fileInput.click"]');
+
+            if (isBlocked) {
+                input.disabled = true;
+                input.placeholder = "Чат заблокирован";
+                input.classList.add('bg-gray-100', 'cursor-not-allowed');
+                btn.classList.add('hidden');
+                if (attachBtn) attachBtn.classList.add('hidden');
+            } else {
+                input.disabled = false;
+                input.placeholder = "Напишите сообщение...";
+                input.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                btn.classList.remove('hidden');
+                if (attachBtn) attachBtn.classList.remove('hidden');
+            }
+        }
+
         function showToast(message, type = 'info', duration = 4000) {
             let toastContainer = document.getElementById('toast-container');
             if (!toastContainer) {
@@ -1234,8 +1357,9 @@
                 if (res?.ok) {
                     const json = await res.json();
                     if (json.isSuccess && Array.isArray(json.data)) {
-                        myBlockedUsers = new Set(json.data.map(u => u.id));
-                        console.log(`Загружен мой чёрный список: ${myBlockedUsers.size} пользователей`);
+                        myBlockedUsers = new Set(json.data.map(u => u.id.toLowerCase()));
+                        console.log(`Загружен мой чёрный список: ${myBlockedUsers.size}`);
+                        refreshBlockStatus();
                     }
                 }
             } catch (err) {
@@ -1310,10 +1434,16 @@
 
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
+
             document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
             document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
 
             unblockChat();
+            const chatData = allChats.find(c => c.chatId === chatId);
+
+            if (chatData && chatData.isBlocked) {
+                blockChat("Этот чат заблокирован");
+            }
 
             messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
 
@@ -1324,22 +1454,11 @@
             .then(async res => {
                 if (res.isSuccess && res.data) {
                     currentChatInfo = res.data;
+                    if (res.data.isBlocked) {
+                        blockChat("Чат заблокирован");
+                    }
 
                     loadMessagesAndJoin(chatId);
-
-                    if (currentChatInfo.type === 'private') {
-                        const recipient = currentChatInfo.participants.find(p => p.id !== '@Model.UserId');
-                        if (recipient) {
-                            if (myBlockedUsers.has(recipient.id)) {
-                                blockChatForMe(recipient.fullName || recipient.name || "этот контакт");
-                            }
-
-                            const isBlockedByHim = await checkIfBlockedByUserAsync(recipient.id);
-                            if (isBlockedByHim) {
-                                blockChat(recipient.fullName || recipient.name || "Этот пользователь");
-                            }
-                        }
-                    }
                 } else {
                     loadMessagesAndJoin(chatId);
                 }
@@ -1427,6 +1546,7 @@
                 if (!res) return;
 
                 const json = await res.json();
+                allChats = json.data;
 
                 if (loading) loading.style.display = 'none';
                 container.innerHTML = '';
