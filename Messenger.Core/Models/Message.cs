@@ -13,9 +13,6 @@ public partial class Message
     [Column("Sender_ID")]
     public Guid SenderId { get; set; }
 
-    [Column("Recipient_ID")]
-    public Guid? RecipientId { get; set; }
-
     [Column("Chat_ID")]
     public Guid ChatId { get; set; }
 
@@ -44,11 +41,6 @@ public partial class Message
     [InverseProperty("Message")]
     [JsonIgnore]
     public virtual ICollection<Reaction> Reactions { get; set; } = new List<Reaction>();
-
-    [ForeignKey("RecipientId")]
-    [InverseProperty("MessageRecipients")]
-    [JsonIgnore]
-    public virtual User Recipient { get; set; } = null!;
 
     [ForeignKey("SenderId")]
     [InverseProperty("MessageSenders")]

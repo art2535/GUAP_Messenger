@@ -24,7 +24,6 @@ namespace Messenger.Infrastructure.Repositories
             return await _context.Messages
                 .Where(m => m.ChatId == chatId)
                 .Include(m => m.Sender)
-                .Include(m => m.Recipient)
                 .Include(m => m.Reactions)
                     .ThenInclude(r => r.User)
                 .Include(m => m.Attachments)

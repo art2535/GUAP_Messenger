@@ -24,7 +24,7 @@ namespace Messenger.Infrastructure.Services
             return await _repository.GetMessagesByChatIdAsync(chatId, token);
         }
 
-        public async Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId, Guid? receiverId,
+        public async Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId,
             string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default)
         {
             try
@@ -34,7 +34,6 @@ namespace Messenger.Infrastructure.Services
                     MessageId = Guid.NewGuid(),
                     ChatId = chatId,
                     SenderId = senderId,
-                    RecipientId = receiverId,
                     MessageText = content ?? string.Empty,
                     HasAttachments = hasAttachments,
                     SendTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)

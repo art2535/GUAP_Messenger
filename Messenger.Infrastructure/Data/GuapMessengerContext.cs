@@ -118,8 +118,6 @@ public partial class GuapMessengerContext : DbContext
 
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
 
-            entity.HasOne(d => d.Recipient).WithMany(p => p.MessageRecipients).HasConstraintName("fk_recipient");
-
             entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
         });
 

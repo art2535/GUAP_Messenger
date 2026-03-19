@@ -6,7 +6,7 @@ namespace Messenger.Core.Interfaces
 {
     public interface IMessageService
     {
-        Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId, Guid? receiverId,
+        Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId,
             string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default);
         Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default);
         Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default);

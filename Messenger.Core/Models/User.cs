@@ -69,10 +69,6 @@ public partial class User
     [JsonIgnore]
     public virtual ICollection<Login> Logins { get; set; } = new List<Login>();
 
-    [InverseProperty("Recipient")]
-    [JsonIgnore]
-    public virtual ICollection<Message> MessageRecipients { get; set; } = new List<Message>();
-
     [InverseProperty("Sender")]
     [JsonIgnore]
     public virtual ICollection<Message> MessageSenders { get; set; } = new List<Message>();
