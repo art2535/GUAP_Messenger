@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Messenger.Core.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
@@ -8,6 +9,13 @@ namespace Messenger.Core.Hubs
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class ChatHub : Hub
     {
+        private readonly IUserService _userService;
+
+        public ChatHub(IUserService userService)
+        {
+            _userService = userService;            
+        }
+
         public async Task JoinChat(Guid chatId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
@@ -20,20 +28,26 @@ namespace Messenger.Core.Hubs
 
         public override async Task OnConnectedAsync()
         {
-            var userId = Context.User?.FindFirst("sub")?.Value
-                      ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var externalIdClaim = Context.User?.FindFirst("sub")?.Value
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (string.IsNullOrEmpty(userId))
+            if (string.IsNullOrEmpty(externalIdClaim))
             {
                 await base.OnConnectedAsync();
                 return;
             }
 
-            userId = userId.Trim().ToLowerInvariant();
+            var user = await _userService.GetUserByExternalIdAsync(externalIdClaim);
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
+            if (user == null)
+            {
+                await base.OnConnectedAsync();
+                return;
+            }
 
-            await Clients.All.SendAsync("UserOnline", userId);
+            var internalUserId = user.UserId.ToString().ToLowerInvariant();
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{internalUserId}");
 
             await base.OnConnectedAsync();
         }
@@ -48,32 +62,12 @@ namespace Messenger.Core.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        public async Task YouBlocked(string blockedUserId)
-        {
-            await Clients.Caller.SendAsync("YouBlocked", blockedUserId);
-        }
-
-        public async Task YouUnblocked(string unblockedUserId)
-        {
-            await Clients.Caller.SendAsync("YouUnblocked", unblockedUserId);
-        }
-
         public async Task NotifyBlockStatus(string actorId, string targetId, bool isBlocked)
         {
             await Clients.Group($"User_{actorId.ToLowerInvariant()}")
                 .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
             await Clients.Group($"User_{targetId.ToLowerInvariant()}")
                 .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
-        }
-
-        public async Task NotifyBlocked(string blockedUserId)
-        {
-            await Clients.User(blockedUserId).SendAsync("UserBlockedMe", Context.UserIdentifier);
-        }
-
-        public async Task NotifyUnblocked(string unblockedUserId)
-        {
-            await Clients.User(unblockedUserId).SendAsync("UserUnblockedMe", Context.UserIdentifier);
         }
 
         public async Task NotifyParticipantRemoved(Guid chatId, Guid removedUserId)
