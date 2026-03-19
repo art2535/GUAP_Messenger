@@ -383,6 +383,10 @@
         let myBlockedUsers = new Set();
         let allChats = [];
 
+        console.log("DEBUG: Session USER_ID from Razor:", '@HttpContext.Session.GetString("USER_ID")');
+        console.log("DEBUG: Model.UserId from Razor:", '@Model.UserId');
+        console.log("DEBUG: Итоговое me:", '@HttpContext.Session.GetString("USER_ID")' || '@Model.UserId');
+
         let token = '@HttpContext.Session.GetString("ACCESS_TOKEN")' || '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
 
         const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
@@ -433,30 +437,41 @@
         };
 
         function refreshBlockStatus() {
-            const blockedUi = document.getElementById('blocked-ui');
-            const normalUi = document.getElementById('normal-input-ui');
-
             if (!currentChatId || !currentChatInfo) return;
 
-            if (currentChatInfo.type === 'private') {
-                const myId = "@Model.UserId".toLowerCase();
-                const partner = currentChatInfo.participants.find(p => p.id.toLowerCase() !== myId);
+            const blockedUi = document.getElementById('blocked-ui');
+            const normalUi  = document.getElementById('normal-input-ui');
 
-                if (partner) {
-                    const partnerId = partner.id.toLowerCase();
-                    const iBlockedHim = myBlockedUsers.has(partnerId);
-
-                    if (iBlockedHim || currentChatInfo.isBlockedByPartner) {
-                        normalUi.classList.add('hidden');
-                        blockedUi.classList.remove('hidden');
-                        blockedUi.innerText = iBlockedHim ? "Вы заблокировали этого пользователя" : "Пользователь ограничил доступ";
-                        return;
-                    }
-                }
+            if (currentChatInfo.type !== 'private') {
+                normalUi.classList.remove('hidden');
+                blockedUi.classList.add('hidden');
+                return;
             }
 
-            normalUi.classList.remove('hidden');
-            blockedUi.classList.add('hidden');
+            const partner = currentChatInfo.participants.find(p =>
+                (p.id || p.userId || "").toLowerCase() !== me
+            );
+
+            if (!partner) {
+                normalUi.classList.remove('hidden');
+                blockedUi.classList.add('hidden');
+                return;
+            }
+
+            const partnerId       = (partner.id || partner.userId || "").toLowerCase();
+            const iBlockedHim     = myBlockedUsers.has(partnerId);
+            const heBlockedMe     = currentChatInfo.isBlockedByPartner === true; // ← должно приходить из API
+
+            if (iBlockedHim || heBlockedMe) {
+                normalUi.classList.add('hidden');
+                blockedUi.classList.remove('hidden');
+                blockedUi.innerText = iBlockedHim
+                    ? "Вы заблокировали этого пользователя"
+                    : "Пользователь ограничил доступ";
+            } else {
+                normalUi.classList.remove('hidden');
+                blockedUi.classList.add('hidden');
+            }
         }
 
         function addBlockSystemMessage(blockerName, blockTime = null) {
@@ -530,16 +545,21 @@
         }
 
         function unblockChat() {
+            console.log("unblockChat → полная разблокировка");
+
             messageInput.disabled = false;
             messageInput.placeholder = "Напишите сообщение...";
             messageInput.style.backgroundColor = "";
             messageInput.style.color = "";
+
             sendButton.disabled = false;
             sendButton.style.opacity = "";
             fileInput.disabled = false;
             document.querySelector('label[for="file-input"]').style.opacity = "";
 
-            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
+            // Удаляем ВСЕ системные сообщения о блокировке
+            document.querySelectorAll('.system-block-message, .system-myblock-message, .system-blocked-by-partner')
+                .forEach(el => el.remove());
 
             const subtitle = document.getElementById('chat-subtitle');
             if (subtitle) subtitle.textContent = 'Активен недавно';
@@ -646,54 +666,36 @@
 
             const currentUserId = '@Model.UserId';
             const isMine = msg.senderId === currentUserId;
-
             const isGroupChat = currentChatInfo?.type === 'group';
 
             const div = document.createElement('div');
             div.className = `mb-6 flex ${isMine ? 'justify-end' : 'justify-start'}`;
             if (msg.messageId) div.dataset.mid = msg.messageId;
 
-            const fullTime = formatDateTime(msg.sentAt);
-            const statusText = msg.status === 'Read' ? 'Прочитано'
-                             : msg.status === 'Delivered' ? 'Доставлено'
-                             : 'Отправлено';
+            const time = formatDateTime(msg.sentAt);
 
-            let nameElement = '';
+            let senderNameHtml = '';
             if (isGroupChat && !isMine) {
-                nameElement = `<span class="sender-name">Загрузка...</span>`;
-            } else if (isGroupChat && isMine) {
-                nameElement = `<span class="sender-name">Вы</span>`;
-            }
-
-            let footerHtml = '';
-            if (isGroupChat) {
-                footerHtml = isMine
-                    ? `<div class="text-xs text-blue-400 mt-1 flex items-center gap-1.5 flex-row-reverse">
-                         <span>${statusText}</span><span>·</span>${nameElement}<span>· ${fullTime}</span>
-                       </div>`
-                    : `<div class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
-                         ${nameElement}<span>·</span><span>${statusText}</span><span>· ${fullTime}</span>
-                       </div>`;
-            } else {
-                footerHtml = `<div class="text-xs ${isMine ? 'text-blue-400' : 'text-gray-500'} mt-1 ${isMine ? 'text-right' : 'text-left'}">
-                                ${statusText} · ${fullTime}
-                              </div>`;
+                senderNameHtml = `<span class="sender-name font-medium text-gray-700 block mb-1">Загрузка...</span>`;
             }
 
             div.innerHTML = `
                 <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-xs lg:max-w-md">
+                    ${senderNameHtml}
                     <div class="inline-block px-4 py-2.5 rounded-2xl shadow-sm
                                 ${isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
                         ${msg.messageText ? `<p class="break-words whitespace-pre-wrap leading-relaxed">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
                         ${renderAttachments(msg.attachments || [])}
                     </div>
-                    ${footerHtml}
+                    <div class="text-xs text-gray-500 mt-1 ${isMine ? 'text-right' : 'text-left'}">
+                        ${time}
+                        ${isGroupChat && isMine ? ' · Вы' : ''}
+                    </div>
                 </div>
             `;
 
             messagesContainer.appendChild(div);
             feather.replace();
-            scrollToBottom();
 
             if (isGroupChat && !isMine) {
                 loadUserName(msg.senderId).then(name => {
@@ -701,6 +703,8 @@
                     if (nameEl) nameEl.textContent = name;
                 });
             }
+
+            scrollToBottom();
         }
 
         const userNameCache = new Map();
@@ -976,37 +980,63 @@
             });
 
             connection.on("UserBlockStatusChanged", (data) => {
-                console.log("Получен сигнал блокировки:", data);
+                console.log("[Chats] UserBlockStatusChanged →", data);
 
-                const chat = allChats.find(c =>
-                    c.type === 'private' &&
-                    c.participants.some(p => p.id.toLowerCase() === data.actorId.toLowerCase()) &&
-                    c.participants.some(p => p.id.toLowerCase() === data.targetId.toLowerCase())
-                );
+                const actor = (data.actorId || "").toLowerCase();
+                const target = (data.targetId || "").toLowerCase();
+                const isBlocked = !!data.isBlocked;
+                const me = '@HttpContext.Session.GetString("USER_ID")'?.toLowerCase().trim() ||
+                                '@Model.UserId'.toLowerCase().trim();
 
-                if (chat) {
-                    chat.isBlocked = data.isBlocked;
+                console.log("Текущий пользователь (me):", me);
 
-                    if (currentChatId === chat.chatId) {
-                        if (data.isBlocked) {
-                            const isBlockedByMe = data.actorId.toLowerCase() === currentUserId.toLowerCase();
-
-                            if (isBlockedByMe) {
-                                addBlockSystemMessage("Вы");
-                            } else {
-                                const blocker = chat.participants.find(p => p.id.toLowerCase() === data.actorId.toLowerCase());
-                                const blockerName = blocker ? blocker.name : "Пользователь";
-                                addBlockSystemMessage(blockerName);
-                            }
-
-                            document.getElementById('message-input').disabled = true;
-                            document.getElementById('send-button').classList.add('opacity-50', 'pointer-events-none');
-                        } else {
-                            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
-                            document.getElementById('message-input').disabled = false;
-                            document.getElementById('send-button').classList.remove('opacity-50', 'pointer-events-none');
-                        }
+                if (actor === me) {
+                    if (isBlocked) {
+                        myBlockedUsers.add(target);
+                    } else {
+                        myBlockedUsers.delete(target);
                     }
+
+                    console.log("Обновлён myBlockedUsers:", Array.from(myBlockedUsers));
+
+                    if (currentChatId && currentChatInfo?.type === 'private') {
+                        console.log("Открыт приватный чат → проверяем партнёра");
+
+                        let partner = null;
+                        for (const p of currentChatInfo.participants || []) {
+                            let pid = (p.id || p.userId || "").toString().trim().toLowerCase();
+                            if (pid && pid !== me) {
+                                partner = p;
+                                console.log("Найден партнёр:", p, "pid =", pid);
+                                break;
+                            }
+                        }
+
+                        if (partner) {
+                            const partnerId = (partner.id || partner.userId || "")
+                                .toString().trim().toLowerCase();
+
+                            console.log("partnerId:", partnerId, "target:", target);
+
+                            if (partnerId === target) {
+                                console.log("→ Это текущий собеседник!");
+                                if (isBlocked) {
+                                    blockChatForMe(partner.name || "этот пользователь");
+                                } else {
+                                    unblockChat();
+                                }
+                                refreshBlockStatus();
+                            }
+                        }
+                    } else {
+                        console.log("Чат не открыт или не приватный → просто обновляем список");
+                    }
+
+                    loadMyBlockedList();
+                }
+
+                if (target === me && isBlocked) {
+                    showToast("Вас заблокировали", "warning");
                 }
             });
 
@@ -1301,6 +1331,68 @@
             }
         }
 
+        function applyBlockStatus() {
+            // Если чат не выбран или это группа — разрешаем всё
+            if (!currentChatInfo || currentChatInfo.type !== 'private') {
+                unblockChat();
+                return;
+            }
+
+            const partner = currentChatInfo.participants.find(p =>
+                (p.id || p.userId || "").toString().toLowerCase().trim() !== me
+            );
+
+            if (!partner) return;
+
+            const partnerId = (partner.id || partner.userId || "").toString().toLowerCase().trim();
+
+            // 1. Проверяем, заблокировал ли Я (оранжевая зона)
+            const iBlockedHim = myBlockedUsers.has(partnerId);
+
+            // 2. Проверяем, заблокировал ли ОН меня (красная зона)
+            // Это поле должно приходить из БД в объекте currentChatInfo
+            const heBlockedMe = !!currentChatInfo.isBlockedByPartner;
+
+            console.log("Применение статуса:", { iBlockedHim, heBlockedMe });
+
+            if (iBlockedHim) {
+                blockChatForMe(partner.name || "этот пользователь");
+            } else if (heBlockedMe) {
+                blockedByPartner(partner.name || "этот пользователь");
+            } else {
+                unblockChat(); // Полная разблокировка, если никто никого не блочил
+            }
+        }
+
+        function blockedByPartner(blockerName = "Этот пользователь") {
+            console.log("blockedByPartner → вас заблокировали:", blockerName);
+
+            messageInput.disabled = true;
+            messageInput.placeholder = "Отправка сообщений ограничена";
+            messageInput.style.backgroundColor = "#fef2f2";
+            messageInput.style.color = "#991b1b";
+
+            sendButton.disabled = true;
+            sendButton.style.opacity = "0.5";
+            fileInput.disabled = true;
+            document.querySelector('label[for="file-input"]').style.opacity = "0.5";
+
+            // Красное системное сообщение
+            document.querySelectorAll('.system-blocked-by-partner').forEach(el => el.remove());
+            const div = document.createElement('div');
+            div.className = 'mb-6 flex justify-center system-blocked-by-partner';
+            div.innerHTML = `
+                <div class="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-2xl text-center max-w-sm">
+                    <i data-feather="slash" class="w-8 h-8 mx-auto mb-2 text-red-600"></i>
+                    <p class="font-semibold text-lg">${blockerName} добавил вас в чёрный список</p>
+                    <p class="text-sm mt-2 opacity-90">Вы не можете отправлять сообщения в этот чат</p>
+                </div>
+            `;
+            messagesContainer.appendChild(div);
+            feather.replace();
+            scrollToBottom();
+        }
+
         function showToast(message, type = 'info', duration = 4000) {
             let toastContainer = document.getElementById('toast-container');
             if (!toastContainer) {
@@ -1454,11 +1546,19 @@
             .then(async res => {
                 if (res.isSuccess && res.data) {
                     currentChatInfo = res.data;
+                    console.log("Только что загружен currentChatInfo.participants:",
+                        currentChatInfo.participants.map(p => ({
+                            id: p.id || p.userId || "нет id",
+                            name: p.name || p.fullName || "нет имени"
+                        }))
+                    );
+
                     if (res.data.isBlocked) {
                         blockChat("Чат заблокирован");
                     }
 
-                    loadMessagesAndJoin(chatId);
+                    applyBlockStatus();
+                    //loadMessagesAndJoin(chatId);
                 } else {
                     loadMessagesAndJoin(chatId);
                 }
