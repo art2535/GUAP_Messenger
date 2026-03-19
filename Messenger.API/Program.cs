@@ -12,6 +12,8 @@ namespace Messenger.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            builder.EnsureSharedDevelopmentEncryptionKey();
+
             builder.Services.AddControllers();
 
             builder.Services.AddSignalRService();
@@ -20,6 +22,7 @@ namespace Messenger.API
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRepositories();
             builder.Services.AddServices();
+            builder.Services.AddEncryption(builder.Configuration);
 
             builder.Services.AddHttpClient();
 

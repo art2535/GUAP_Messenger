@@ -9,11 +9,13 @@ namespace Messenger.Infrastructure.Services
     {
         private readonly ChatRepository _repository;
         private readonly IUserService _userService;
+        private readonly IEncryptionService _encryptionService;
 
-        public ChatService(ChatRepository repository, IUserService userService)
+        public ChatService(ChatRepository repository, IUserService userService, IEncryptionService encryptionService)
         {
             _repository = repository;
             _userService = userService;
+            _encryptionService = encryptionService;
         }
 
         public async Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
@@ -62,6 +64,23 @@ namespace Messenger.Infrastructure.Services
                     }
                 }
 
+                string? decryptedLastMessage = null;
+                if (lastMsg?.MessageText != null)
+                {
+                    try
+                    {
+                        decryptedLastMessage = _encryptionService.Decrypt(lastMsg.MessageText);
+                    }
+                    catch
+                    {
+                        decryptedLastMessage = "[Сообщение защищено]";
+                    }
+                }
+                else if (chat.Messages?.Any() == true)
+                {
+                    decryptedLastMessage = "Вложение";
+                }
+
                 result.Add(new
                 {
                     chatId = chat.ChatId,
@@ -78,7 +97,7 @@ namespace Messenger.Infrastructure.Services
                             .FirstOrDefault()
                         : null,
                     type = chat.Type,
-                    lastMessage = lastMsg?.MessageText ?? (chat.Messages?.Any() == true ? "Вложение" : null),
+                    lastMessage = decryptedLastMessage,
                     isOnline = true,
                     isBlocked = isBlocked
                 });

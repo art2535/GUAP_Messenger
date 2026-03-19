@@ -27,10 +27,11 @@ namespace Messenger.API.Controllers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
+        private readonly IEncryptionService _encryptionService;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService, 
-            IChatService chatService, IUserService userService)
+            IChatService chatService, IUserService userService, IEncryptionService encryptionService)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
@@ -39,6 +40,7 @@ namespace Messenger.API.Controllers
             _attachmentService = attachmentService;
             _chatService = chatService;
             _userService = userService;
+            _encryptionService = encryptionService;
         }
 
         [HttpPost("{chatId}")]
@@ -105,15 +107,10 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                var result = await _messageService.SendMessageAsync(
-                    chatId: chatId,
-                    senderId: user!.UserId,
-                    receiverId: null,
-                    content: messageText?.Trim(),
-                    hasAttachments: files?.Any() == true,
-                    files: files,
-                    token: cancellationToken
-                );
+                var contentToSave = string.IsNullOrWhiteSpace(messageText) ? null : _encryptionService.Encrypt(messageText.Trim());
+
+                var result = await _messageService.SendMessageAsync(chatId, user!.UserId, contentToSave,
+                    files?.Any() == true, files, cancellationToken);
 
                 if (!result.isSuccess)
                 {
@@ -169,7 +166,7 @@ namespace Messenger.API.Controllers
                     ChatId = message.ChatId,
                     SenderId = user!.UserId,
                     SenderName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Пользователь",
-                    MessageText = message.MessageText,
+                    MessageText = messageText?.Trim(),
                     SentAt = message.SendTime,
                     Status = "Sent",
                     Attachments = attachments
@@ -212,7 +209,7 @@ namespace Messenger.API.Controllers
                     SenderName = m.Sender != null
                         ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                         : "Удалённый пользователь",
-                    MessageText = m.MessageText,
+                    MessageText = string.IsNullOrEmpty(m.MessageText) ? null : TryDecrypt(m.MessageText),
                     SentAt = m.SendTime,
                     Status = "Read",
                     Attachments = m.Attachments.Select(a => new AttachmentDto
@@ -238,6 +235,18 @@ namespace Messenger.API.Controllers
                     IsSuccess = false,
                     Error = ex.Message
                 });
+            }
+        }
+
+        private string? TryDecrypt(string encryptedText)
+        {
+            try
+            {
+                return _encryptionService.Decrypt(encryptedText);
+            }
+            catch (Exception)
+            {
+                return "[Ошибка расшифровки: сообщение зашифровано другим ключом]";
             }
         }
 

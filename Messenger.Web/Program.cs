@@ -87,6 +87,7 @@ namespace Messenger.Web
             builder.Services.AddRepositories();
             builder.Services.AddSignalRService();
             builder.Services.AddHttpClient();
+            builder.Services.AddEncryption(builder.Configuration);
 
             builder.Services.AddDistributedMemoryCache();
 
