@@ -40,6 +40,10 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<UserStatus> UserStatuses { get; set; }
 
+    public virtual DbSet<Broadcast> Broadcasts { get; set; }
+
+    public virtual DbSet<BroadcastRecipient> BroadcastRecipients { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -200,6 +204,63 @@ public partial class GuapMessengerContext : DbContext
             entity.Property(e => e.UserId).ValueGeneratedNever();
 
             entity.HasOne(d => d.User).WithOne(p => p.UserStatus).HasConstraintName("fk_status_user");
+        });
+
+        modelBuilder.Entity<Broadcast>(entity =>
+        {
+            entity.HasKey(e => e.BroadcastId).HasName("Broadcasts_pkey");
+
+            entity.Property(e => e.BroadcastId)
+                .HasColumnName("Broadcast_ID")
+                .HasDefaultValueSql("gen_random_uuid()");
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("Created_At")
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.SenderId).HasColumnName("Sender_ID");
+
+            entity.Property(e => e.TotalRecipients).HasColumnName("Total_Recipients");
+
+            entity.HasOne(d => d.Sender)
+                .WithMany(p => p.BroadcastsCreated)
+                .HasForeignKey(d => d.SenderId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_broadcast_sender");
+        });
+
+        modelBuilder.Entity<BroadcastRecipient>(entity =>
+        {
+            entity.HasKey(e => new { e.BroadcastId, e.UserId }).HasName("Broadcast_Recipients_pkey");
+
+            entity.Property(e => e.BroadcastId).HasColumnName("Broadcast_ID");
+            entity.Property(e => e.UserId).HasColumnName("User_ID");
+
+            entity.Property(e => e.SentAt)
+                .HasColumnName("Sent_At")
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.DeliveredAt)
+                .HasColumnName("Delivered_At")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.ReadAt)
+                .HasColumnName("Read_At")
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne(d => d.Broadcast)
+                .WithMany(p => p.Recipients)
+                .HasForeignKey(d => d.BroadcastId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_recipient_broadcast");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.BroadcastRecipients)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_recipient_user");
         });
 
         OnModelCreatingPartial(modelBuilder);

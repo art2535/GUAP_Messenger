@@ -93,4 +93,12 @@ public partial class User
     [InverseProperty("Users")]
     [JsonIgnore]
     public virtual ICollection<Role> Roles { get; set; } = new List<Role>();
+
+    [InverseProperty(nameof(Broadcast.Sender))]
+    [JsonIgnore]
+    public virtual ICollection<Broadcast> BroadcastsCreated { get; set; } = new List<Broadcast>();
+
+    [InverseProperty(nameof(BroadcastRecipient.User))]
+    [JsonIgnore]
+    public virtual ICollection<BroadcastRecipient> BroadcastRecipients { get; set; } = new List<BroadcastRecipient>();
 }
