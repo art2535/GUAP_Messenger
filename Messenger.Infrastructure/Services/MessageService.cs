@@ -1,22 +1,25 @@
-﻿using Messenger.Core.DTOs;
-using Messenger.Core.Hubs;
+﻿using MassTransit;
+using Messenger.Core.DTOs;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Messages;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Messenger.Infrastructure.Services
 {
     public class MessageService : IMessageService
     {
         private readonly MessageRepository _repository;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IPublishEndpoint _publishEndpoint;
+        private readonly GuapMessengerContext _context;
 
-        public MessageService(MessageRepository repository, IHubContext<ChatHub> hubContext)
+        public MessageService(MessageRepository repository, IPublishEndpoint publishEndpoint, GuapMessengerContext context)
         {
             _repository = repository;
-            _hubContext = hubContext;
+            _publishEndpoint = publishEndpoint;
+            _context = context;
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
@@ -40,10 +43,24 @@ namespace Messenger.Infrastructure.Services
                 };
 
                 await _repository.AddMessageAsync(message, token);
-                var loadedMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
+                var sentMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
 
-                return loadedMessage != null
-                    ? ServiceResult<Message>.Success(loadedMessage)
+                await _publishEndpoint.Publish(new ChatMessageSent
+                {
+                    MessageId = sentMessage.MessageId,
+                    ChatId = sentMessage.ChatId,
+                    SequenceNumber = sentMessage.SequenceNumber,
+                    SenderId = sentMessage.SenderId,
+                    MessageText = sentMessage.MessageText,
+                    SentAt = sentMessage.SendTime,
+                    HasAttachments = sentMessage.HasAttachments
+                }, token);
+
+                sentMessage.DeliveryStatus = MessageDeliveryStatus.Sent;
+                await _context.SaveChangesAsync(token);
+
+                return sentMessage != null
+                    ? ServiceResult<Message>.Success(sentMessage)
                     : ServiceResult<Message>.Failure("Не удалось загрузить сообщение");
             }
             catch (Exception ex)
