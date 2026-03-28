@@ -11,12 +11,15 @@ namespace Messenger.Web.Middleware
         private readonly RequestDelegate _next;
         private readonly IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<TokenRefreshMiddleware> _logger;
 
-        public TokenRefreshMiddleware(RequestDelegate next, IConfiguration configuration, IHttpClientFactory httpClientFactory)
+        public TokenRefreshMiddleware(RequestDelegate next, IConfiguration configuration,
+            IHttpClientFactory httpClientFactory, ILogger<TokenRefreshMiddleware> logger)
         {
             _next = next;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -28,7 +31,7 @@ namespace Messenger.Web.Middleware
 
                 if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
                 {
-                    Console.WriteLine($"[TokenRefresh] Текущий токен (первые 20): {accessToken?.Substring(0, 20) ?? "null"}");
+                    _logger.LogInformation($"[TokenRefresh] Текущий токен (первые 20): {accessToken?[..20] ?? "null"}");
 
                     try
                     {
@@ -38,7 +41,7 @@ namespace Messenger.Web.Middleware
 
                         if (timeLeft < TimeSpan.FromMinutes(1))
                         {
-                            Console.WriteLine($"[TokenRefresh] Токен истекает через {timeLeft.TotalSeconds} сек — обновляем");
+                            _logger.LogWarning($"[TokenRefresh] Токен истекает через {timeLeft.TotalSeconds} сек — обновляем");
 
                             var client = _httpClientFactory.CreateClient();
                             var tokenEndpoint = "https://sso.guap.ru/realms/master/protocol/openid-connect/token";
@@ -75,27 +78,27 @@ namespace Messenger.Web.Middleware
                                             authResult.Principal!,
                                             authResult.Properties);
 
-                                        Console.WriteLine("[TokenRefresh] Токен успешно обновлён");
+                                        _logger.LogInformation("[TokenRefresh] Токен успешно обновлён");
                                     }
                                 }
                             }
                             else
                             {
                                 var error = await response.Content.ReadAsStringAsync();
-                                Console.WriteLine($"[TokenRefresh] Ошибка обновления: {response.StatusCode} {error}");
+                                _logger.LogError($"[TokenRefresh] Ошибка обновления: {response.StatusCode} - {error}");
 
                                 if (response.StatusCode == HttpStatusCode.Unauthorized ||
                                     response.StatusCode == HttpStatusCode.Forbidden)
                                 {
                                     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                                    Console.WriteLine("[TokenRefresh] Refresh_token истёк — принудительный выход");
+                                    _logger.LogInformation("[TokenRefresh] Refresh_token истёк — принудительный выход");
                                 }
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[TokenRefresh] Ошибка: {ex.Message}");
+                        _logger.LogError($"[TokenRefresh] Ошибка: {ex.Message}");
                     }
                 }
             }
