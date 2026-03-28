@@ -25,6 +25,12 @@ public partial class Message
     [Column("Send_Time", TypeName = "timestamp without time zone")]
     public DateTime SendTime { get; set; }
 
+    [Column("Sequence_Number")]
+    public int SequenceNumber { get; set; }
+
+    [Column("Delivery_Status")]
+    public MessageDeliveryStatus DeliveryStatus { get; set; }
+
     [InverseProperty("Message")]
     [JsonIgnore]
     public virtual ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();

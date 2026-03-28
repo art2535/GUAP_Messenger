@@ -1,4 +1,5 @@
-﻿using Messenger.Core.Models;
+﻿using MassTransit;
+using Messenger.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Data;
@@ -55,6 +56,10 @@ public partial class GuapMessengerContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("uuid-ossp");
+
+        modelBuilder.AddInboxStateEntity();
+        modelBuilder.AddOutboxMessageEntity();
+        modelBuilder.AddOutboxStateEntity();
 
         modelBuilder.Entity<AccountSetting>(entity =>
         {
