@@ -762,86 +762,69 @@
         }
 
         async function sendMessage() {
-            if (!currentChatId) return;
-
-            if (currentChatInfo?.type === 'private') {
-                const recipient = currentChatInfo.participants.find(p => p.id !== '@Model.UserId');
-                if (recipient && myBlockedUsers.has(recipient.id)) {
-                    showToast("Вы заблокировали этого пользователя — отправка невозможна", 'error');
-                    return;
-                }
-            }
+            if (!currentChatId || isSending) return;
 
             const text = messageInput.value.trim();
-            const hasFiles = selectedFiles.length > 0;
+            if (!text && selectedFiles.length === 0) return;
 
-            if (!text && !hasFiles) return;
+            isSending = true;
+            sendButton.disabled = true;
 
-            const textForPreview = text;
-            const filesForPreview = [...selectedFiles];
-
-            const formData = new FormData();
-            if (text) formData.append('messageText', text);
-            selectedFiles.forEach(file => formData.append('files', file));
+            const tempId = 'temp-' + Date.now();
+            appendOptimisticMessage(text, selectedFiles, tempId);
 
             try {
+                const formData = new FormData();
+                if (text) formData.append('messageText', text);
+                selectedFiles.forEach(file => formData.append('files', file));
+
                 const res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
                     method: 'POST',
                     body: formData
                 });
 
-                if (!res) return;
-
-                if (res.ok) {
-                    messageInput.value = '';
-                    attachedFiles.innerHTML = '';
-                    selectedFiles = [];
-                    fileInput.value = '';
-                } else {
-                    const data = await res.json().catch(() => ({}));
-                    if (data.error?.includes("чёрном списке") || data.error?.includes("заблокирован")) {
-                        blockChat("Вы в чёрном списке этого пользователя");
-                    }
+                if (!res?.ok) {
+                    document.querySelector(`[data-mid="${tempId}"]`)?.remove();
+                    throw new Error('HTTP ошибка');
                 }
 
                 messageInput.value = '';
                 attachedFiles.innerHTML = '';
                 selectedFiles = [];
-
                 fileInput.value = '';
-                if (fileInput.value) {
-                    fileInput.type = 'text';
-                    fileInput.type = 'file';
-                }
 
-                const currentChatItem = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
-                if (currentChatItem) {
-                    const previewDiv = currentChatItem.querySelector('div.text-sm.text-gray-500');
-                    if (previewDiv) {
-                        if (textForPreview) {
-                            const displayText = textForPreview.length > 38
-                                ? textForPreview.substring(0, 35) + '...'
-                                : textForPreview;
-                            previewDiv.innerHTML = displayText;
-                        } else if (filesForPreview.length > 0) {
-                            const images = filesForPreview.filter(f => f.type.startsWith('image/')).length;
-                            const videos = filesForPreview.filter(f => f.type.startsWith('video/')).length;
-                            const files = filesForPreview.length - images - videos;
-
-                            const parts = [];
-                            if (images > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${images > 1 ? ' ('+images+')' : ''}`);
-                            if (videos > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${videos > 1 ? ' ('+videos+')' : ''}`);
-                            if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
-
-                            previewDiv.innerHTML = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
-                            feather.replace();
-                        }
-                    }
-                }
-
-            } catch (e) {
-                console.error('Ошибка отправки:', e);
+            } catch (err) {
+                console.error(err);
+                document.querySelector(`[data-mid="${tempId}"]`)?.remove();
+                showToast('Не удалось отправить сообщение', 'error');
+            } finally {
+                isSending = false;
+                sendButton.disabled = false;
             }
+        }
+
+        function appendOptimisticMessage(text, files, tempId) {
+            const div = document.createElement('div');
+            div.className = `mb-6 flex justify-end`;
+            div.dataset.mid = tempId;
+
+            let content = text ? `<p class="break-words">${text}</p>` : `<div class="opacity-70">📎 Отправка вложения...</div>`;
+
+            div.innerHTML = `
+                <div class="flex flex-col items-end">
+                    <div class="inline-block px-4 py-2.5 rounded-2xl bg-blue-600 text-white">
+                        ${content}
+                        <div class="text-xs mt-1 opacity-75 flex items-center gap-1" id="status-${tempId}">
+                            Отправляется...
+                            <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            messagesContainer.appendChild(div);
+            feather.replace();
+            scrollToBottom();
         }
 
         function renderAttachedPreviews() {
@@ -1051,39 +1034,29 @@
             });
 
             connection.on('ReceiveMessage', msg => {
-                if (msg.chatId === currentChatId) {
-                    if (msg.messageText && msg.messageText.length > 100 && msg.messageText.includes('==')) {
-                        console.warn("Получен подозрительно зашифрованный текст:", msg.messageText.substring(0, 60));
-                        msg.messageText = "[Ошибка расшифровки на сервере]";
-                    }
+                if (msg.chatId !== currentChatId) return;
 
-                    appendMessage(msg);
+                const tempEl = document.querySelector(`[data-mid^="temp-"]`);
+                if (tempEl) tempEl.remove();
+
+                appendMessage(msg);
+            });
+
+            connection.on('MessageDeliveryFailed', data => {
+                if (data.chatId !== currentChatId) return;
+
+                const tempEl = document.querySelector(`[data-mid="${data.messageId}"]`) ||
+                               document.querySelector(`[data-mid^="temp-"]`);
+
+                if (tempEl) {
+                    const statusContainer = tempEl.querySelector('div[id^="status-"]') || tempEl.querySelector('.opacity-75');
+                    if (statusContainer) {
+                        statusContainer.innerHTML = `<span class="text-red-400 font-medium">Ошибка отправки</span>`;
+                    }
+                    tempEl.style.opacity = "0.6";
                 }
 
-                const item = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
-                if (item) {
-                    const previewDiv = item.querySelector('div.text-sm.text-gray-500');
-                    if (previewDiv) {
-                        let previewText = '';
-                        if (msg.messageText && msg.messageText.trim()) {
-                            previewText = msg.messageText.trim();
-                        } else if (msg.attachments && msg.attachments.length > 0) {
-                            const imgs = msg.attachments.filter(a => a.fileType?.startsWith('image/')).length;
-                            const vids = msg.attachments.filter(a => a.fileType?.startsWith('video/')).length;
-                            const files = msg.attachments.length - imgs - vids;
-                            const parts = [];
-                            if (imgs > 0) parts.push(`<i data-feather="image" class="w-4 h-4"></i> Фото${imgs > 1 ? ' ('+imgs+')' : ''}`);
-                            if (vids > 0) parts.push(`<i data-feather="video" class="w-4 h-4"></i> Видео${vids > 1 ? ' ('+vids+')' : ''}`);
-                            if (files > 0) parts.push(`<i data-feather="paperclip" class="w-4 h-4"></i> Файл${files > 1 ? 'ов: '+files : ''}`);
-                            previewText = parts.join('&nbsp;&nbsp;') || '<i data-feather="paperclip"></i> Вложение';
-                        } else {
-                            previewText = '<i data-feather="message-square" class="w-4 h-4"></i> Сообщение';
-                        }
-
-                        previewDiv.innerHTML = previewText;
-                        feather.replace();
-                    }
-                }
+                showToast('Сообщение не удалось доставить на сервер', 'error');
             });
 
             connection.on("YouBlocked", (blockedUserId) => {
