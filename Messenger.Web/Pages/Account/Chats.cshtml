@@ -245,16 +245,21 @@
             </div>
         </div>
 
-        <div class="flex-1 flex flex-col">
-            <div id="chat-header" class="p-4 border-b border-gray-200 bg-white flex items-center justify-between cursor-pointer hover:bg-gray-50 transition" onclick="openChatInfo()">
+        <div class="flex-1 flex flex-col" id="right-panel">
+            <div id="chat-header"
+                 class="hidden p-4 border-b border-gray-200 bg-white flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
+                 onclick="openChatInfo()">
                 <div class="flex items-center space-x-3">
                     <div class="relative">
-                        <img id="chat-info-avatar" src="https://static.photos/people/200x200/default" class="w-12 h-12 rounded-full object-cover">
-                        <span id="chat-online-indicator" class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                        <img id="chat-info-avatar"
+                             src="https://static.photos/people/200x200/default"
+                             class="w-12 h-12 rounded-full object-cover">
+                        <span id="chat-online-indicator"
+                              class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white hidden"></span>
                     </div>
                     <div>
-                        <h2 id="chat-title" class="font-semibold text-lg">Выберите чат</h2>
-                        <p id="chat-subtitle" class="text-sm text-gray-500">Нажмите, чтобы посмотреть информацию</p>
+                        <h2 id="chat-title" class="font-semibold text-lg">Чат</h2>
+                        <p id="chat-subtitle" class="text-sm text-gray-500">Активен недавно</p>
                         <div class="flex items-center text-[10px] text-blue-500 font-medium mt-0.5 uppercase tracking-wider">
                             <i data-feather="shield" class="w-3 h-3 mr-1"></i>
                             <span>Защищено шифрованием AES-256-GCM</span>
@@ -264,28 +269,31 @@
                 <i data-feather="chevron-down" class="w-5 h-5 text-gray-500"></i>
             </div>
 
-            <div id="messages-container" class="flex-1 p-4 overflow-y-auto bg-gray-50">
-                <div class="flex items-center justify-center h-full text-gray-500">
-                    <p>Выберите чат для просмотра сообщений</p>
-                </div>
+            <div id="messages-container"
+                 class="hidden flex-1 p-4 overflow-y-auto bg-gray-50">
             </div>
 
-            <div id="chat-input-area" class="p-3 border-t border-gray-200 bg-white">
+            <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 bg-white">
                 <div id="blocked-notice" class="hidden flex items-center justify-center p-3 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium italic">
                     <i data-feather="slash" class="w-4 h-4 mr-2"></i>
                     <span id="blocked-notice-text">Отправка сообщений ограничена</span>
                 </div>
 
-                <div id="input-section-container" class="p-3 border-t border-gray-200 bg-white">
+                <div id="input-section-container">
                     <div id="blocked-ui" class="hidden p-4 bg-gray-50 text-center text-red-500 font-medium italic">
                         Чат заблокирован
                     </div>
 
                     <div id="normal-input-ui">
                         <div class="flex items-center space-x-2">
-                            <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700"><i data-feather="paperclip" class="w-5 h-5"></i></label>
+                            <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700">
+                                <i data-feather="paperclip" class="w-5 h-5"></i>
+                            </label>
                             <input id="file-input" type="file" class="hidden" multiple>
-                            <input id="message-input" type="text" placeholder="Напишите сообщение..." class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
+                            <input id="message-input"
+                                   type="text"
+                                   placeholder="Напишите сообщение..."
+                                   class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
                             <button id="send-button" class="text-gray-500 hover:text-gray-700">
                                 <i data-feather="send" class="w-5 h-5"></i>
                             </button>
@@ -293,6 +301,17 @@
                         <div id="attached-files" class="mt-2 flex flex-wrap gap-2"></div>
                     </div>
                 </div>
+            </div>
+
+            <div id="empty-right-panel"
+                 class="flex-1 flex flex-col items-center justify-center bg-gray-50 text-gray-400">
+                <div class="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-6">
+                    <i data-feather="message-square" class="w-10 h-10"></i>
+                </div>
+                <p class="text-xl font-medium text-gray-600 mb-1">GUAP Messenger</p>
+                <p class="text-sm text-center max-w-[240px]">
+                    Выберите чат из списка слева,<br>чтобы начать общение
+                </p>
             </div>
         </div>
     </div>
@@ -444,7 +463,7 @@
             if (!currentChatId || !currentChatInfo) return;
 
             const blockedUi = document.getElementById('blocked-ui');
-            const normalUi  = document.getElementById('normal-input-ui');
+            const normalUi = document.getElementById('normal-input-ui');
 
             if (currentChatInfo.type !== 'private') {
                 normalUi.classList.remove('hidden');
@@ -462,9 +481,9 @@
                 return;
             }
 
-            const partnerId       = (partner.id || partner.userId || "").toLowerCase();
-            const iBlockedHim     = myBlockedUsers.has(partnerId);
-            const heBlockedMe     = currentChatInfo.isBlockedByPartner === true; // ← должно приходить из API
+            const partnerId = (partner.id || partner.userId || "").toLowerCase();
+            const iBlockedHim = myBlockedUsers.has(partnerId);
+            const heBlockedMe = currentChatInfo.isBlockedByPartner === true;
 
             if (iBlockedHim || heBlockedMe) {
                 normalUi.classList.add('hidden');
@@ -530,6 +549,11 @@
             loadAvatar();
             loadChats();
             startSignalR();
+
+            document.getElementById('empty-right-panel').classList.remove('hidden');
+            document.getElementById('chat-header').classList.add('hidden');
+            document.getElementById('messages-container').classList.add('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
         });
 
         function blockChat(blockerName = "Этот пользователь", blockTime = null) {
@@ -561,7 +585,6 @@
             fileInput.disabled = false;
             document.querySelector('label[for="file-input"]').style.opacity = "";
 
-            // Удаляем ВСЕ системные сообщения о блокировке
             document.querySelectorAll('.system-block-message, .system-myblock-message, .system-blocked-by-partner')
                 .forEach(el => el.remove());
 
@@ -1132,7 +1155,6 @@
             });
 
             connection.on('NewChat', chat => {
-                // Ищем в chats-container
                 const container = document.getElementById('chats-container');
                 const existing = container.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`);
 
@@ -1320,7 +1342,6 @@
         }
 
         function applyBlockStatus() {
-            // Если чат не выбран или это группа — разрешаем всё
             if (!currentChatInfo || currentChatInfo.type !== 'private') {
                 unblockChat();
                 return;
@@ -1334,11 +1355,8 @@
 
             const partnerId = (partner.id || partner.userId || "").toString().toLowerCase().trim();
 
-            // 1. Проверяем, заблокировал ли Я (оранжевая зона)
             const iBlockedHim = myBlockedUsers.has(partnerId);
 
-            // 2. Проверяем, заблокировал ли ОН меня (красная зона)
-            // Это поле должно приходить из БД в объекте currentChatInfo
             const heBlockedMe = !!currentChatInfo.isBlockedByPartner;
 
             console.log("Применение статуса:", { iBlockedHim, heBlockedMe });
@@ -1348,7 +1366,7 @@
             } else if (heBlockedMe) {
                 blockedByPartner(partner.name || "этот пользователь");
             } else {
-                unblockChat(); // Полная разблокировка, если никто никого не блочил
+                unblockChat();
             }
         }
 
@@ -1365,7 +1383,6 @@
             fileInput.disabled = true;
             document.querySelector('label[for="file-input"]').style.opacity = "0.5";
 
-            // Красное системное сообщение
             document.querySelectorAll('.system-blocked-by-partner').forEach(el => el.remove());
             const div = document.createElement('div');
             div.className = 'mb-6 flex justify-center system-blocked-by-partner';
@@ -1506,54 +1523,56 @@
                 joinChat(currentChatId); 
         }
 
-        function openChat(item) {
+        async function openChat(item) {
             const chatId = item.dataset.chatId;
             if (currentChatId === chatId) return;
-            if (currentChatId) leaveChat(currentChatId);
+
+            if (currentChatId) {
+                leaveChat(currentChatId);
+            }
+
             currentChatId = chatId;
 
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
 
-            document.getElementById('chat-title').textContent = item.querySelector('h3').textContent;
-            document.getElementById('chat-info-avatar').src = item.querySelector('img').src;
+            document.getElementById('empty-right-panel').classList.add('hidden');
+            document.getElementById('chat-header').classList.remove('hidden');
+            document.getElementById('messages-container').classList.remove('hidden');
+            document.getElementById('chat-input-area').classList.remove('hidden');
+
+            const chatNameEl = item.querySelector('h3');
+            document.getElementById('chat-title').textContent = chatNameEl ? chatNameEl.textContent : 'Чат';
+
+            const avatarEl = item.querySelector('img');
+            document.getElementById('chat-info-avatar').src = avatarEl ? avatarEl.src : 'https://static.photos/people/200x200/default';
 
             unblockChat();
-            const chatData = allChats.find(c => c.chatId === chatId);
+            document.getElementById('message-input').value = '';
+            document.getElementById('attached-files').innerHTML = '';
+            selectedFiles = [];
 
-            if (chatData && chatData.isBlocked) {
-                blockChat("Этот чат заблокирован");
+            const messagesContainer = document.getElementById('messages-container');
+            messagesContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Загрузка сообщений...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/chats/${chatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.isSuccess && json.data) {
+                        currentChatInfo = json.data;
+                        applyBlockStatus();
+                    }
+                }
+            } catch (e) {
+                console.warn("Не удалось загрузить информацию о чате", e);
             }
 
-            messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+            await loadMessages(chatId);
 
-            fetch(`${API_BASE}/chats/${chatId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(r => r.json())
-            .then(async res => {
-                if (res.isSuccess && res.data) {
-                    currentChatInfo = res.data;
-                    console.log("Только что загружен currentChatInfo.participants:",
-                        currentChatInfo.participants.map(p => ({
-                            id: p.id || p.userId || "нет id",
-                            name: p.name || p.fullName || "нет имени"
-                        }))
-                    );
-
-                    if (res.data.isBlocked) {
-                        blockChat("Чат заблокирован");
-                    }
-
-                    applyBlockStatus();
-                    //loadMessagesAndJoin(chatId);
-                } else {
-                    loadMessagesAndJoin(chatId);
-                }
-            })
-            .catch(() => {
-                loadMessagesAndJoin(chatId);
-            });
+            joinChat(chatId);
         }
 
         function loadMessagesAndJoin(chatId) {
@@ -1680,26 +1699,33 @@
         }
 
         async function loadMessages(chatId) {
-            messagesContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Загрузка сообщений...</div>';
 
             try {
                 const res = await fetch(`${API_BASE}/messages/${chatId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
-
-                messagesContainer.innerHTML = '';
                 const messages = json.data || [];
 
-                messages.forEach(appendMessage);
+                container.innerHTML = '';
 
-                requestAnimationFrame(() => {
-                    setTimeout(scrollToBottom, 50);
-                });
+                if (messages.length === 0) {
+                    container.innerHTML = `
+                        <div class="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
+                            <i data-feather="message-square" class="w-12 h-12 mb-4 opacity-30"></i>
+                            <p class="text-lg">Сообщений пока нет</p>
+                            <p class="text-sm mt-1">Напишите первое сообщение</p>
+                        </div>`;
+                } else {
+                    messages.forEach(msg => appendMessage(msg));
+                }
 
+                scrollToBottom();
             } catch (err) {
                 console.error('Ошибка загрузки сообщений:', err);
-                messagesContainer.innerHTML = '<p class="text-red-500 text-center">Ошибка загрузки</p>';
+                container.innerHTML = '<div class="flex items-center justify-center h-full text-red-500">Не удалось загрузить сообщения</div>';
             }
         }
 
@@ -2225,68 +2251,62 @@
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
 
-            const modals = [
-                document.getElementById('delete-confirm-overlay'),
-                document.getElementById('chat-info-search-container'),
-                document.getElementById('chat-info-modal'),
-                document.getElementById('create-chat-modal'),
-                document.getElementById('lightbox')
-            ];
+            const createModal = document.getElementById('create-chat-modal');
+            const infoModal = document.getElementById('chat-info-modal');
+            const lightboxEl = document.getElementById('lightbox');
+            const deleteOverlay = document.getElementById('delete-confirm-overlay');
+            const searchContainer = document.getElementById('chat-info-search-container');
 
-            for (const modal of modals) {
-                if (!modal) continue;
+            if (deleteOverlay) {
+                deleteOverlay.remove();
+                return;
+            }
+            if (searchContainer) {
+                searchContainer.remove();
+                return;
+            }
+            if (infoModal && infoModal.classList.contains('show')) {
+                infoModal.classList.remove('show');
+                removedParticipantIds = [];
+                addedParticipantIds = [];
+                chatNameChanged = false;
+                return;
+            }
+            if (createModal && createModal.classList.contains('show')) {
+                createModal.classList.remove('show');
+                return;
+            }
+            if (lightboxEl && lightboxEl.classList.contains('show')) {
+                lightboxEl.classList.remove('show');
+                document.getElementById('lightbox-img').src = '';
+                return;
+            }
 
-                if (modal.id === 'delete-confirm-overlay') {
-                    modal.remove();
-                    return;
-                }
-
-                if (modal.id === 'chat-info-search-container') {
-                    modal.remove();
-                    return;
-                }
-
-                if (modal.id === 'chat-info-modal' && modal.classList.contains('show')) {
-                    modal.classList.remove('show');
-                    removedParticipantIds = [];
-                    addedParticipantIds = [];
-                    chatNameChanged = false;
-                    toggleSaveButton();
-                    return;
-                }
-
-                if (modal.id === 'create-chat-modal' && modal.classList.contains('show')) {
-                    modal.classList.remove('show');
-                    return;
-                }
-
-                if (modal.id === 'lightbox' && modal.classList.contains('show')) {
-                    modal.classList.remove('show');
-                    document.getElementById('lightbox-img').src = '';
-                    return;
-                }
-
-                if (currentChatId !== null) {
-                    document.querySelectorAll('.chat-item.active').forEach(el => el.classList.remove('active'));
-
-                    currentChatId = null;
-                    if (connection?.state === 'Connected') {
-                        leaveChat(currentChatId);
-                    }
-
-                    messagesContainer.innerHTML = `
-                        <div class="flex items-center justify-center h-full text-gray-500">
-                            <p>Выберите чат для просмотра сообщений</p>
-                        </div>
-                    `;
-                    document.getElementById('chat-title').textContent = 'Выберите чат';
-                    document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
-                    document.getElementById('chat-info-avatar').src = 'https://static.photos/people/200x200/default';
-
-                    return;
-                }
+            if (currentChatId !== null) {
+                closeCurrentChat();
             }
         });
+
+        function closeCurrentChat() {
+            if (currentChatId && connection?.state === 'Connected') {
+                leaveChat(currentChatId);
+            }
+
+            currentChatId = null;
+            currentChatInfo = null;
+
+            document.getElementById('chat-header').classList.add('hidden');
+            document.getElementById('messages-container').classList.add('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
+
+            document.getElementById('empty-right-panel').classList.remove('hidden');
+
+            document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+
+            document.getElementById('message-input').value = '';
+            document.getElementById('attached-files').innerHTML = '';
+            selectedFiles = [];
+        }
 
         function openChatInfo() {
             if (!currentChatId) {
