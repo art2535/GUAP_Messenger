@@ -19,8 +19,7 @@ namespace Messenger.API.Extensions
                     o.UseBusOutbox();
                 });
 
-                x.AddConsumer<ChatMessageSentConsumer, ChatMessageSentConsumerDefinition>();
-                x.AddConsumer<ChatMessageFaultConsumer>();
+                x.AddConsumer<ChatMessageSentConsumer>();
 
                 x.AddConfigureEndpointsCallback((name, cfg) =>
                 {

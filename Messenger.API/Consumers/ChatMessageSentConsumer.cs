@@ -28,11 +28,20 @@ namespace Messenger.API.Consumers
 
             try
             {
-                await _hubContext.Clients.Group($"chat-{msg.ChatId}")
+                await _hubContext.Clients.Group(msg.ChatId.ToString())
+                    .SendAsync("MessageSendingStatus", new
+                    {
+                        MessageId = msg.MessageId,
+                        ChatId = msg.ChatId,
+                        Status = "Processing",
+                        Timestamp = DateTimeOffset.UtcNow
+                    });
+
+                await _hubContext.Clients.Group(msg.ChatId.ToString())
                     .SendAsync("ReceiveMessage", msg, context.CancellationToken);
 
                 var dbMessage = await _dbContext.Messages
-                    .FirstOrDefaultAsync(m => m.MessageId == msg.MessageId);
+                    .FirstOrDefaultAsync(m => m.MessageId == msg.MessageId, context.CancellationToken);
 
                 if (dbMessage != null)
                 {
@@ -40,8 +49,16 @@ namespace Messenger.API.Consumers
                     await _dbContext.SaveChangesAsync(context.CancellationToken);
                 }
 
-                _logger.LogInformation("Сообщение {MessageId} (Seq {Seq}) доставлено в чат {ChatId}",
-                    msg.MessageId, msg.SequenceNumber, msg.ChatId);
+                await _hubContext.Clients.Group(msg.ChatId.ToString())
+                    .SendAsync("MessageSendingStatus", new MessageSendingStatus
+                    {
+                        MessageId = msg.MessageId,
+                        ChatId = msg.ChatId,
+                        Status = "Sent",
+                        Timestamp = DateTimeOffset.UtcNow
+                    });
+
+                _logger.LogInformation("Сообщение {MessageId} успешно обработано", msg.MessageId);
             }
             catch (Exception ex)
             {
@@ -49,17 +66,27 @@ namespace Messenger.API.Consumers
 
                 try
                 {
-                    var tracked = await _dbContext.Messages.FindAsync(msg.MessageId);
+                    var tracked = await _dbContext.Messages.FindAsync([msg.MessageId], context.CancellationToken);
                     if (tracked != null)
                     {
                         tracked.DeliveryStatus = MessageDeliveryStatus.Failed;
-                        await _dbContext.SaveChangesAsync();
+                        await _dbContext.SaveChangesAsync(context.CancellationToken);
                     }
                 }
-                catch (Exception innerEx)
+                catch (Exception innnerEx)
                 {
-                    _logger.LogWarning(innerEx, "Не удалось обновить статус Failed для сообщения {MessageId}", msg.MessageId);
+                    _logger.LogError(innnerEx, "Ошибка обновления статуса доставки сообщения {MessageId}", msg.MessageId);
                 }
+
+                await _hubContext.Clients.Group(msg.ChatId.ToString())
+                    .SendAsync("MessageSendingStatus", new
+                    {
+                        MessageId = msg.MessageId,
+                        ChatId = msg.ChatId,
+                        Status = "Failed",
+                        Reason = "Ошибка обработки сообщения",
+                        Timestamp = DateTimeOffset.UtcNow
+                    });
 
                 throw;
             }
