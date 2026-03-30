@@ -456,8 +456,34 @@
         }
 
         fileInput.onchange = function() {
-            selectedFiles = Array.from(this.files || []);
+            const MAX_SIZE_MB = 10;
+            const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+
+            const validFiles = [];
+            let hasError = false;
+
+            for (let file of this.files) {
+                if (file.size > MAX_SIZE_BYTES) {
+                    showToast(`Файл "${file.name}" слишком большой.\nМаксимум: ${MAX_SIZE_MB} МБ`, 'error');
+                    hasError = true;
+                    continue;
+                }
+                validFiles.push(file);
+            }
+
+            if (hasError && validFiles.length === 0) {
+                fileInput.value = '';
+                selectedFiles = [];
+                attachedFiles.innerHTML = '';
+                return;
+            }
+
+            selectedFiles = validFiles;
             renderAttachedPreviews();
+
+            if (hasError && validFiles.length > 0) {
+                showToast(`Некоторые файлы превышают лимит 10 МБ и были удалены`, 'warning');
+            }
         };
 
         function refreshBlockStatus() {
@@ -692,6 +718,18 @@
                 return;
             }
 
+            const isMyMessage = msg.senderId === '@Model.UserId' || msg.senderId === me;
+
+            updateChatLastMessagePreview(
+                msg.chatId,
+                msg.messageText || '',
+                msg.attachments || [],
+                msg.sentAt || msg.sentTime,
+                isMyMessage
+            );
+
+            removeEmptyStateIfNeeded();
+
             let displayText = msg.messageText || "";
 
             if (displayText && displayText.match(/^[A-Za-z0-9+/=]{20,}$/) && !displayText.includes(' ')) {
@@ -788,6 +826,14 @@
         async function sendMessage() {
             if (!currentChatId || isSending) return;
 
+            const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+            for (let file of selectedFiles) {
+                if (file.size > MAX_SIZE_BYTES) {
+                    showToast(`Файл "${file.name}" превышает 10 МБ`, 'error');
+                    return;
+                }
+            }
+
             const text = messageInput.value.trim();
             if (!text && selectedFiles.length === 0) return;
 
@@ -838,7 +884,7 @@
             }
         }
 
-        function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null) {
+        function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false) {
             const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
             if (!chatItem) return;
 
@@ -846,18 +892,25 @@
 
             if (!lastMessageEl) return;
 
+            const time = sentAt
+                ? formatDateTime(sentAt)
+                : formatDateTime(new Date().toISOString());
+
             let previewHTML = '';
 
-            const time = sentAt ? formatDateTime(sentAt) : formatDateTime(new Date().toISOString());
-
             if (messageText && messageText.trim() !== '') {
-                const shortText = messageText.trim().length > 38
-                    ? messageText.trim().substring(0, 35) + '...'
+                const shortText = messageText.trim().length > 40
+                    ? messageText.trim().substring(0, 37) + '...'
                     : messageText.trim();
-                previewHTML = `<span class="font-medium text-blue-600">Вы:</span> ${shortText}`;
+
+                if (isMyMessage) {
+                    previewHTML = `<span class="font-medium text-blue-600">Вы:</span> ${shortText}`;
+                } else {
+                    previewHTML = shortText;
+                }
             }
             else if (attachments && attachments.length > 0) {
-                const imageCount = attachments.filter(a => a.fileType?.startsWith('image/')).length;
+                const imageCount = attachments.filter(a => a.fileType?.startsWith('image/') || a.fileType?.startsWith('image')).length;
                 const fileCount = attachments.length - imageCount;
 
                 if (imageCount > 0) {
@@ -867,16 +920,16 @@
                 }
             }
             else {
-                previewHTML = '<span class="italic text-gray-400">Сообщение</span>';
+                previewHTML = 'Новое сообщение';
             }
 
             lastMessageEl.innerHTML = `
-                <span class="text-xs text-gray-400 mr-1">${time}</span>
+                <span class="text-xs text-gray-400 mr-1.5">${time}</span>
                 ${previewHTML}
             `;
 
             const chatsContainer = document.getElementById('chats-container');
-            if (chatsContainer && chatItem.parentNode) {
+            if (chatsContainer) {
                 chatsContainer.prepend(chatItem);
             }
 
@@ -886,6 +939,8 @@
         let messageStatusMap = new Map();
 
         function appendOptimisticMessage(text, files, tempId) {
+            removeEmptyStateIfNeeded();
+
             const div = document.createElement('div');
             div.className = `mb-6 flex justify-end`;
             div.dataset.mid = tempId;
@@ -918,6 +973,14 @@
             messageStatusMap.set(tempId, div);
         }
 
+        function removeEmptyStateIfNeeded() {
+            const emptyPlaceholder = messagesContainer.querySelector('.flex-1.flex.flex-col.items-center.justify-center.text-gray-400');
+
+            if (emptyPlaceholder) {
+                emptyPlaceholder.remove();
+            }
+        }
+
         function updateMessageStatus(messageIdOrTempId, status, reason = null) {
             const messageEl = messageStatusMap.get(messageIdOrTempId) ||
                              document.querySelector(`[data-mid="${messageIdOrTempId}"]`);
@@ -942,9 +1005,20 @@
                     break;
 
                 case 'failed':
-                    statusContainer.classList.add('text-red-300');
-                    if (icon) icon.outerHTML = `<i data-feather="alert-triangle" class="w-3 h-3"></i>`;
-                    textSpan.textContent = reason || 'Не доставлено';
+                case 'error':
+                    statusContainer.className = 'message-status flex items-center gap-1.5 text-xs mt-1.5 text-red-400 font-medium';
+                    if (icon) icon.outerHTML = `<i data-feather="alert-triangle" class="w-4 h-4"></i>`;
+
+                    statusContainer.innerHTML = `
+                        <i data-feather="alert-triangle" class="w-4 h-4"></i>
+                        <span>Ошибка отправки</span>
+                    `;
+
+                    if (reason) {
+                        messageEl.title = reason;
+                    }
+
+                    messageStatusMap.delete(messageIdOrTempId);
                     break;
 
                 default:
@@ -1171,6 +1245,8 @@
             });
 
             connection.on('ReceiveMessage', (msg) => {
+                if (msg.chatId !== currentChatId) return;
+
                 const tempEl = document.querySelector(`[data-mid^="temp-"]`);
                 if (tempEl) tempEl.remove();
 
