@@ -70,6 +70,24 @@ namespace Messenger.API.Controllers
                     return error;
                 }
 
+                const long MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+                if (files != null && files.Length > 0)
+                {
+                    foreach (var file in files)
+                    {
+                        if (file.Length > MAX_FILE_SIZE)
+                        {
+                            return BadRequest(new ErrorResponse
+                            {
+                                IsSuccess = false,
+                                Error = $"Файл '{file.FileName}' превышает максимальный размер 10 МБ. " +
+                                        $"Текущий размер: {file.Length / (1024 * 1024):F2} МБ"
+                            });
+                        }
+                    }
+                }
+
                 var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
                 if (chat == null)
                 {
