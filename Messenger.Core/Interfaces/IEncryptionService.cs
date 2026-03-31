@@ -4,5 +4,6 @@
     {
         string Encrypt(string plainText);
         string Decrypt(string cipherText);
+        string TryDecryptSafe(string? encryptedText);
     }
 }

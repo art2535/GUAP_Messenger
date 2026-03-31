@@ -95,5 +95,20 @@ namespace Messenger.Infrastructure.Services
 
             return Encoding.UTF8.GetString(plaintextBytes);
         }
+
+        public string TryDecryptSafe(string? encryptedText)
+        {
+            if (string.IsNullOrWhiteSpace(encryptedText))
+                return "";
+
+            try
+            {
+                return Decrypt(encryptedText);
+            }
+            catch
+            {
+                return "[Сообщение зашифровано или повреждено]";
+            }
+        }
     }
 }
