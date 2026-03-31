@@ -845,7 +845,14 @@
         }
 
         function scrollToBottom() {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            const container = document.getElementById('messages-container');
+            if (!container) return;
+
+            container.scrollTop = container.scrollHeight;
+
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+            });
         }
 
         function decodeHtml(html) {
@@ -1936,16 +1943,7 @@
                     throw new Error(`HTTP error! status: ${res.status}`);
                 }
 
-                const text = await res.text();
-
-                let json;
-                try {
-                    json = JSON.parse(text);
-                } catch (e) {
-                    console.error("Ответ не является JSON:", text.substring(0, 300));
-                    throw new Error("Сервер вернул некорректный ответ");
-                }
-
+                const json = await res.json();
                 const messages = json.data || json || [];
 
                 originalMessages = [...messages];
@@ -1963,7 +1961,14 @@
                     messages.forEach(msg => appendMessage(msg));
                 }
 
-                scrollToBottom();
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 10);
+
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 100);
+
             } catch (err) {
                 console.error('Ошибка загрузки сообщений:', err);
                 container.innerHTML = `
