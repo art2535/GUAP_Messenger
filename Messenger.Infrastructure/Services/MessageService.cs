@@ -1,5 +1,6 @@
 ﻿using MassTransit;
 using Messenger.Core.DTOs;
+using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
@@ -14,12 +15,58 @@ namespace Messenger.Infrastructure.Services
         private readonly MessageRepository _repository;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly GuapMessengerContext _context;
+        private readonly IEncryptionService _encryptionService;
 
-        public MessageService(MessageRepository repository, IPublishEndpoint publishEndpoint, GuapMessengerContext context)
+        public MessageService(MessageRepository repository, IPublishEndpoint publishEndpoint,
+            GuapMessengerContext context, IEncryptionService encryptionService)
         {
             _repository = repository;
             _publishEndpoint = publishEndpoint;
             _context = context;
+            _encryptionService = encryptionService;
+        }
+
+        public async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return new List<MessageDto>();
+
+            query = query.Trim().ToLowerInvariant();
+
+            var messages = await _repository.GetMessagesByChatIdAsync(chatId, token);
+
+            var filtered = new List<MessageDto>();
+
+            foreach (var m in messages)
+            {
+                string decryptedText = _encryptionService.TryDecryptSafe(m.MessageText);
+
+                if (decryptedText.ToLowerInvariant().Contains(query))
+                {
+                    filtered.Add(new MessageDto
+                    {
+                        MessageId = m.MessageId,
+                        ChatId = m.ChatId,
+                        SenderId = m.SenderId,
+                        SenderName = m.Sender != null
+                            ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
+                            : "Пользователь",
+                        MessageText = decryptedText,
+                        SentAt = m.SendTime,
+                        Status = m.DeliveryStatus.ToString(),
+                        Attachments = m.Attachments?.Select(a => new AttachmentDto
+                        {
+                            AttachmentId = a.AttachmentId,
+                            FileName = a.FileName,
+                            FileType = a.FileType,
+                            SizeInBytes = a.SizeInBytes ?? 0,
+                            Url = a.Url
+                        }).ToList() ?? new List<AttachmentDto>()
+                    });
+                }
+            }
+
+            return filtered.OrderBy(m => m.SentAt).ToList();
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)

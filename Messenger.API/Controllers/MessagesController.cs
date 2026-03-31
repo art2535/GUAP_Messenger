@@ -43,6 +43,45 @@ namespace Messenger.API.Controllers
             _encryptionService = encryptionService;
         }
 
+        [HttpGet("{chatId}/search")]
+        [SwaggerOperation(
+            Summary = "Поиск сообщения по названию в чате",
+            Description = "Возращает найденное сообщение по критерию поиска")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщение успешно найдено по критериям", typeof(MessageSearchResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные или пользователь заблокирован", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> SearchMessages([SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery][SwaggerParameter(Description = "Критерий поиска (название сообщения)")] string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return Ok(new MessageSearchResponse
+                {
+                    IsSuccess = true,
+                    Data = new List<MessageDto>()
+                });
+            }
+
+            try
+            {
+                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
+                return Ok(new MessageSearchResponse
+                {
+                    IsSuccess = true,
+                    Data = results
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
         [HttpPost("{chatId}")]
         [SwaggerOperation(
             Summary = "Отправить сообщение в чат",
@@ -58,7 +97,6 @@ namespace Messenger.API.Controllers
         public async Task<IActionResult> SendMessageAsync(
             [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId, 
             [FromForm] [SwaggerParameter(Description = "Текст сообщения (опционально)")] string? messageText, 
-            [FromForm] [SwaggerParameter(Description = "Имя отправителя (необязательно, обычно берётся из токена)")] string? senderName,
             [FromForm] [SwaggerParameter(Description = "Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files, 
             CancellationToken cancellationToken = default)
         {
@@ -227,7 +265,8 @@ namespace Messenger.API.Controllers
                     SenderName = m.Sender != null
                         ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                         : "Удалённый пользователь",
-                    MessageText = string.IsNullOrEmpty(m.MessageText) ? null : TryDecrypt(m.MessageText),
+                    MessageText = string.IsNullOrEmpty(m.MessageText) ? null
+                        : _encryptionService.TryDecryptSafe(m.MessageText),
                     SentAt = m.SendTime,
                     Status = "Read",
                     Attachments = m.Attachments.Select(a => new AttachmentDto
@@ -253,18 +292,6 @@ namespace Messenger.API.Controllers
                     IsSuccess = false,
                     Error = ex.Message
                 });
-            }
-        }
-
-        private string? TryDecrypt(string encryptedText)
-        {
-            try
-            {
-                return _encryptionService.Decrypt(encryptedText);
-            }
-            catch (Exception)
-            {
-                return "[Ошибка расшифровки: сообщение зашифровано другим ключом]";
             }
         }
 
