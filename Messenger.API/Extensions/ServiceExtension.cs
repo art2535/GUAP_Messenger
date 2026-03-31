@@ -11,7 +11,6 @@ namespace Messenger.API.Extensions
         public static void AddServices(this IServiceCollection services)
         {
             services.AddScoped<IUserService, UserService>();
-            services.AddScoped<IMessageService, MessageService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IAttachmentService, AttachmentService>();
@@ -21,6 +20,7 @@ namespace Messenger.API.Extensions
             services.AddScoped<IMessageStatusService, MessageStatusService>();
             services.AddScoped<IBroadcastRepository, BroadcastRepository>();
             services.AddScoped<BroadcastService>();
+            services.AddScoped<IMessageService, MessageService>();
         }
 
         public static void AddSignalRService(this IServiceCollection services)
