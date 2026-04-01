@@ -1,7 +1,9 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
 namespace Messenger.Core.Hubs
@@ -10,10 +12,14 @@ namespace Messenger.Core.Hubs
     public class ChatHub : Hub
     {
         private readonly IUserService _userService;
+        private readonly IUserStatusService _userStatusService;
+        private readonly ILogger<ChatHub> _logger;
 
-        public ChatHub(IUserService userService)
+        public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger)
         {
-            _userService = userService;            
+            _userService = userService;
+            _userStatusService = userStatusService;
+            _logger = logger;
         }
 
         public async Task JoinChat(Guid chatId)
@@ -28,37 +34,94 @@ namespace Messenger.Core.Hubs
 
         public override async Task OnConnectedAsync()
         {
-            var externalIdClaim = Context.User?.FindFirst("sub")?.Value
-                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(externalIdClaim))
+            try
             {
-                await base.OnConnectedAsync();
-                return;
+                var externalId = Context.User?.FindFirst("sub")?.Value
+                              ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(externalId))
+                {
+                    _logger.LogWarning("OnConnectedAsync: ExternalId не найден");
+                    await base.OnConnectedAsync();
+                    return;
+                }
+
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user == null)
+                {
+                    _logger.LogWarning("OnConnectedAsync: Пользователь с ExternalId {ExternalId} не найден", externalId);
+                    await base.OnConnectedAsync();
+                    return;
+                }
+
+                var userId = user.UserId;
+
+                _logger.LogInformation("OnConnectedAsync: {UserId} подключился", userId);
+
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
+
+                await _userStatusService.UpdateStatusAsync(new UserStatus
+                {
+                    UserId = userId,
+                    Online = true,
+                    LastActivity = DateTime.UtcNow
+                });
+
+                var statusData = new
+                {
+                    userId = userId.ToString(),
+                    isOnline = true,
+                    lastActivity = DateTime.UtcNow
+                };
+
+                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
+                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
             }
-
-            var user = await _userService.GetUserByExternalIdAsync(externalIdClaim);
-
-            if (user == null)
+            catch (Exception ex)
             {
-                await base.OnConnectedAsync();
-                return;
+                _logger.LogError(ex, "Ошибка в OnConnectedAsync");
             }
-
-            var internalUserId = user.UserId.ToString().ToLowerInvariant();
-
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{internalUserId}");
 
             await base.OnConnectedAsync();
         }
 
-        public override async Task OnDisconnectedAsync(Exception exception)
+        public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userId != null)
+            try
             {
-                await Clients.All.SendAsync("UserOffline", userId);
+                var externalId = Context.User?.FindFirst("sub")?.Value
+                              ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(externalId))
+                {
+                    var user = await _userService.GetUserByExternalIdAsync(externalId);
+                    if (user != null)
+                    {
+                        var userId = user.UserId;
+
+                        await _userStatusService.UpdateStatusAsync(new UserStatus
+                        {
+                            UserId = userId,
+                            Online = false,
+                            LastActivity = DateTime.UtcNow
+                        });
+
+                        var statusData = new
+                        {
+                            userId = userId.ToString(),
+                            isOnline = false,
+                            lastActivity = DateTime.UtcNow
+                        };
+
+                        await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
+                    }
+                }
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка в OnDisconnectedAsync");
+            }
+
             await base.OnDisconnectedAsync(exception);
         }
 
@@ -135,6 +198,70 @@ namespace Messenger.Core.Hubs
                 avatarUrl = newAvatarUrl,
                 displayName = newDisplayName
             });
+        }
+
+        public async Task StartTyping(string chatId)
+        {
+            var externalId = Context.User?.FindFirst("sub")?.Value 
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(externalId))
+                return;
+
+            var user = await _userService.GetUserByExternalIdAsync(externalId);
+            if (user == null)
+                return;
+
+            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            {
+                chatId,
+                userId = user.UserId.ToString(),
+                isTyping = true
+            });
+        }
+
+        public async Task StopTyping(string chatId)
+        {
+            var externalId = Context.User?.FindFirst("sub")?.Value 
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(externalId)) 
+                return;
+
+            var user = await _userService.GetUserByExternalIdAsync(externalId);
+            if (user == null) 
+                return;
+
+            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            {
+                chatId,
+                userId = user.UserId.ToString(),
+                isTyping = false
+            });
+        }
+
+        public async Task RequestAndBroadcastUserStatus(Guid userId)
+        {
+            try
+            {
+                var status = await _userStatusService.GetStatusByUserIdAsync(userId);
+                if (status == null) 
+                    return;
+
+                var statusData = new
+                {
+                    userId = userId.ToString(),
+                    isOnline = status.Online,
+                    lastActivity = status.LastActivity ?? DateTime.UtcNow
+                };
+
+                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
+                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
+
+                _logger.LogInformation("RequestAndBroadcastUserStatus: отправлен статус для {UserId}", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка в RequestAndBroadcastUserStatus для {UserId}", userId);
+            }
         }
     }
 }

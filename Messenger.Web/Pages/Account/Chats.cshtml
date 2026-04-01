@@ -165,6 +165,52 @@
             #user-search-results.show {
                 display: block;
             }
+
+        .chat-online-dot {
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
+            transition: all 0.2s ease;
+        }
+
+        .typing-in-list {
+            animation: pulse 1.5s infinite;
+        }
+
+        @@keyframes pulse {
+            0%, 100% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: #3b82f6;
+            font-weight: 500;
+        }
+
+        .typing-dots::after {
+            content: ' ...';
+            animation: typingDots 1.4s steps(4, end) infinite;
+        }
+
+        @@keyframes typingDots {
+            0% {
+                content: '.';
+            }
+
+            33% {
+                content: '..';
+            }
+
+            66% {
+                content: '...';
+            }
+        }
     </style>
 </head>
 <body class="h-screen">
@@ -259,7 +305,14 @@
                     </div>
                     <div class="min-w-0">
                         <h2 id="chat-title" class="font-semibold text-lg truncate">Чат</h2>
-                        <p id="chat-subtitle" class="text-sm text-gray-500 truncate">был(а) недавно</p>
+                        <div id="chat-status-area" class="text-sm text-gray-500 truncate flex items-center gap-2">
+                            <span id="chat-subtitle"></span>
+
+                            <div id="typing-indicator" class="typing-indicator hidden items-center gap-1">
+                                <span id="typing-name" class="font-medium text-blue-600"></span>
+                                <span class="typing-dots text-blue-600">печатает</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -471,6 +524,7 @@
         const lightboxImg = document.getElementById('lightbox-img');
 
         let currentChatId = null;
+        let userStatuses = new Map();
         let selectedFiles = [];
         let connection = null;
         let isSending = false;
@@ -1115,6 +1169,8 @@
             if (tooltip) tooltip.textContent = text;
         }
 
+        let pendingStatusUpdate = null;
+
         async function startSignalR() {
             if (!token) {
                 console.error("Нет токена для SignalR");
@@ -1142,6 +1198,44 @@
                 })
                 .withAutomaticReconnect([0, 2000, 10000, 30000])
                 .build();
+
+            connection.on("UserOnlineStatusChanged", (data) => {
+                console.log(`[STATUS] ${data.userId} → ${data.isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
+
+                userStatuses.set(data.userId.toString(), {
+                    isOnline: !!data.isOnline,
+                    lastActivity: data.lastActivity
+                });
+
+                if (currentChatId) {
+                    updateCurrentChatSubtitle();
+                }
+            });
+
+            connection.on("UserIsTyping", (data) => {
+                if (data.userId === me || data.userId === '@Model.UserId') {
+                    return;
+                }
+
+                if (data.chatId === currentChatId) {
+                    const typingIndicator = document.getElementById('typing-indicator');
+                    const typingNameEl = document.getElementById('typing-name');
+                    const subtitle = document.getElementById('chat-subtitle');
+
+                    if (data.isTyping) {
+                        loadUserName(data.userId).then(name => {
+                            if (typingNameEl) typingNameEl.textContent = name || "Собеседник";
+                            if (typingIndicator) typingIndicator.classList.remove('hidden');
+                            if (subtitle) subtitle.classList.add('hidden');
+                        });
+                    } else {
+                        if (typingIndicator) typingIndicator.classList.add('hidden');
+                        if (subtitle) subtitle.classList.remove('hidden');
+                    }
+                }
+
+                updateTypingInChatList(data.chatId, data.userId, data.isTyping);
+            });
 
             connection.on("ProfileUpdated", function (data) {
                 if (data.userId !== "@Model.UserId") return;
@@ -1541,17 +1635,127 @@
 
             try {
                 await connection.start();
+                console.log("SignalR успешно подключён");
+
                 updateConnectionStatus('Онлайн', 'green');
 
                 await loadMyBlockedList();
 
-                joinAllMyChats();
+                setTimeout(async () => {
+                    console.log("Запуск joinAllMyChats...");
+                    await joinAllMyChats();
+
+                    if (currentChatId) {
+                        setTimeout(updateCurrentChatSubtitle, 300);
+                    }
+                }, 1500);
+
             } catch (err) {
                 console.error("Ошибка подключения SignalR:", err);
-                updateConnectionStatus('Ошибка', 'red');
+                updateConnectionStatus('Ошибка подключения', 'red');
+
                 setTimeout(startSignalR, 5000);
             }
         }
+
+        function updateAllOnlineIndicators() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+            });
+        }
+
+        function updateCurrentChatSubtitle() {
+            if (!currentChatId || !currentChatInfo) {
+                console.log("updateCurrentChatSubtitle: пропуск — нет currentChatId или currentChatInfo");
+                return;
+            }
+
+            const subtitle = document.getElementById('chat-subtitle');
+            const onlineDot = document.getElementById('chat-online-indicator');
+
+            if (currentChatInfo.type !== 'private') {
+                if (subtitle) subtitle.textContent = `${currentChatInfo.participants?.length || 0} участников`;
+                if (onlineDot) onlineDot.classList.add('hidden');
+                return;
+            }
+
+            const partner = currentChatInfo.participants?.find(p => {
+                const pid = String(p.id || p.userId || "").toLowerCase().trim();
+                return pid !== String(me).toLowerCase().trim();
+            });
+
+            if (!partner) {
+                console.log("updateCurrentChatSubtitle: собеседник не найден в currentChatInfo");
+                return;
+            }
+
+            const partnerId = String(partner.id || partner.userId || "").trim();
+            const status = userStatuses.get(partnerId);
+
+            console.log(`[Subtitle Update] Партнёр ${partnerId} → статус:`, status);
+
+            if (onlineDot) {
+                onlineDot.classList.toggle('hidden', !(status?.isOnline === true));
+            }
+
+            if (!subtitle) return;
+
+            if (status?.isOnline === true) {
+                subtitle.textContent = "в сети";
+                subtitle.classList.add('text-green-600', 'font-medium');
+            } else if (status?.lastActivity) {
+                subtitle.textContent = `был(а) ${formatLastSeen(status.lastActivity)}`;
+                subtitle.classList.remove('text-green-600', 'font-medium');
+            } else {
+                subtitle.textContent = "был(а) недавно";
+            }
+        }
+
+        function formatLastSeen(isoString) {
+            if (!isoString) return "давно";
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMin = Math.floor((now - date) / 60000);
+
+            if (diffMin < 1) return "только что";
+            if (diffMin < 60) return `${diffMin} мин назад`;
+
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        let typingTimeout = null;
+
+        messageInput.addEventListener('input', () => {
+            if (!currentChatId || !connection || connection.state !== "Connected") return;
+
+            if (messageInput.value.trim().length > 0) {
+                connection.invoke("StartTyping", currentChatId).catch(() => {});
+            }
+
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                connection.invoke("StopTyping", currentChatId).catch(() => {});
+            }, 1800);
+        });
+
+        // Останавливаем печать при отправке сообщения
+        const originalSendMessage = sendMessage;
+        sendMessage = async function () {
+            if (typingTimeout) {
+                clearTimeout(typingTimeout);
+                if (connection) {
+                    connection.invoke("StopTyping", currentChatId).catch(() => {});
+                }
+            }
+            return originalSendMessage.apply(this, arguments);
+        };
+
+        const originalOpenChat = openChat;
+        openChat = function (item) {
+            originalOpenChat.call(this, item);
+            setTimeout(updateCurrentChatSubtitle, 300);
+        };
 
         function updateBlockingUI(isBlocked) {
             const input = document.getElementById('message-input');
@@ -1570,6 +1774,42 @@
                 input.classList.remove('bg-gray-100', 'cursor-not-allowed');
                 btn.classList.remove('hidden');
                 if (attachBtn) attachBtn.classList.remove('hidden');
+            }
+        }
+
+        function updateAllOnlineIndicators() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+                const partnerId = item.dataset.partnerId;
+                if (!partnerId) return;
+
+                const status = userStatuses.get(partnerId);
+                const onlineDot = item.querySelector('.chat-online-dot');
+
+                if (onlineDot) {
+                    onlineDot.classList.toggle('hidden', !(status?.isOnline === true));
+                }
+            });
+        }
+
+        function updateTypingInChatList(chatId, userId, isTyping) {
+            const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (!chatItem) return;
+
+            const typingBlock = chatItem.querySelector('.typing-in-list');
+            const lastMsgBlock = chatItem.querySelector('.last-message-preview');
+
+            if (!typingBlock) return;
+
+            if (isTyping) {
+                loadUserName(userId).then(name => {
+                    const nameEl = typingBlock.querySelector('.typing-name');
+                    if (nameEl) nameEl.textContent = name || "Собеседник";
+                    typingBlock.classList.remove('hidden');
+                    if (lastMsgBlock) lastMsgBlock.classList.add('hidden');
+                });
+            } else {
+                typingBlock.classList.add('hidden');
+                if (lastMsgBlock) lastMsgBlock.classList.remove('hidden');
             }
         }
 
@@ -1716,24 +1956,35 @@
         }
 
         async function joinAllMyChats() {
+            if (!connection) return;
+
+            while (connection.state !== signalR.HubConnectionState.Connected) {
+                console.log(`Ожидаем Connected... текущее состояние: ${connection.state}`);
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
             try {
                 const res = await fetch(`${API_BASE}/chats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                console.log("GET /chats status:", res.status);
-                if (!res.ok) {
-                    console.error("Ошибка загрузки чатов:", await res.text());
-                    return;
-                }
+
+                if (!res.ok) return;
+
                 const json = await res.json();
-                console.log("Чаты для join:", json.data?.length || 0, json);
+                console.log("Чаты для join:", json.data?.length || 0);
+
                 if (json.data) {
-                    json.data.forEach(chat => {
+                    for (const chat of json.data) {
                         const chatId = chat.chatId || chat.id;
-                        connection.invoke('JoinChat', chatId)
-                            .then(() => console.log(`Joined chat ${chatId}`))
-                            .catch(err => console.error(`JoinChat failed for ${chatId}:`, err));
-                    });
+                        if (chatId) {
+                            try {
+                                await connection.invoke("JoinChat", chatId);
+                                console.log(`✓ Joined chat ${chatId}`);
+                            } catch (e) {
+                                console.warn(`JoinChat failed for ${chatId}:`, e.message);
+                            }
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("joinAllMyChats error:", err);
@@ -1796,6 +2047,17 @@
                     if (json.isSuccess && json.data) {
                         currentChatInfo = json.data;
                         applyBlockStatus();
+
+                        if (currentChatInfo?.type === 'private') {
+                            const partner = currentChatInfo.participants?.find(p =>
+                                String(p.id || p.userId || "").toLowerCase() !== String(me).toLowerCase()
+                            );
+
+                            if (partner) {
+                                const partnerId = String(partner.id || partner.userId || "");
+                                setTimeout(() => requestPartnerStatus(partnerId), 200);
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -1803,8 +2065,26 @@
             }
 
             await loadMessages(chatId);
-
             joinChat(chatId);
+
+            setTimeout(updateCurrentChatSubtitle, 100);
+            setTimeout(updateCurrentChatSubtitle, 400);
+            setTimeout(updateCurrentChatSubtitle, 800);
+            setTimeout(updateCurrentChatSubtitle, 1300);
+
+            if (pendingStatusUpdate) {
+                setTimeout(updateCurrentChatSubtitle, 150);
+                pendingStatusUpdate = null;
+            }
+        }
+
+        async function requestPartnerStatus(partnerId) {
+            if (!connection || connection.state !== 'Connected') return;
+            try {
+                await connection.invoke("RequestAndBroadcastUserStatus", partnerId);
+            } catch (err) {
+                console.warn("Не удалось запросить статус партнёра", err);
+            }
         }
 
         function loadMessagesAndJoin(chatId) {
@@ -1904,18 +2184,44 @@
                     div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                     div.dataset.chatId = chat.chatId || chat.id;
 
+                    const isPrivate = chat.type === 'private' || chat.isPrivate;
+
+                    let displayName = chat.name || 'Без имени';
+                    let displayAvatar = chat.avatar || 'https://static.photos/people/200x200/default';
+                    let partnerId = null;
+
+                    if (isPrivate && chat.participants && chat.participants.length > 0) {
+                        const interlocutor = chat.participants.find(p =>
+                            (p.id || p.userId || "").toString().toLowerCase() !== me.toLowerCase()
+                        );
+
+                        if (interlocutor) {
+                            displayName = interlocutor.fullName || interlocutor.name || displayName;
+                            displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
+                            partnerId = interlocutor.id || interlocutor.userId;
+                        }
+                    }
+
                     div.innerHTML = `
-                        <div class="relative">
-                            <img src="${chat.avatar || 'https://static.photos/people/200x200/default'}" class="w-12 h-12 rounded-full object-cover">
-                            <span class="absolute bottom-0 right-0 w-3 h-3 ${chat.isOnline !== false ? 'bg-green-500' : 'bg-gray-300'} rounded-full border-2 border-white"></span>
+                        <div class="relative flex-shrink-0">
+                            <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
+                            <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-medium truncate">${chat.name || 'Без имени'}</h3>
-                            <div class="text-sm text-gray-500 truncate flex items-center gap-1.5">
+                            <h3 class="font-medium truncate">${displayName}</h3>
+                            <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
                                 ${renderLastMessagePreview(chat.lastMessage)}
+                            </div>
+                            <!-- Индикатор печатает -->
+                            <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
+                                <span class="typing-name"></span> печатает...
                             </div>
                         </div>
                     `;
+
+                    // Сохраняем partnerId для удобства
+                    if (partnerId) div.dataset.partnerId = partnerId;
+
                     div.onclick = () => openChat(div);
                     container.appendChild(div);
                 });
@@ -1923,6 +2229,9 @@
                 cacheChatItems();
                 filterChats();
                 feather.replace();
+
+                // Обновляем статусы после отрисовки списка
+                setTimeout(updateAllOnlineIndicators, 300);
             } catch (err) {
                 console.error("Ошибка загрузки:", err);
                 const status = document.getElementById('chats-status-container');
