@@ -1,5 +1,6 @@
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
+using Messenger.Core.DTOs.UserStatuses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
@@ -14,15 +15,18 @@ namespace Messenger.Web.Pages.Authorization
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthorizationModel> _logger;
 
         public string ErrorMessage { get; private set; } = string.Empty;
 
-        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration,
+            ILogger<AuthorizationModel> logger)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _logger = logger;
         }
-        
+
         public async Task<IActionResult> OnGetEtaLoginAsync()
         {
             if (User.Identity?.IsAuthenticated == true)
@@ -40,7 +44,29 @@ namespace Messenger.Web.Pages.Authorization
                 if (!response.IsSuccessStatusCode)
                 {
                     ErrorMessage = "Ошибка записи входа в аккаунт";
+                    _logger.LogError("Ошибка записи входа в аккаунт");
                     return Page();
+                }
+
+                var userStatusRequest = new UpdateStatusRequest
+                {
+                    Online = true
+                };
+
+                using var client = new HttpClient
+                {
+                    BaseAddress = new Uri(_configuration["URL:API:HTTPS"]),
+                    Timeout = TimeSpan.FromSeconds(30)
+                };
+
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                var statusResponse = await client.PutAsJsonAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", userStatusRequest);
+
+                if (!statusResponse.IsSuccessStatusCode)
+                {
+                    var error = await statusResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"Ошибка записи статуса онлайн: {statusResponse.StatusCode} - {error}");
                 }
 
                 return RedirectToPage("/Account/Chats");
@@ -57,9 +83,9 @@ namespace Messenger.Web.Pages.Authorization
         public async Task<IActionResult> OnGetCallbackAsync()
         {
             var externalId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
-            
             if (string.IsNullOrEmpty(externalId))
             {
+                ErrorMessage = "Нет externalId";
                 return RedirectToPage("/Authorization/Authorization", new { error = "Нет externalId" });
             }
 
@@ -70,49 +96,71 @@ namespace Messenger.Web.Pages.Authorization
             try
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
-
                 if (string.IsNullOrEmpty(accessToken))
                 {
-                    ErrorMessage = "Не удалось получить access token после авторизации";
+                    _logger.LogError("Не удалось получить access token после авторизации");
+                    ErrorMessage = "Не удалось получить access token";
                     return Page();
                 }
 
                 using var httpClient = _httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
                 var request = new LoginEtaRequest
                 {
                     ExternalId = externalId,
-                    Email = email ?? "",
-                    FirstName = firstName ?? "ЕТА",
-                    LastName = lastName ?? "Пользователь",
+                    Email = email,
+                    FirstName = firstName,
+                    LastName = lastName,
                     MiddleName = "",
                     IpAddress = GetLocalIPv4(),
                     FakePasswordForInternalUse = $"external_{externalId.Substring(0, 8)}"
                 };
 
-                var response = await httpClient.PostAsJsonAsync(
+                var authResponse = await httpClient.PostAsJsonAsync(
                     $"{_configuration["URL:API:HTTPS"]}/api/authorization/external/callback", request);
 
-                if (response.IsSuccessStatusCode)
+                if (!authResponse.IsSuccessStatusCode)
                 {
-                    var loginRequest = new CreateLoginRequest
-                    {
-                        Token = accessToken,
-                        IpAddress = GetLocalIPv4()
-                    };
+                    var error = await authResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"Ошибка внешней авторизации: {authResponse.StatusCode} - {error}");
+                    ErrorMessage = "Ошибка авторизации в системе";
+                    return Page();
+                }
 
-                    var loginResponse = await LoginAsync(loginRequest);
+                var loginRequest = new CreateLoginRequest
+                {
+                    Token = accessToken,
+                    IpAddress = GetLocalIPv4()
+                };
 
-                    if (!loginResponse.IsSuccessStatusCode)
-                    {
-                        ErrorMessage = "Ошибка записи входа в аккаунт";
-                        return Page();
-                    }
+                var loginResponse = await LoginAsync(loginRequest);
+
+                if (!loginResponse.IsSuccessStatusCode)
+                {
+                    var error = await loginResponse.Content.ReadAsStringAsync();
+                    _logger.LogWarning($"Ошибка записи входа: {loginResponse.StatusCode} - {error}");
+                }
+
+                var userStatusRequest = new UpdateStatusRequest
+                {
+                    Online = true
+                };
+
+                var statusResponse = await httpClient.PutAsJsonAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", userStatusRequest);
+
+                if (!statusResponse.IsSuccessStatusCode)
+                {
+                    var error = await statusResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"Ошибка записи статуса онлайн: {statusResponse.StatusCode} - {error}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"API ОШИБКА: {ex.Message}");
-                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                _logger.LogError(ex, "Критическая ошибка при входе через внешнего провайдера");
+                ErrorMessage = "Внутренняя ошибка при входе";
+                return Page();
             }
 
             return RedirectToPage("/Account/Chats");

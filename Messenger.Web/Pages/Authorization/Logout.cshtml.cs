@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using Messenger.Core.DTOs.UserStatuses;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
@@ -9,11 +10,13 @@ namespace Messenger.Web.Pages.Authorization
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<LogoutModel> _logger;
 
-        public LogoutModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public LogoutModel(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<LogoutModel> logger)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<IActionResult> OnPostAsync()
@@ -22,7 +25,7 @@ namespace Messenger.Web.Pages.Authorization
 
             if (!string.IsNullOrEmpty(token))
             {
-                var client = _httpClientFactory.CreateClient();
+                using var client = _httpClientFactory.CreateClient();
                 var request = new HttpRequestMessage(HttpMethod.Patch, $"{_configuration["URL:API:HTTPS"]}/api/logins");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -32,12 +35,32 @@ namespace Messenger.Web.Pages.Authorization
                     if (!response.IsSuccessStatusCode)
                     {
                         var error = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Ошибка API при выходе: {response.StatusCode}   {error}");
+                        _logger.LogError($"Ошибка API при выходе: {response.StatusCode} - {error}");
+                    }
+
+                    var userStatusRequest = new UpdateStatusRequest
+                    {
+                        Online = false
+                    };
+
+                    var statusRequest = new HttpRequestMessage(HttpMethod.Put, 
+                        $"{_configuration["URL:API:HTTPS"]}/api/userstatuses")
+                    {
+                        Content = JsonContent.Create(userStatusRequest)
+                    };
+                    statusRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                    var userStatusResponse = await client.SendAsync(statusRequest);
+
+                    if (!userStatusResponse.IsSuccessStatusCode)
+                    {
+                        var error = await userStatusResponse.Content.ReadAsStringAsync();
+                        _logger.LogError($"Ошибка записи статуса при выходе: {userStatusResponse.StatusCode} - {error}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Не удалось связаться с API при выходе: " + ex.Message);
+                    _logger.LogError("Не удалось связаться с API при выходе: " + ex.Message);
                 }
             }
 
