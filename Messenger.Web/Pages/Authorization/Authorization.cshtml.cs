@@ -1,13 +1,16 @@
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.DTOs.UserStatuses;
+using Messenger.Core.Hubs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Authorization
 {
@@ -16,15 +19,17 @@ namespace Messenger.Web.Pages.Authorization
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthorizationModel> _logger;
+        private readonly IHubContext<ChatHub> _hubContext;
 
         public string ErrorMessage { get; private set; } = string.Empty;
 
         public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration,
-            ILogger<AuthorizationModel> logger)
+            ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         public async Task<IActionResult> OnGetEtaLoginAsync()
@@ -60,14 +65,8 @@ namespace Messenger.Web.Pages.Authorization
                 };
 
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                var statusResponse = await client.PutAsJsonAsync(
-                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", userStatusRequest);
 
-                if (!statusResponse.IsSuccessStatusCode)
-                {
-                    var error = await statusResponse.Content.ReadAsStringAsync();
-                    _logger.LogError($"Ошибка записи статуса онлайн: {statusResponse.StatusCode} - {error}");
-                }
+                await SendToSignalRAsync(client, userStatusRequest);
 
                 return RedirectToPage("/Account/Chats");
             }
@@ -147,14 +146,7 @@ namespace Messenger.Web.Pages.Authorization
                     Online = true
                 };
 
-                var statusResponse = await httpClient.PutAsJsonAsync(
-                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", userStatusRequest);
-
-                if (!statusResponse.IsSuccessStatusCode)
-                {
-                    var error = await statusResponse.Content.ReadAsStringAsync();
-                    _logger.LogError($"Ошибка записи статуса онлайн: {statusResponse.StatusCode} - {error}");
-                }
+                await SendToSignalRAsync(httpClient, userStatusRequest);
             }
             catch (Exception ex)
             {
@@ -178,6 +170,44 @@ namespace Messenger.Web.Pages.Authorization
                 new AuthenticationHeaderValue("Bearer", request.Token);
 
             return await client.PostAsJsonAsync("/api/logins", request, token);
+        }
+
+        private async Task SendToSignalRAsync(HttpClient httpClient, UpdateStatusRequest request)
+        {
+            var statusResponse = await httpClient.PutAsJsonAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", request);
+
+            if (statusResponse.IsSuccessStatusCode)
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                             ?? User.FindFirst("sub")?.Value;
+
+                if (Guid.TryParse(userIdStr, out Guid userId))
+                {
+                    try
+                    {
+                        await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", new
+                        {
+                            userId = userId.ToString(),
+                            isOnline = true,
+                            lastActivity = DateTime.UtcNow
+                        });
+
+                        await _hubContext.Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", new
+                        {
+                            userId = userId.ToString(),
+                            isOnline = true,
+                            lastActivity = DateTime.UtcNow
+                        });
+
+                        _logger.LogInformation("SignalR уведомление о входе отправлено для пользователя {UserId}", userId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning("Не удалось отправить SignalR уведомление о входе: {Message}", ex.Message);
+                    }
+                }
+            }
         }
 
         private static string GetLocalIPv4()
