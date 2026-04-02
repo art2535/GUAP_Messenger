@@ -298,7 +298,7 @@
                 <div onclick="openChatInfo()" class="flex items-center space-x-3 flex-1 min-w-0 cursor-pointer">
                     <div class="relative">
                         <img id="chat-info-avatar"
-                             src="https://static.photos/people/200x200/default"
+                             src="https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png"
                              class="w-11 h-11 rounded-full object-cover ring-2 ring-white shadow">
                         <span id="chat-online-indicator"
                               class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
@@ -467,7 +467,7 @@
             </div>
 
             <div class="flex flex-col items-center mb-8">
-                <img id="modal-chat-avatar" src="https://static.photos/people/200x200/default" class="w-24 h-24 rounded-full object-cover mb-4">
+                <img id="modal-chat-avatar" src="https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png" class="w-24 h-24 rounded-full object-cover mb-4">
                 <input type="text" id="modal-chat-name" class="text-2xl font-bold text-center bg-transparent border-b-2 border-transparent focus:border-blue-500 outline-none w-full" placeholder="Название чата">
                 <p id="modal-chat-type" class="text-sm text-gray-500 mt-2"></p>
             </div>
@@ -533,6 +533,9 @@
         let searchTimeout = null;
         let allChatItems = [];
         let me = '@Model.UserId';
+
+        const userNameCache = new Map();
+        userNameCache.clear();
 
         async function fetchWithAuth(url, options = {}) {
             const headers = {
@@ -875,26 +878,45 @@
             scrollToBottom();
         }
 
-        const userNameCache = new Map();
-
         async function loadUserName(userId) {
-            if (userNameCache.has(userId)) {
-                return userNameCache.get(userId);
+            if (!userId) return "Пользователь";
+
+            const normalizedId = String(userId).trim();
+
+            if (normalizedId !== String(me || '@Model.UserId' || "").trim()) {
+                userNameCache.delete(normalizedId);
             }
+
+            if (userNameCache.has(normalizedId)) {
+                const cachedName = userNameCache.get(normalizedId);
+                console.log(`[loadUserName] Из кэша для ${normalizedId}: ${cachedName}`);
+                return cachedName;
+            }
+
+            console.log(`[loadUserName] Запрашиваем имя с сервера для ${normalizedId}`);
 
             try {
-                const res = await fetch(`${API_BASE}/users/${userId}/name`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await fetch(`${API_BASE}/users/${normalizedId}/name`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Cache-Control': 'no-cache'
+                    }
                 });
-                const json = await res.json();
-                if (json.isSuccess && json.data) {
-                    userNameCache.set(userId, json.data);
-                    return json.data;
+
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.isSuccess && json.data) {
+                        const name = json.data.trim();
+                        userNameCache.set(normalizedId, name);
+                        console.log(`[loadUserName] Успешно получено: ${name} для ${normalizedId}`);
+                        return name;
+                    }
                 }
             } catch (e) {
-                console.warn('Не удалось загрузить имя пользователя', userId);
+                console.warn(`[loadUserName] Ошибка запроса имени для ${normalizedId}`, e);
             }
-            userNameCache.set(userId, 'Пользователь');
+
+            userNameCache.set(normalizedId, 'Пользователь');
             return 'Пользователь';
         }
 
@@ -1199,6 +1221,34 @@
                 .withAutomaticReconnect([0, 2000, 10000, 30000])
                 .build();
 
+            connection.on('ParticipantCountChanged', (data) => {
+                if (!data) return;
+
+                const chatId = String(data.chatId || data.ChatId || "").trim();
+                const newCount = parseInt(data.count || data.Count || "0");
+
+                if (!chatId) return;
+
+                console.log(`[PARTICIPANT COUNT] Чат ${chatId} → ${newCount} участников`);
+
+                if (currentChatId === chatId) {
+                    const subtitleEl = document.getElementById('chat-subtitle');
+                    if (subtitleEl && currentChatInfo?.type === 'group') {
+                        subtitleEl.textContent = `${newCount} участников`;
+                        console.log(`[PARTICIPANT COUNT] Обновлено в шапке чата: ${newCount} участников`);
+                    }
+
+                    if (document.getElementById('chat-info-modal').classList.contains('show')) {
+                        const countEl = document.getElementById('participants-count');
+                        if (countEl) countEl.textContent = `(${newCount})`;
+                    }
+
+                    if (currentChatInfo) {
+                        currentChatInfo.participantsCount = newCount;
+                    }
+                }
+            });
+
             connection.on("UserOnlineStatusChanged", (data) => {
                 console.log(`[STATUS] ${data.userId} → ${data.isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
 
@@ -1210,10 +1260,31 @@
                 if (currentChatId) {
                     updateCurrentChatSubtitle();
                 }
+
+                if (document.getElementById('chat-info-modal').classList.contains('show') && currentChatInfo?.type === 'group') {
+                    const userIdStr = data.userId.toString().trim();
+                    const isOnlineNow = !!data.isOnline;
+
+                    const participantEl = document.querySelector(`#participants-list [data-user-id="${userIdStr}"]`);
+                    if (participantEl) {
+                        const onlineDot = participantEl.querySelector('.chat-online-dot');
+                        if (onlineDot) {
+                            onlineDot.classList.toggle('hidden', !isOnlineNow);
+                        }
+                    }
+                }
             });
 
             connection.on("UserIsTyping", (data) => {
-                if (data.userId === me || data.userId === '@Model.UserId') {
+                if (!data?.chatId || !data?.userId) return;
+
+                const typingUserId = String(data.userId).trim();
+                const myId = String(me || '@Model.UserId' || "").trim();
+
+                console.log(`[TYPING RECEIVED] chat=${data.chatId}, user=${typingUserId}, isTyping=${data.isTyping}, myId=${myId}`);
+
+                if (typingUserId === myId) {
+                    console.log(`[TYPING] Игнорируем своё печатание`);
                     return;
                 }
 
@@ -1223,7 +1294,8 @@
                     const subtitle = document.getElementById('chat-subtitle');
 
                     if (data.isTyping) {
-                        loadUserName(data.userId).then(name => {
+                        loadUserName(typingUserId).then(name => {
+                            console.log(`[TYPING] Показываем: ${name} печатает...`);
                             if (typingNameEl) typingNameEl.textContent = name || "Собеседник";
                             if (typingIndicator) typingIndicator.classList.remove('hidden');
                             if (subtitle) subtitle.classList.add('hidden');
@@ -1234,7 +1306,7 @@
                     }
                 }
 
-                updateTypingInChatList(data.chatId, data.userId, data.isTyping);
+                updateTypingInChatList(data.chatId, typingUserId, data.isTyping);
             });
 
             connection.on("ProfileUpdated", function (data) {
@@ -1486,7 +1558,7 @@
 
                 if (!existing) {
                     let displayName = chat.name || 'Новый чат';
-                    let displayAvatar = chat.avatar || 'https://static.photos/people/200x200/default';
+                    let displayAvatar = chat.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
 
                     if (chat.type === 'private' || chat.isPrivate) {
                         const currentUserId = '@Model.UserId'.toLowerCase();
@@ -1577,7 +1649,7 @@
                         div.dataset.userId = user.id;
                         div.innerHTML = `
                             <div class="flex items-center gap-4">
-                                <img src="${user.avatar || 'https://static.photos/people/200x200/default'}"
+                                <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
                                      class="w-12 h-12 rounded-full object-cover">
                                 <div>
                                     <p class="font-semibold">${addedName}</p>
@@ -1739,7 +1811,6 @@
             }, 1800);
         });
 
-        // Останавливаем печать при отправке сообщения
         const originalSendMessage = sendMessage;
         sendMessage = async function () {
             if (typingTimeout) {
@@ -1798,18 +1869,35 @@
             const typingBlock = chatItem.querySelector('.typing-in-list');
             const lastMsgBlock = chatItem.querySelector('.last-message-preview');
 
-            if (!typingBlock) return;
+            if (!typingBlock || !lastMsgBlock) return;
+
+            const myId = String(me || '@Model.UserId' || "").trim();
+            const typingUserId = String(userId).trim();
+
+            if (typingUserId === myId) {
+                typingBlock.classList.add('hidden');
+                lastMsgBlock.classList.remove('hidden');
+                return;
+            }
 
             if (isTyping) {
-                loadUserName(userId).then(name => {
-                    const nameEl = typingBlock.querySelector('.typing-name');
+                loadUserName(typingUserId).then(name => {
+                    console.log(`[TYPING LIST] Показываем в списке: "${name}" печатает...`);
+
+                    let nameEl = typingBlock.querySelector('.typing-name');
+                    if (!nameEl) {
+                        typingBlock.innerHTML = `<span class="typing-name"></span> печатает...`;
+                        nameEl = typingBlock.querySelector('.typing-name');
+                    }
+
                     if (nameEl) nameEl.textContent = name || "Собеседник";
+
                     typingBlock.classList.remove('hidden');
-                    if (lastMsgBlock) lastMsgBlock.classList.add('hidden');
+                    lastMsgBlock.classList.add('hidden');
                 });
             } else {
                 typingBlock.classList.add('hidden');
-                if (lastMsgBlock) lastMsgBlock.classList.remove('hidden');
+                lastMsgBlock.classList.remove('hidden');
             }
         }
 
@@ -2028,7 +2116,7 @@
             document.getElementById('chat-title').textContent = chatNameEl ? chatNameEl.textContent : 'Чат';
 
             const avatarEl = item.querySelector('img');
-            document.getElementById('chat-info-avatar').src = avatarEl ? avatarEl.src : 'https://static.photos/people/200x200/default';
+            document.getElementById('chat-info-avatar').src = avatarEl ? avatarEl.src : 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
 
             unblockChat();
             document.getElementById('message-input').value = '';
@@ -2187,7 +2275,7 @@
                     const isPrivate = chat.type === 'private' || chat.isPrivate;
 
                     let displayName = chat.name || 'Без имени';
-                    let displayAvatar = chat.avatar || 'https://static.photos/people/200x200/default';
+                    let displayAvatar = chat.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
                     let partnerId = null;
 
                     if (isPrivate && chat.participants && chat.participants.length > 0) {
@@ -2219,7 +2307,6 @@
                         </div>
                     `;
 
-                    // Сохраняем partnerId для удобства
                     if (partnerId) div.dataset.partnerId = partnerId;
 
                     div.onclick = () => openChat(div);
@@ -2230,7 +2317,6 @@
                 filterChats();
                 feather.replace();
 
-                // Обновляем статусы после отрисовки списка
                 setTimeout(updateAllOnlineIndicators, 300);
             } catch (err) {
                 console.error("Ошибка загрузки:", err);
@@ -2597,7 +2683,7 @@
                     const div = document.createElement('div');
                     div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition rounded-lg';
                     div.innerHTML = `
-                        <img src="${user.avatar || 'https://static.photos/people/200x200/default'}" class="w-10 h-10 rounded-full object-cover">
+                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}" class="w-10 h-10 rounded-full object-cover">
                         <span class="font-medium">${user.name || 'Без имени'}</span>
                     `;
 
@@ -2725,7 +2811,7 @@
 
             div.innerHTML = `
                 <div class="flex items-center gap-4">
-                    <img src="${userAvatar || 'https://static.photos/people/200x200/default'}"
+                    <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
                          class="w-12 h-12 rounded-full object-cover">
                     <div>
                         <p class="font-semibold">${userName}</p>
@@ -2832,7 +2918,7 @@
                             const item = document.createElement('div');
                             item.className = 'flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition';
                             item.innerHTML = `
-                                <img src="${user.avatar || 'https://static.photos/people/200x200/default'}"
+                                <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
                                      class="w-10 h-10 rounded-full object-cover flex-shrink-0">
                                 <div class="min-w-0 flex-1">
                                     <p class="font-medium truncate">${user.name || 'Без имени'}</p>
@@ -2899,18 +2985,35 @@
 
             try {
                 const responses = await Promise.all(tasks);
-                if (!responses.every(r => r.ok)) throw new Error('Не все изменения сохранены');
+                const allSuccess = responses.every(r => r.ok);
 
-                if (chatNameChanged && isGroup) {
+                if (!allSuccess) throw new Error('Не все изменения сохранены');
+
+                if (chatNameChanged && isGroup && newName) {
                     document.getElementById('chat-title').textContent = newName;
                     const chatItem = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"] h3`);
                     if (chatItem) chatItem.textContent = newName;
+                    currentChatInfo.name = newName;
                 }
 
-                showToast('Изменения сохранены!', 'success');
+                const newCount = currentChatInfo.participants.length
+                    - removedParticipantIds.length
+                    + addedParticipantIds.length;
+
+                currentChatInfo.participants = currentChatInfo.participants.filter(p =>
+                    !removedParticipantIds.includes(p.id)
+                );
+
                 document.getElementById('chat-info-modal').classList.remove('show');
+
+                showToast('Изменения сохранены!', 'success');
+
             } catch (err) {
                 showToast('Ошибка: ' + err.message, 'error');
+            } finally {
+                removedParticipantIds = [];
+                addedParticipantIds = [];
+                chatNameChanged = false;
             }
         });
 
@@ -2985,7 +3088,7 @@
                     `;
                     document.getElementById('chat-title').textContent = 'Выберите чат';
                     document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
-                    document.getElementById('chat-info-avatar').src = 'https://static.photos/people/200x200/default';
+                    document.getElementById('chat-info-avatar').src = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
 
                     if (!document.querySelector('.chat-item')) {
                         chatsList.innerHTML = '<div class="p-4 text-gray-500">Чатов нет</div>';
@@ -3074,28 +3177,35 @@
             }
 
             const info = currentChatInfo;
+            if (!info) return;
 
-            document.getElementById('modal-chat-avatar').src =
-                document.getElementById('chat-info-avatar').src;
-
-            document.getElementById('modal-chat-name').value =
-                document.getElementById('chat-title').textContent;
-
-            document.getElementById('modal-chat-type').textContent =
-                info.type === 'group' ? 'Групповой чат' : 'Личный чат';
+            document.getElementById('modal-chat-avatar').src = document.getElementById('chat-info-avatar').src;
+            document.getElementById('modal-chat-name').value = document.getElementById('chat-title').textContent;
+            document.getElementById('modal-chat-type').textContent = info.type === 'group' ? 'Групповой чат' : 'Личный чат';
 
             const list = document.getElementById('participants-list');
             list.innerHTML = '';
 
             info.participants.forEach(p => {
-                const isYou = p.id === '@Model.UserId';
+                const isYou = String(p.id || p.userId || "").trim() === String(me || '@Model.UserId' || "").trim();
+                const userId = String(p.id || p.userId || "").trim();
+
+                const status = userStatuses.get(userId);
+                const isOnline = status?.isOnline === true;
+
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
-                div.dataset.userId = p.id;
+                div.dataset.userId = userId;
+
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
-                        <img src="${p.avatar || 'https://static.photos/people/200x200/default'}"
-                             class="w-12 h-12 rounded-full object-cover">
+                        <div class="relative">
+                            <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                 class="w-12 h-12 rounded-full object-cover">
+                            ${info.type === 'group' ? `
+                            <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
+                            ` : ''}
+                        </div>
                         <div>
                             <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
                             ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
@@ -3103,10 +3213,11 @@
                     </div>
                     ${info.type === 'group' && !isYou ? `
                     <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                            onclick="removeParticipantFromChat('${p.id}', this)">
+                            onclick="removeParticipantFromChat('${userId}', this)">
                         <i data-feather="x" class="w-5 h-5"></i>
                     </button>` : ''}
                 `;
+
                 list.appendChild(div);
             });
 
@@ -3118,7 +3229,6 @@
             toggleSaveButton();
 
             document.getElementById('chat-info-modal').classList.add('show');
-
             feather.replace();
         }
 

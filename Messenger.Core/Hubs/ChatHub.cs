@@ -153,6 +153,15 @@ namespace Messenger.Core.Hubs
             });
         }
 
+        public async Task NotifyParticipantCountChanged(Guid chatId, int count)
+        {
+            await Clients.Group(chatId.ToString()).SendAsync("ParticipantCountChanged", new
+            {
+                chatId = chatId,
+                count = count
+            });
+        }
+
         public async Task NewChat(object chatInfo)
         {
             await Task.CompletedTask;

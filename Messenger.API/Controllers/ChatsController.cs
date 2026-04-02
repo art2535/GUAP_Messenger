@@ -3,6 +3,7 @@ using Messenger.API.Services;
 using Messenger.Core.DTOs.Chats;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -334,6 +335,16 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(chatId.ToString()).
                     SendAsync("ParticipantAdded", new { chatId, user = userInfo }, ct);
 
+                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
+
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("ParticipantCountChanged", new
+                    {
+                        chatId = chatId,
+                        count = updatedCount
+                    });
+
                 var chatForNewUser = new
                 {
                     chatId = chat.ChatId,
@@ -493,6 +504,16 @@ namespace Messenger.API.Controllers
 
                 await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
                     .SendAsync("ParticipantRemoved", new { chatId, userId }, cancellationToken);
+
+                var updatedChat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
+
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("ParticipantCountChanged", new
+                    {
+                        chatId = chatId,
+                        count = updatedCount
+                    });
 
                 if (!string.IsNullOrEmpty(userToDelete.ExternalId))
                 {
