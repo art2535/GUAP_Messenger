@@ -144,13 +144,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                var currentUser = await _userService.GetUserByIdAsync(user!.UserId);
+                var currentUser = await _userService.GetUserByIdAsync(userId);
                 if (currentUser == null)
                 {
                     return NotFound(new ErrorResponse
