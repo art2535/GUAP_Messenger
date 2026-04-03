@@ -8,10 +8,14 @@ namespace Messenger.Infrastructure.Services
     public class ChatService : IChatService
     {
         private readonly ChatRepository _repository;
+        private readonly IUserService _userService;
+        private readonly IEncryptionService _encryptionService;
 
-        public ChatService(ChatRepository repository)
+        public ChatService(ChatRepository repository, IUserService userService, IEncryptionService encryptionService)
         {
             _repository = repository;
+            _userService = userService;
+            _encryptionService = encryptionService;
         }
 
         public async Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
@@ -47,6 +51,36 @@ namespace Messenger.Infrastructure.Services
             foreach (var chat in chats)
             {
                 var lastMsg = chat.Messages?.OrderByDescending(m => m.SendTime).FirstOrDefault();
+
+                bool isBlocked = false;
+                if (chat.Type == "private")
+                {
+                    var otherParticipant = chat.ChatParticipants.FirstOrDefault(p => p.UserId != userId);
+                    if (otherParticipant != null)
+                    {
+                        bool blockedByMe = await _userService.IsBlockedByAsync(userId, otherParticipant.UserId, token);
+                        bool blockedByThem = await _userService.IsBlockedByAsync(otherParticipant.UserId, userId, token);
+                        isBlocked = blockedByMe || blockedByThem;
+                    }
+                }
+
+                string? decryptedLastMessage = null;
+                if (lastMsg?.MessageText != null)
+                {
+                    try
+                    {
+                        decryptedLastMessage = _encryptionService.Decrypt(lastMsg.MessageText);
+                    }
+                    catch
+                    {
+                        decryptedLastMessage = "[Сообщение защищено]";
+                    }
+                }
+                else if (chat.Messages?.Any() == true)
+                {
+                    decryptedLastMessage = "Вложение";
+                }
+
                 result.Add(new
                 {
                     chatId = chat.ChatId,
@@ -63,8 +97,9 @@ namespace Messenger.Infrastructure.Services
                             .FirstOrDefault()
                         : null,
                     type = chat.Type,
-                    lastMessage = lastMsg?.MessageText ?? (chat.Messages?.Any() == true ? "Вложение" : null),
-                    isOnline = true
+                    lastMessage = decryptedLastMessage,
+                    isOnline = true,
+                    isBlocked = isBlocked
                 });
             }
 

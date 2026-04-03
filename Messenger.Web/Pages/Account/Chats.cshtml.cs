@@ -1,77 +1,57 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Messenger.Core.Interfaces;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.IdentityModel.Tokens.Jwt;
-using System.Net.Http.Headers;
-using System.Text.Json;
+using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Account
 {
     public class ChatsModel : PageModel
     {
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+        private readonly IUserService _userService;
 
         public string? UserId { get; set; }
-        public string? JwtToken { get; set; }
         public string? UserName { get; set; } = string.Empty;
         public string? UserRole { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
 
-        public ChatsModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public ChatsModel(IUserService userService)
         {
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
+            _userService = userService;
         }
 
         public async Task<IActionResult> OnGetAsync()
         {
-            var token = HttpContext.Session.GetString("JWT_TOKEN");
-
-            if (string.IsNullOrEmpty(token))
-                return RedirectToPage("/Authorization/Authorization");
-
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-
-            if (jwtToken.ValidTo < DateTime.UtcNow)
+            if (User.Identity?.IsAuthenticated == true)
             {
-                HttpContext.Session.Clear();
-                return RedirectToPage("/Authorization/Authorization");
-            }
+                var externalId = User.FindFirstValue("sub")
+                              ?? User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")
+                              ?? User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+                              ?? User.FindFirst("sub")?.Value;
 
-            UserId = HttpContext.Session.GetString("USER_ID");
-            UserName = HttpContext.Session.GetString("USER_NAME");
-            UserRole = HttpContext.Session.GetString("USER_ROLE");
-
-            try
-            {
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
-
-                var response = await client.GetAsync($"{_configuration["URL:API:HTTPS"]}/api/users/info");
-
-                if (response.IsSuccessStatusCode)
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user != null)
                 {
-                    var jsonText = await response.Content.ReadAsStringAsync();
-                    var jsonDoc = JsonDocument.Parse(jsonText);
-
-                    if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement) &&
-                        dataElement.TryGetProperty("account", out var accountElement) &&
-                        accountElement.TryGetProperty("avatar", out var avatarElement) &&
-                        avatarElement.ValueKind == JsonValueKind.String)
-                    {
-                        var avatarPath = avatarElement.GetString();
-                        if (!string.IsNullOrWhiteSpace(avatarPath))
-                        {
-                            AvatarUrl = avatarPath;
-                        }
-                    }
+                    UserId = user.UserId.ToString();
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка получения данных: {ex.Message}");
+                else
+                {
+                    UserId = externalId;
+                }
+
+                UserName = User.FindFirstValue("name")
+                        ?? User.FindFirstValue("preferred_username")
+                        ?? "Пользователь";
+
+                UserRole = User.FindFirstValue("role")
+                        ?? User.FindFirstValue("roles")
+                        ?? "Пользователь";
+
+                var accessToken = await HttpContext.GetTokenAsync("access_token");
+                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken ?? "");
+                HttpContext.Session.SetString("USER_ID", UserId ?? ""); 
+                HttpContext.Session.SetString("USER_NAME", UserName);
+                HttpContext.Session.SetString("USER_ROLE", UserRole);
             }
 
             return Page();

@@ -77,7 +77,11 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(u => u.Login == login, token)
                 ?? throw new UnauthorizedAccessException($"Пользователь с логином {login} не найден");
 
-            if (!ValidationService.VerifyPassword(password, user.Password))
+            if (!string.IsNullOrEmpty(user.ExternalId))
+            {
+                Console.WriteLine("External login — пароль пропущен!");
+            }
+            else if (!ValidationService.VerifyPassword(password, user.Password))
             {
                 throw new UnauthorizedAccessException("Неверный логин или пароль");
             }
@@ -319,6 +323,59 @@ namespace Messenger.Infrastructure.Services
         {
             return await _context.Blacklists
                 .AnyAsync(ub => ub.UserId == blockerId && ub.BlockedUserId == blockedId, token);
+        }
+
+        public async Task<User?> GetUserByExternalIdAsync(string externalId)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.ExternalId == externalId);
+        }
+
+        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, 
+            string lastName, string? middleName = null)
+        {
+            var existing = await GetUserByExternalIdAsync(externalId);
+            if (existing != null)
+                return existing;
+
+            var userId = Guid.NewGuid();
+            var fakePassword = $"external_{externalId.Substring(0, 8)}";
+
+            var user = new User
+            {
+                UserId = userId,
+                ExternalId = externalId,
+                Login = email,
+                Password = ValidationService.HashPassword(fakePassword),
+                FirstName = firstName,
+                LastName = lastName,
+                MiddleName = middleName,
+                BirthDate = null,
+                RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Account = new AccountSetting
+                {
+                    SettingId = Guid.NewGuid(),
+                    AccountId = userId
+                },
+                UserStatus = new UserStatus
+                {
+                    UserId = userId,
+                    Online = true
+                }
+            };
+
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+
+            var defaultRole = await _context.Roles
+                .FirstOrDefaultAsync(r => r.Name == "Пользователь");
+
+            if (defaultRole != null)
+            {
+                await AssignRoleAsync(userId, defaultRole.RoleId);
+            }
+
+            return user;
         }
     }
 }

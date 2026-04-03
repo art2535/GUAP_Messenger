@@ -1,5 +1,6 @@
 using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Messenger.Web.Middleware;
 
 namespace Messenger.Web
 {
@@ -10,12 +11,17 @@ namespace Messenger.Web
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddPostgreSQL(builder.Configuration);
-            builder.Services.AddJwtService(builder.Configuration);
             builder.Services.AddRazorPages();
+            builder.Services.AddEtaWebAuthentication(builder.Configuration);
+            builder.Services.AddLogging();
+            builder.Services.AddAuthorization();
+            builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddServices();
             builder.Services.AddRepositories();
             builder.Services.AddSignalRService();
             builder.Services.AddHttpClient();
+            builder.Services.AddEncryption(builder.Configuration);
+            builder.Services.AddDistributedMemoryCache();
 
             builder.Services.AddSession(options =>
             {
@@ -46,6 +52,7 @@ namespace Messenger.Web
             app.UseRouting();
 
             app.UseAuthentication();
+            app.UseMiddleware<TokenRefreshMiddleware>();
             app.UseAuthorization();
 
             app.MapRazorPages();

@@ -15,6 +15,13 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task AddMessageAsync(Message message, CancellationToken token = default)
         {
+            var lastSeq = await _context.Messages
+                .Where(m => m.ChatId == message.ChatId)
+                .MaxAsync(m => (int?)m.SequenceNumber, token) ?? 0;
+
+            message.SequenceNumber = lastSeq + 1;
+            message.DeliveryStatus = MessageDeliveryStatus.Pending;
+
             await _context.Messages.AddAsync(message, token);
             await _context.SaveChangesAsync(token);
         }
@@ -24,7 +31,6 @@ namespace Messenger.Infrastructure.Repositories
             return await _context.Messages
                 .Where(m => m.ChatId == chatId)
                 .Include(m => m.Sender)
-                .Include(m => m.Recipient)
                 .Include(m => m.Reactions)
                     .ThenInclude(r => r.User)
                 .Include(m => m.Attachments)

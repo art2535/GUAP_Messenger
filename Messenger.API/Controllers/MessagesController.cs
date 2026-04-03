@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -26,10 +27,11 @@ namespace Messenger.API.Controllers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
+        private readonly IEncryptionService _encryptionService;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService, 
-            IChatService chatService, IUserService userService)
+            IChatService chatService, IUserService userService, IEncryptionService encryptionService)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
@@ -38,6 +40,46 @@ namespace Messenger.API.Controllers
             _attachmentService = attachmentService;
             _chatService = chatService;
             _userService = userService;
+            _encryptionService = encryptionService;
+        }
+
+        [HttpGet("{chatId}/search")]
+        [SwaggerOperation(
+            Summary = "Поиск сообщения по названию в чате",
+            Description = "Возращает найденное сообщение по критерию поиска")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Сообщение успешно найдено по критериям", typeof(MessageSearchResponse))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные или пользователь заблокирован", typeof(ErrorResponse))]
+        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        public async Task<IActionResult> SearchMessages([SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery][SwaggerParameter(Description = "Критерий поиска (название сообщения)")] string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return Ok(new MessageSearchResponse
+                {
+                    IsSuccess = true,
+                    Data = new List<MessageDto>()
+                });
+            }
+
+            try
+            {
+                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
+                return Ok(new MessageSearchResponse
+                {
+                    IsSuccess = true,
+                    Data = results
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
 
         [HttpPost("{chatId}")]
@@ -55,13 +97,34 @@ namespace Messenger.API.Controllers
         public async Task<IActionResult> SendMessageAsync(
             [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId, 
             [FromForm] [SwaggerParameter(Description = "Текст сообщения (опционально)")] string? messageText, 
-            [FromForm] [SwaggerParameter(Description = "Имя отправителя (необязательно, обычно берётся из токена)")] string? senderName,
             [FromForm] [SwaggerParameter(Description = "Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files, 
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var senderId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                const long MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+                if (files != null && files.Length > 0)
+                {
+                    foreach (var file in files)
+                    {
+                        if (file.Length > MAX_FILE_SIZE)
+                        {
+                            return BadRequest(new ErrorResponse
+                            {
+                                IsSuccess = false,
+                                Error = $"Файл '{file.FileName}' превышает максимальный размер 10 МБ. " +
+                                        $"Текущий размер: {file.Length / (1024 * 1024):F2} МБ"
+                            });
+                        }
+                    }
+                }
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
                 if (chat == null)
@@ -72,33 +135,38 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                if (!chat.ChatParticipants.Any(p => p.UserId == senderId))
+                if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
                 { 
                     return Forbid(); 
                 }
 
                 if (chat.Type == "private")
                 {
-                    var recipientId = chat.ChatParticipants.First(p => p.UserId != senderId).UserId;
+                    var recipientId = chat.ChatParticipants.FirstOrDefault(p => p.UserId != user!.UserId)?.UserId;
 
-                    if (await _userService.IsBlockedByAsync(recipientId, senderId, cancellationToken))
+                    if (recipientId != null)
                     {
-                        return BadRequest(new ErrorResponse
+                        bool blockedByRecipient = await _userService.IsBlockedByAsync(recipientId.Value, user!.UserId, cancellationToken);
+
+                        bool blockedByMe = await _userService.IsBlockedByAsync(user!.UserId, recipientId.Value, cancellationToken);
+
+                        if (blockedByRecipient || blockedByMe)
                         {
-                            Error = "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке"
-                        });
+                            return BadRequest(new ErrorResponse
+                            {
+                                IsSuccess = false,
+                                Error = blockedByMe
+                                    ? "Вы не можете отправить сообщение, так как заблокировали этого пользователя."
+                                    : "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке."
+                            });
+                        }
                     }
                 }
 
-                var result = await _messageService.SendMessageAsync(
-                    chatId: chatId,
-                    senderId: senderId,
-                    receiverId: null,
-                    content: messageText?.Trim(),
-                    hasAttachments: files?.Any() == true,
-                    files: files,
-                    token: cancellationToken
-                );
+                var contentToSave = string.IsNullOrWhiteSpace(messageText) ? null : _encryptionService.Encrypt(messageText.Trim());
+
+                var result = await _messageService.SendMessageAsync(chatId, user!.UserId, contentToSave,
+                    files?.Any() == true, files, cancellationToken);
 
                 if (!result.isSuccess)
                 {
@@ -152,9 +220,9 @@ namespace Messenger.API.Controllers
                 {
                     MessageId = message.MessageId,
                     ChatId = message.ChatId,
-                    SenderId = senderId,
+                    SenderId = user!.UserId,
                     SenderName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Пользователь",
-                    MessageText = message.MessageText,
+                    MessageText = messageText?.Trim(),
                     SentAt = message.SendTime,
                     Status = "Sent",
                     Attachments = attachments
@@ -197,7 +265,8 @@ namespace Messenger.API.Controllers
                     SenderName = m.Sender != null
                         ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                         : "Удалённый пользователь",
-                    MessageText = m.MessageText,
+                    MessageText = string.IsNullOrEmpty(m.MessageText) ? null
+                        : _encryptionService.TryDecryptSafe(m.MessageText),
                     SentAt = m.SendTime,
                     Status = "Read",
                     Attachments = m.Attachments.Select(a => new AttachmentDto
@@ -254,12 +323,16 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var messageStatus = new MessageStatus
                 {
                     MessageId = messageId,
-                    UserId = userId,
+                    UserId = user!.UserId,
                     Status = request.Status,
                     ChangeDate = DateTime.UtcNow
                 };
@@ -326,13 +399,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
                 var reaction = new Reaction
                 {
                     ReactionId = Guid.NewGuid(),
                     MessageId = messageId,
-                    UserId = userId,
+                    UserId = user!.UserId,
                     ReactionType = request.ReactionType
                 };
                 await _reactionService.AddReactionAsync(reaction, cancellationToken);
@@ -369,11 +446,22 @@ namespace Messenger.API.Controllers
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.MessageText))
-                return BadRequest(new { IsSuccess = false, Error = "Текст не может быть пустым" });
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = "Текст не может быть пустым"
+                });
+            }
 
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
                 if (message == null) 
                 {
@@ -383,7 +471,7 @@ namespace Messenger.API.Controllers
                         Error = "Сообщение не найдено"
                     });
                 }
-                if (message.SenderId != userId) 
+                if (message.SenderId != user!.UserId) 
                 { 
                     return Forbid(); 
                 }
@@ -453,13 +541,18 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
                 if (message == null) 
                 { 
                     return NotFound(); 
                 }
-                if (message.SenderId != userId)
+                if (message.SenderId != user!.UserId)
                 { 
                     return Forbid(); 
                 }

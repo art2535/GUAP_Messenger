@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -19,10 +19,12 @@ namespace Messenger.API.Controllers
     public class UserStatusesController : ControllerBase
     {
         private readonly IUserStatusService _userStatusService;
+        private readonly IUserService _userService;
 
-        public UserStatusesController(IUserStatusService userStatusService)
+        public UserStatusesController(IUserStatusService userStatusService, IUserService userService)
         {
             _userStatusService = userStatusService;
+            _userService = userService;
         }
 
         [HttpGet]
@@ -37,8 +39,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var status = await _userStatusService.GetStatusByUserIdAsync(userId, cancellationToken);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var status = await _userStatusService.GetStatusByUserIdAsync(user!.UserId, cancellationToken);
 
                 if (status == null)
                 {
@@ -80,12 +87,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var userStatus = new UserStatus
                 {
-                    UserId = userId,
+                    UserId = user!.UserId,
                     Online = request.Online,
-                    LastActivity = DateTime.UtcNow
+                    LastActivity = DateTime.Now
                 };
 
                 await _userStatusService.UpdateStatusAsync(userStatus, cancellationToken);

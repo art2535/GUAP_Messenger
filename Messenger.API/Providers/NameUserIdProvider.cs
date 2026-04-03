@@ -7,7 +7,8 @@ namespace Messenger.API.Providers
     {
         public string? GetUserId(HubConnectionContext connection)
         {
-            return connection.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return connection.User?.FindFirst("sub")?.Value.ToLowerInvariant()
+              ?? connection.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value.ToLowerInvariant();
         }
     }
 }

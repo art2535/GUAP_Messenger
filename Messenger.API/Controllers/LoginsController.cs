@@ -1,4 +1,5 @@
 ﻿using Messenger.API.Responses;
+using Messenger.API.Services;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -19,10 +19,12 @@ namespace Messenger.API.Controllers
     public class LoginsController : ControllerBase
     {
         private readonly ILoginService _loginService;
+        private readonly IUserService _userService;
 
-        public LoginsController(ILoginService loginService)
+        public LoginsController(ILoginService loginService, IUserService userService)
         {
             _loginService = loginService;
+            _userService = userService;
         }
 
         [HttpGet]
@@ -37,8 +39,13 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var logins = await _loginService.GetLoginsByUserIdAsync(userId, cancellationToken);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var logins = await _loginService.GetLoginsByUserIdAsync(user!.UserId, cancellationToken);
 
                 return Ok(new GetLoginsSuccessResponse
                 {
@@ -72,12 +79,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
                 var login = new Login
                 {
                     LoginId = Guid.NewGuid(),
-                    UserId = userId,
-                    Token = request.Token,
+                    UserId = user!.UserId,
+                    Token = $"{request.Token.Substring(0, 20)}...",
                     IpAddress = request.IpAddress,
                     LoginTime = DateTime.Now,
                     Active = true
@@ -114,15 +126,21 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
 
-                var logins = await _loginService.GetLoginsByUserIdAsync(userId, cancellationToken);
+                var logins = await _loginService.GetLoginsByUserIdAsync(user!.UserId, cancellationToken);
 
-                var userLogout = logins.FirstOrDefault(l => l.UserId == userId && l.Active == true);
+                var userLogout = logins.FirstOrDefault(l => l.UserId == user.UserId && l.Active == true);
                 if (userLogout != null)
                 {
+                    userLogout.Token = string.Empty;
                     userLogout.Active = false;
                     userLogout.LogoutTime = DateTime.Now;
+
                     await _loginService.UpdateLoginAsync(userLogout, cancellationToken);
                 }
 

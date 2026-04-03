@@ -1,15 +1,16 @@
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
-using Messenger.Web.DTOs;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Messenger.Core.DTOs.UserStatuses;
+using Messenger.Core.Hubs;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text;
-using System.Text.Json;
+using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Authorization
 {
@@ -17,120 +18,199 @@ namespace Messenger.Web.Pages.Authorization
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthorizationModel> _logger;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public string BodyClass => "auth-page";
+        public string ErrorMessage { get; private set; } = string.Empty;
 
-        [BindProperty]
-        [Required(ErrorMessage = "Логин не может быть пустым")]
-        public string Login { get; set; } = string.Empty;
-
-        [BindProperty]
-        [Required(ErrorMessage = "Пароль не может быть пустым")]
-        public string Password { get; set; } = string.Empty;
-
-        [BindProperty]
-        public bool IsRememberedMe { get; set; }
-
-        public string? ErrorMessage { get; private set; } = string.Empty;
-
-        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration,
+            ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _logger = logger;
+            _hubContext = hubContext;
         }
 
-        public IActionResult OnGet()
+        public async Task<IActionResult> OnGetEtaLoginAsync()
         {
-            var sessionToken = HttpContext.Session.GetString("JWT_TOKEN");
-
-            if (!string.IsNullOrEmpty(sessionToken))
+            if (User.Identity?.IsAuthenticated == true)
             {
+                var accessToken = await HttpContext.GetTokenAsync("access_token");
+
+                var loginRequest = new CreateLoginRequest
+                {
+                    Token = accessToken,
+                    IpAddress = GetLocalIPv4()
+                };
+
+                var response = await LoginAsync(loginRequest);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    ErrorMessage = "Ошибка записи входа в аккаунт";
+                    _logger.LogError("Ошибка записи входа в аккаунт");
+                    return Page();
+                }
+
+                var userStatusRequest = new UpdateStatusRequest
+                {
+                    Online = true
+                };
+
+                using var client = new HttpClient
+                {
+                    BaseAddress = new Uri(_configuration["URL:API:HTTPS"]),
+                    Timeout = TimeSpan.FromSeconds(30)
+                };
+
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                await SendToSignalRAsync(client, userStatusRequest);
+
                 return RedirectToPage("/Account/Chats");
             }
 
-            return Page();
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Page("/Authorization/Authorization", "Callback")
+            };
+
+            return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
         }
 
-        public async Task<IActionResult> OnPostLoginAsync()
+        public async Task<IActionResult> OnGetCallbackAsync()
         {
-            if (!ModelState.IsValid)
+            var externalId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+            if (string.IsNullOrEmpty(externalId))
             {
+                ErrorMessage = "Нет externalId";
+                return RedirectToPage("/Authorization/Authorization", new { error = "Нет externalId" });
+            }
+
+            var firstName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")?.Value ?? "ЕТА";
+            var lastName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")?.Value ?? "Пользователь";
+            var email = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value ?? "";
+
+            try
+            {
+                var accessToken = await HttpContext.GetTokenAsync("access_token");
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    _logger.LogError("Не удалось получить access token после авторизации");
+                    ErrorMessage = "Не удалось получить access token";
+                    return Page();
+                }
+
+                using var httpClient = _httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                var request = new LoginEtaRequest
+                {
+                    ExternalId = externalId,
+                    Email = email,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    MiddleName = "",
+                    IpAddress = GetLocalIPv4(),
+                    FakePasswordForInternalUse = $"external_{externalId.Substring(0, 8)}"
+                };
+
+                var authResponse = await httpClient.PostAsJsonAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/authorization/external/callback", request);
+
+                if (!authResponse.IsSuccessStatusCode)
+                {
+                    var error = await authResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"Ошибка внешней авторизации: {authResponse.StatusCode} - {error}");
+                    ErrorMessage = "Ошибка авторизации в системе";
+                    return Page();
+                }
+
+                var loginRequest = new CreateLoginRequest
+                {
+                    Token = accessToken,
+                    IpAddress = GetLocalIPv4()
+                };
+
+                var loginResponse = await LoginAsync(loginRequest);
+
+                if (!loginResponse.IsSuccessStatusCode)
+                {
+                    var error = await loginResponse.Content.ReadAsStringAsync();
+                    _logger.LogWarning($"Ошибка записи входа: {loginResponse.StatusCode} - {error}");
+                }
+
+                var userStatusRequest = new UpdateStatusRequest
+                {
+                    Online = true
+                };
+
+                await SendToSignalRAsync(httpClient, userStatusRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Критическая ошибка при входе через внешнего провайдера");
+                ErrorMessage = "Внутренняя ошибка при входе";
                 return Page();
             }
 
-            using (var httpClient = _httpClientFactory.CreateClient())
+            return RedirectToPage("/Account/Chats");
+        }
+
+        public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
+        {
+            using var client = new HttpClient
             {
-                try
+                BaseAddress = new Uri(_configuration["URL:API:HTTPS"]),
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", request.Token);
+
+            return await client.PostAsJsonAsync("/api/logins", request, token);
+        }
+
+        private async Task SendToSignalRAsync(HttpClient httpClient, UpdateStatusRequest request)
+        {
+            var statusResponse = await httpClient.PutAsJsonAsync(
+                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", request);
+
+            if (statusResponse.IsSuccessStatusCode)
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                             ?? User.FindFirst("sub")?.Value;
+
+                if (Guid.TryParse(userIdStr, out Guid userId))
                 {
-                    var loginRequest = new LoginRequest
+                    try
                     {
-                        Login = Login,
-                        Password = Password
-                    };
-
-                    var content = new StringContent(JsonSerializer.Serialize(loginRequest), Encoding.UTF8, "application/json");
-
-                    var response = await httpClient.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/authorization/login", content);
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        ErrorMessage = $"Авторизация не прошла: {response.StatusCode} — {errorContent}";
-                        return Page();
-                    }
-
-                    var json = await response.Content.ReadAsStringAsync();
-                    var userResponse = JsonSerializer.Deserialize<LoginResponse>(json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    if (userResponse == null || string.IsNullOrEmpty(userResponse.Token))
-                    {
-                        ErrorMessage = "Ошибка: токен или пользователь не найден.";
-                        return Page();
-                    }
-
-                    if (userResponse != null && !string.IsNullOrEmpty(userResponse.Token))
-                    {
-                        httpClient.DefaultRequestHeaders.Authorization =
-                            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, userResponse.Token);
-
-                        var logRequest = new CreateLoginRequest
+                        await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", new
                         {
-                            Token = userResponse.Token,
-                            IpAddress = GetLocalIPv4()
-                        };
+                            userId = userId.ToString(),
+                            isOnline = true,
+                            lastActivity = DateTime.UtcNow
+                        });
 
-                        var logContent = new StringContent(JsonSerializer.Serialize(logRequest), Encoding.UTF8, "application/json");
-                        var logResponse = await httpClient.PostAsync($"{_configuration["URL:API:HTTPS"]}/api/logins", logContent);
-
-                        if (!logResponse.IsSuccessStatusCode)
+                        await _hubContext.Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", new
                         {
-                            ErrorMessage = "Ошибка записи лога входа";
-                            return Page();
-                        }
+                            userId = userId.ToString(),
+                            isOnline = true,
+                            lastActivity = DateTime.UtcNow
+                        });
 
-                        HttpContext.Session.SetString("JWT_TOKEN", userResponse.Token);
-                        HttpContext.Session.SetString("USER_EMAIL", loginRequest.Login);
-                        HttpContext.Session.SetString("USER_ROLE", userResponse.Role);
-                        HttpContext.Session.SetString("USER_ID", userResponse.UserId.ToString());
-                        HttpContext.Session.SetString("USER_NAME", userResponse.FullName ?? userResponse.UserName ?? loginRequest.Login);
-
-                        return RedirectToPage("/Account/Chats");
+                        _logger.LogInformation("SignalR уведомление о входе отправлено для пользователя {UserId}", userId);
                     }
-
-                    return Page();
-                }
-                catch (Exception ex)
-                {
-                    ErrorMessage = "Ошибка соединения с API: " + ex.Message;
-                    return Page();
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning("Не удалось отправить SignalR уведомление о входе: {Message}", ex.Message);
+                    }
                 }
             }
         }
 
-        public static string GetLocalIPv4()
+        private static string GetLocalIPv4()
         {
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
             {

@@ -15,8 +15,25 @@ namespace Messenger.Infrastructure.Repositories
 
         public async Task UpdateUserStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
         {
-            _context.UserStatuses.Update(userStatus);
-            await _context.SaveChangesAsync(cancellationToken);
+            var rowsAffected = await _context.UserStatuses
+                .Where(us => us.UserId == userStatus.UserId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(us => us.Online, userStatus.Online)
+                        .SetProperty(us => us.LastActivity, DateTime.Now),
+                    cancellationToken);
+
+            if (rowsAffected == 0)
+            {
+                var newStatus = new UserStatus
+                {
+                    UserId = userStatus.UserId,
+                    Online = userStatus.Online,
+                    LastActivity = DateTime.Now
+                };
+
+                _context.UserStatuses.Add(newStatus);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
 
         public async Task<UserStatus?> GetUserStatusByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)

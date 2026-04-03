@@ -26,19 +26,23 @@ public partial class User
     public string? MiddleName { get; set; }
 
     [Column("Birth_Date")]
-    public DateOnly BirthDate { get; set; }
+    public DateOnly? BirthDate { get; set; }
 
     [Column("Registration_Date")]
     public DateOnly RegistrationDate { get; set; }
 
     [StringLength(50)]
-    public string Login { get; set; } = null!;
+    public string? Login { get; set; }
 
     [StringLength(255)]
-    public string Password { get; set; } = null!;
+    public string? Password { get; set; }
 
     [StringLength(18)]
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
+
+    [Column("External_ID")]
+    [StringLength(255)]
+    public string? ExternalId { get; set; }
 
     [ForeignKey("AccountId")]
     [InverseProperty("Users")]
@@ -65,10 +69,6 @@ public partial class User
     [JsonIgnore]
     public virtual ICollection<Login> Logins { get; set; } = new List<Login>();
 
-    [InverseProperty("Recipient")]
-    [JsonIgnore]
-    public virtual ICollection<Message> MessageRecipients { get; set; } = new List<Message>();
-
     [InverseProperty("Sender")]
     [JsonIgnore]
     public virtual ICollection<Message> MessageSenders { get; set; } = new List<Message>();
@@ -93,4 +93,12 @@ public partial class User
     [InverseProperty("Users")]
     [JsonIgnore]
     public virtual ICollection<Role> Roles { get; set; } = new List<Role>();
+
+    [InverseProperty(nameof(Broadcast.Sender))]
+    [JsonIgnore]
+    public virtual ICollection<Broadcast> BroadcastsCreated { get; set; } = new List<Broadcast>();
+
+    [InverseProperty(nameof(BroadcastRecipient.User))]
+    [JsonIgnore]
+    public virtual ICollection<BroadcastRecipient> BroadcastRecipients { get; set; } = new List<BroadcastRecipient>();
 }
