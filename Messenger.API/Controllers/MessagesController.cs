@@ -28,10 +28,13 @@ namespace Messenger.API.Controllers
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
+        private readonly IPushSubscriptionService _subscriptionService;
+        private readonly ILogger<MessagesController> _logger;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService, 
-            IChatService chatService, IUserService userService, IEncryptionService encryptionService)
+            IChatService chatService, IUserService userService, IEncryptionService encryptionService,
+            IPushSubscriptionService subscriptionService, ILogger<MessagesController> logger)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
@@ -41,6 +44,8 @@ namespace Messenger.API.Controllers
             _chatService = chatService;
             _userService = userService;
             _encryptionService = encryptionService;
+            _subscriptionService = subscriptionService;
+            _logger = logger;
         }
 
         [HttpGet("{chatId}/search")]
@@ -228,7 +233,29 @@ namespace Messenger.API.Controllers
                     Attachments = attachments
                 };
 
-                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ReceiveMessage", messageDto, cancellationToken);
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("ReceiveMessage", messageDto, cancellationToken);
+
+                var senderName = $"{user!.FirstName} {user!.LastName}" 
+                    ?? User.FindFirstValue(ClaimTypes.Name) ?? "Пользователь";
+
+                Console.WriteLine("Отправка Push-уведомления");
+
+                try
+                {
+                    _logger.LogInformation("ПОПЫТКА PUSH: ChatId={ChatId}, SenderId={SenderId}, Text={Text}",
+                        chatId, user!.UserId, messageText?.Trim());
+
+                    await _subscriptionService.SendPushToOfflineUsersAsync(chatId, user!.UserId, senderName,
+                        messageText?.Trim(), attachments.Count > 0, cancellationToken);
+
+                    _logger.LogInformation("Push-уведомления отправлены для чата {ChatId}", chatId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Не удалось отправить push-уведомления для чата {ChatId}", chatId);
+                }
+
 
                 return Ok(new SendMessageSuccessResponse
                 { 
