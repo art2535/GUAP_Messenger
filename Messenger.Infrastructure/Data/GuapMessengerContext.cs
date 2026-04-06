@@ -45,6 +45,8 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<BroadcastRecipient> BroadcastRecipients { get; set; }
 
+    public virtual DbSet<PushSubscription> PushSubscriptions { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -266,6 +268,19 @@ public partial class GuapMessengerContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_recipient_user");
+        });
+
+        modelBuilder.Entity<PushSubscription>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PushSubscriptions_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.PushSubscriptions)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_push_subscription_user");
         });
 
         OnModelCreatingPartial(modelBuilder);
