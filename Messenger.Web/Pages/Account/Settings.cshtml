@@ -23,6 +23,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="access-token" content="@Model.AccessToken">
     <title>Настройки</title>
+    @Html.Partial("_LayoutPWA")
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
@@ -330,6 +331,8 @@
             </div>
         </div>
     </div>
+
+    <script src="~/app.js"></script>
 
     <script>
         const HUB_URL = 'https://localhost:7001/hubs/chat';

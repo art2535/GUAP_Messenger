@@ -14,6 +14,7 @@
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    @Html.Partial("_LayoutPWA")
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -491,6 +492,20 @@
             </div>
         </div>
     </div>
+
+    <script>
+        const sessionToken = '@HttpContext.Session.GetString("ACCESS_TOKEN")' ||
+                             '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
+
+        if (sessionToken) {
+            localStorage.setItem('token', sessionToken);
+            console.log("✅ Токен из сессии сохранен в localStorage");
+        } else {
+            console.warn("⚠️ Токен в сессии не найден");
+        }
+    </script>
+
+    <script src="~/app.js"></script>
 
     <script>
         feather.replace();
@@ -1784,16 +1799,31 @@
 
         function formatLastSeen(isoString) {
             if (!isoString) return "давно";
+
             const date = new Date(isoString);
             const now = new Date();
-            const diffMin = Math.floor((now - date) / 60000);
+            const diffMs = now - date;
+            const diffMinutes = Math.floor(diffMs / 60000);
 
-            if (diffMin < 1) return "только что";
-            if (diffMin < 60) return `${diffMin} мин назад`;
+            if (diffMinutes < 360) {
+                if (diffMinutes < 1) return "только что";
+                if (diffMinutes < 60) return `${diffMinutes} мин назад`;
 
+                const diffHours = Math.floor(diffMinutes / 60);
+                return `${diffHours} ч назад`;
+            }
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
             const hours = date.getHours().toString().padStart(2, '0');
             const minutes = date.getMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
+
+            if (year === now.getFullYear()) {
+                return `${day}.${month} в ${hours}:${minutes}`;
+            }
+
+            return `${day}.${month}.${year} в ${hours}:${minutes}`;
         }
 
         let typingTimeout = null;
