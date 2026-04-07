@@ -1,6 +1,8 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Core.DTOs.Push;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
 using WebPush;
 
@@ -9,17 +11,16 @@ namespace Messenger.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [SwaggerTag("Контроллер для управления push-подписками для веб-уведомлений")]
     public class PushController : ControllerBase
     {
         private readonly IPushSubscriptionService _subscriptionService;
-        private readonly WebPushClient _webPushClient;
         private readonly VapidDetails _vapidDetails;
         private readonly ILogger<PushController> _logger;
-        private readonly IChatService _chatService;
         private readonly IUserService _userService;
 
         public PushController(IPushSubscriptionService subscriptionService, IConfiguration configuration,
-            ILogger<PushController> logger, IChatService chatService, IUserService userService)
+            ILogger<PushController> logger, IUserService userService)
         {
             _subscriptionService = subscriptionService;
             _logger = logger;
@@ -32,13 +33,17 @@ namespace Messenger.API.Controllers
                 privateKey: vapidSection["PrivateKey"]!
             );
 
-            _webPushClient = new WebPushClient();
-            _chatService = chatService;
             _userService = userService;
         }
 
         [HttpPost("subscribe")]
-        public async Task<IActionResult> Subscribe([FromBody] PushSubscriptionDto subscriptionDto)
+        [SwaggerOperation(
+            Summary = "Подписка на push-уведомления",
+            Description = "Сохраняет push-подписку пользователя для отправки веб-уведомлений")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно сохранена")]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные подписки или отсутствуют ключи шифрования")]
+        public async Task<IActionResult> SubscribeAsync(
+            [SwaggerParameter(Description = "Данные для создания подписки")][FromBody] PushSubscriptionRequest subscriptionDto)
         {
             if (subscriptionDto == null || string.IsNullOrEmpty(subscriptionDto.Endpoint))
                 return BadRequest(new { error = "Некорректные данные подписки" });
@@ -48,7 +53,6 @@ namespace Messenger.API.Controllers
 
             var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
 
-            // Явно проверяем, что ключи пришли
             if (string.IsNullOrEmpty(subscriptionDto.P256dh) || string.IsNullOrEmpty(subscriptionDto.Auth))
             {
                 _logger.LogWarning("Подписка от пользователя {UserId} пришла без p256dh/auth ключей", user!.UserId);
@@ -76,7 +80,13 @@ namespace Messenger.API.Controllers
         }
 
         [HttpDelete("unsubscribe")]
-        public async Task<IActionResult> Unsubscribe([FromBody] string endpoint)
+        [SwaggerOperation(
+            Summary = "Отписка от push-уведомлений",
+            Description = "Удаляет push-подписку по указанному endpoint")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно удалена")]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Endpoint не указан")]
+        public async Task<IActionResult> UnsubscribeAsync(
+            [SwaggerParameter(Description = "Endpoint для удаления подписки")][FromBody] string endpoint)
         {
             if (string.IsNullOrEmpty(endpoint))
                 return BadRequest();
@@ -87,18 +97,14 @@ namespace Messenger.API.Controllers
         }
 
         [HttpGet("vapid-public-key")]
-        [AllowAnonymous]
+        [SwaggerOperation(
+            Summary = "Получить публичный VAPID ключ",
+            Description = "Возвращает публичный ключ VAPID, необходимый для подписки на push-уведомления в браузере")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Публичный VAPID ключ", typeof(string))]
         public IActionResult GetVapidPublicKey()
         {
             var publicKey = _vapidDetails.PublicKey;
             return Content(publicKey, "text/plain");
         }        
-    }
-
-    public class PushSubscriptionDto
-    {
-        public string Endpoint { get; set; } = string.Empty;
-        public string P256dh { get; set; } = string.Empty;
-        public string Auth { get; set; } = string.Empty;
     }
 }
