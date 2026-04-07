@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'guap-messenger-v0.3.4';
+﻿const CACHE_NAME = 'guap-messenger-v0.3.5';
 
 const STATIC_ASSETS = [
     '/',
@@ -61,8 +61,8 @@ self.addEventListener('push', event => {
         }
     }
 
-    const title = data.sender || data.title || 'Новое сообщение';
-    const body = data.body || data.message || '';
+    const title = data.sender || 'Новое сообщение';
+    const body = data.body || data.message || 'У вас новое сообщение';
 
     const options = {
         body: body,
@@ -72,7 +72,9 @@ self.addEventListener('push', event => {
         tag: data.chatId ? `chat-${data.chatId}` : 'default',
         renotify: true,
         data: {
-            url: data.url || `/Account/Chats?chatId=${data.chatId}`,
+            url: data.chatId
+                ? `/Account/Chats?chatId=${data.chatId}`
+                : '/Account/Chats',
             chatId: data.chatId
         }
     };
@@ -82,7 +84,7 @@ self.addEventListener('push', event => {
     );
 
     setTimeout(() => {
-        self.registration.getNotifications({ tag: data.chatId ? `chat-${data.chatId}` : 'default' })
+        self.registration.getNotifications({ tag: options.tag })
             .then(notifications => {
                 notifications.forEach(notification => notification.close());
             });
@@ -93,11 +95,18 @@ self.addEventListener('notificationclick', event => {
     event.notification.close();
 
     const urlToOpen = event.notification.data?.url || '/Account/Chats';
+    const chatId = event.notification.data?.chatId;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
             for (const client of clientList) {
                 if (client.url.includes('/Account/Chats') && 'focus' in client) {
+                    if (chatId) {
+                        client.postMessage({
+                            type: 'OPEN_CHAT',
+                            chatId: chatId
+                        });
+                    }
                     return client.focus();
                 }
             }

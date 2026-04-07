@@ -1,6 +1,7 @@
 ﻿const API_BASE_URL = 'https://localhost:7001/api';
 
 let currentToken = null;
+
 function getAuthToken() {
     let token = localStorage.getItem('token');
 
@@ -59,7 +60,13 @@ async function initializePushNotifications(registration) {
             if (result !== 'granted') return;
         }
 
-        const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`);
+        const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
+            method: 'GET',
+            headers: {
+                'Authorization': token
+            }
+        });
+
         if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
         const publicKey = await keyResponse.text();
 
@@ -116,4 +123,26 @@ function urlBase64ToUint8Array(base64String) {
         outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
+}
+
+navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data && event.data.type === 'OPEN_CHAT') {
+        const chatId = event.data.chatId;
+        if (chatId) {
+            console.log(`Service Worker запросил открыть чат: ${chatId}`);
+            openChatById(chatId);
+        }
+    }
+});
+
+async function openChatById(chatId) {
+    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (chatItem) {
+        chatItem.click();
+    } else {
+        await loadChats();
+        const newItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+        if (newItem)
+            newItem.click();
+    }
 }
