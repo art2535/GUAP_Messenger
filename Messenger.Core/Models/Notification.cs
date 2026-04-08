@@ -20,8 +20,13 @@ public partial class Notification
 
     public bool Read { get; set; }
 
+    [Column("Read_At", TypeName = "timestamp without time zone")]
+    public DateTime? ReadAt { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("Notifications")]
     [JsonIgnore]
     public virtual User User { get; set; } = null!;
+
+    public static DateTime Now => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 }
