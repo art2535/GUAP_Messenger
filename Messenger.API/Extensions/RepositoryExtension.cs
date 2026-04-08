@@ -15,6 +15,8 @@ namespace Messenger.API.Extensions
             services.AddScoped<LoginRepository>();
             services.AddScoped<UserStatusRepository>();
             services.AddScoped<MessageStatusRepository>();
+            services.AddScoped<BroadcastRepository>();
+            services.AddScoped<PushSubscriptionRepository>();
         }
     }
 }
