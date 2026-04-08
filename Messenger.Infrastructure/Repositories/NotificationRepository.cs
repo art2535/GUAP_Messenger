@@ -27,7 +27,14 @@ namespace Messenger.Infrastructure.Repositories
         {
             return await _context.Notifications
                 .Where(notification => notification.UserId == userId)
+                .OrderByDescending(n => n.CreationDate)
                 .ToListAsync(token);
+        }
+
+        public async Task<Notification?> GetNotificationByIdAsync(Guid notificationId, CancellationToken token = default)
+        {
+            return await _context.Notifications
+                .FirstOrDefaultAsync(n => n.NotificationId == notificationId, token);
         }
 
         public async Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default)

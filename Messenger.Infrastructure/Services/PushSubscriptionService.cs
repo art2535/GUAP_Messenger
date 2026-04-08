@@ -65,10 +65,11 @@ namespace Messenger.Infrastructure.Services
             try
             {
                 string body = "Новое сообщение";
+
                 if (!string.IsNullOrWhiteSpace(messageText))
                 {
-                    body = messageText.Length > 50
-                        ? messageText[..49] + "..."
+                    body = messageText.Length > 60
+                        ? messageText[..57] + "..."
                         : messageText;
                 }
                 else if (hasAttachments)
@@ -84,8 +85,12 @@ namespace Messenger.Infrastructure.Services
 
                 foreach (var participant in participants.Where(p => p.UserId != senderId))
                 {
+                    string encryptedNotificationText = _encryptionService.Encrypt(notificationText);
+
                     var notificationId = await _notificationService.CreateNotificationAsync(
-                        participant.UserId, notificationText, cancellationToken);
+                        participant.UserId,
+                        encryptedNotificationText,
+                        cancellationToken);
 
                     var subscriptions = await _repository.GetByUserIdAsync(participant.UserId, cancellationToken);
 
@@ -111,14 +116,17 @@ namespace Messenger.Infrastructure.Services
                             var payloadJson = JsonSerializer.Serialize(payload);
 
                             await _webPushClient.SendNotificationAsync(
-                                pushSubscription, payloadJson, _vapidDetails, cancellationToken);
+                                pushSubscription,
+                                payloadJson,
+                                _vapidDetails,
+                                cancellationToken);
 
                             await _repository.UpdateLastUsedAsync(sub.Id, cancellationToken);
                         }
                         catch (WebPushException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Gone)
                         {
                             await _repository.RemoveAsync(sub.Id, cancellationToken);
-                            _logger.LogInformation("Удалена устаревшая подписка для {UserId}", participant.UserId);
+                            _logger.LogInformation("Удалена устаревшая подписка для пользователя {UserId}", participant.UserId);
                         }
                         catch (Exception ex)
                         {
