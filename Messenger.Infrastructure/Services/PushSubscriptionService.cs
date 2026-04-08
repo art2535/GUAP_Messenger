@@ -1,6 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
-using Messenger.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using Messenger.Infrastructure.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -11,82 +10,65 @@ namespace Messenger.Infrastructure.Services
 {
     public class PushSubscriptionService : IPushSubscriptionService
     {
-        private readonly GuapMessengerContext _context;
+        private readonly PushSubscriptionRepository _repository;
         private readonly IChatService _chatService;
+        private readonly INotificationService _notificationService;
         private readonly WebPushClient _webPushClient;
         private readonly VapidDetails _vapidDetails;
         private readonly ILogger<PushSubscriptionService> _logger;
+        private readonly IEncryptionService _encryptionService;
 
-        public PushSubscriptionService(GuapMessengerContext context, IChatService chatService, WebPushClient webPushClient,
-            ILogger<PushSubscriptionService> logger, IConfiguration configuration)
+        public PushSubscriptionService(PushSubscriptionRepository repository, IChatService chatService,
+            INotificationService notificationService, WebPushClient webPushClient, IConfiguration configuration,
+            ILogger<PushSubscriptionService> logger, IEncryptionService encryptionService)
         {
-            _context = context;
+            _repository = repository;
             _chatService = chatService;
+            _notificationService = notificationService;
+            _webPushClient = webPushClient;
             _logger = logger;
 
             var vapidSection = configuration.GetSection("Vapid");
-            _vapidDetails = new VapidDetails(
-                subject: vapidSection["Subject"] ?? "mailto:admin@guap.ru",
-                publicKey: vapidSection["PublicKey"]!,
-                privateKey: vapidSection["PrivateKey"]!
-            );
-
-            _webPushClient = webPushClient;
+            _vapidDetails = new VapidDetails(vapidSection["Subject"], vapidSection["PublicKey"]!,
+                vapidSection["PrivateKey"]!);
+            _encryptionService = encryptionService;
         }
 
         public async Task<List<PushSubscription>> GetSubscriptionsByUserIdAsync(Guid userId, CancellationToken ct = default)
         {
-            return await _context.PushSubscriptions
-                .Where(s => s.UserId == userId)
-                .ToListAsync(ct);
+            return await _repository.GetByUserIdAsync(userId, ct);
         }
 
         public async Task AddSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
         {
-            _context.PushSubscriptions.Add(subscription);
-            await _context.SaveChangesAsync(ct);
+            await _repository.AddAsync(subscription, ct);
         }
 
         public async Task RemoveSubscriptionAsync(Guid id, CancellationToken ct = default)
         {
-            var sub = await _context.PushSubscriptions.FindAsync(new object[] { id }, ct);
-            if (sub != null)
-            {
-                _context.PushSubscriptions.Remove(sub);
-                await _context.SaveChangesAsync(ct);
-            }
+            await _repository.RemoveAsync(id, ct);
         }
 
         public async Task UpdateSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
         {
-            _context.PushSubscriptions.Update(subscription);
-            await _context.SaveChangesAsync(ct);
+            await _repository.UpdateAsync(subscription, ct);
         }
 
         public async Task RemoveByEndpointAsync(string endpoint, CancellationToken ct = default)
         {
-            var subscriptions = await _context.PushSubscriptions
-                .Where(s => s.Endpoint == endpoint)
-                .ToListAsync(ct);
-
-            if (subscriptions.Any())
-            {
-                _context.PushSubscriptions.RemoveRange(subscriptions);
-                await _context.SaveChangesAsync(ct);
-            }
+            await _repository.RemoveByEndpointAsync(endpoint, ct);
         }
 
-        public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName, string? messageText,
-            bool hasAttachments, CancellationToken cancellationToken)
+        public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
+            string? messageText, bool hasAttachments, CancellationToken cancellationToken)
         {
             try
             {
                 string body = "Новое сообщение";
-
                 if (!string.IsNullOrWhiteSpace(messageText))
                 {
-                    body = messageText.Length > 120
-                        ? messageText.Substring(0, 117) + "..."
+                    body = messageText.Length > 50
+                        ? messageText[..49] + "..."
                         : messageText;
                 }
                 else if (hasAttachments)
@@ -94,26 +76,18 @@ namespace Messenger.Infrastructure.Services
                     body = "Прикрепил файл";
                 }
 
-                var payload = new
-                {
-                    title = "Новое сообщение",
-                    body = body,
-                    sender = senderName,
-                    url = $"/Account/Chats?chatId={chatId}",
-                    chatId = chatId.ToString()
-                };
+                string notificationText = $"Новое сообщение от {senderName}: {body}";
 
-                var payloadJson = JsonSerializer.Serialize(payload);
-
-                _logger.LogInformation("Отправка Telegram-style push от {Sender} в чат {ChatId}", senderName, chatId);
+                _logger.LogInformation("Отправка push от {Sender} в чат {ChatId}", senderName, chatId);
 
                 var participants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
 
                 foreach (var participant in participants.Where(p => p.UserId != senderId))
                 {
-                    var subscriptions = await _context.PushSubscriptions
-                        .Where(s => s.UserId == participant.UserId)
-                        .ToListAsync(cancellationToken);
+                    var notificationId = await _notificationService.CreateNotificationAsync(
+                        participant.UserId, notificationText, cancellationToken);
+
+                    var subscriptions = await _repository.GetByUserIdAsync(participant.UserId, cancellationToken);
 
                     foreach (var sub in subscriptions)
                     {
@@ -124,30 +98,38 @@ namespace Messenger.Infrastructure.Services
                         {
                             var pushSubscription = new WebPush.PushSubscription(sub.Endpoint, sub.P256dh, sub.Auth);
 
-                            await _webPushClient.SendNotificationAsync(
-                                pushSubscription,
-                                payloadJson,
-                                _vapidDetails,
-                                cancellationToken);
+                            var payload = new
+                            {
+                                title = "Новое сообщение",
+                                body = body,
+                                sender = senderName,
+                                url = $"/Account/Chats?chatId={chatId}",
+                                chatId = chatId.ToString(),
+                                notificationId = notificationId.ToString()
+                            };
 
-                            sub.LastUsedAt = DateTime.UtcNow;
-                            await _context.SaveChangesAsync(cancellationToken);
+                            var payloadJson = JsonSerializer.Serialize(payload);
+
+                            await _webPushClient.SendNotificationAsync(
+                                pushSubscription, payloadJson, _vapidDetails, cancellationToken);
+
+                            await _repository.UpdateLastUsedAsync(sub.Id, cancellationToken);
                         }
                         catch (WebPushException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Gone)
                         {
-                            _context.PushSubscriptions.Remove(sub);
-                            await _context.SaveChangesAsync(cancellationToken);
+                            await _repository.RemoveAsync(sub.Id, cancellationToken);
+                            _logger.LogInformation("Удалена устаревшая подписка для {UserId}", participant.UserId);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Не удалось отправить push пользователю {UserId}", participant.UserId);
+                            _logger.LogWarning(ex, "Ошибка отправки push пользователю {UserId}", participant.UserId);
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Критическая ошибка в SendPushToOfflineUsersAsync для чата {ChatId}", chatId);
+                _logger.LogError(ex, "Критическая ошибка при отправке push для чата {ChatId}", chatId);
             }
         }
     }

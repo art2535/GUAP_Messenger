@@ -125,24 +125,76 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data && event.data.type === 'OPEN_CHAT') {
-        const chatId = event.data.chatId;
+navigator.serviceWorker.addEventListener('message', async function (event) {
+    if (event.data && event.data.type === 'OPEN_SPECIFIC_CHAT') {
+        const { chatId, notificationId } = event.data;
+
+        console.log(`[Push Click] Получено из SW: chatId=${chatId}, notificationId=${notificationId}`);
+
         if (chatId) {
-            console.log(`Service Worker запросил открыть чат: ${chatId}`);
-            openChatById(chatId);
+            setTimeout(async () => {
+                await openChatById(chatId);
+            }, 800);
+        }
+
+        if (notificationId) {
+            setTimeout(() => {
+                markNotificationAsRead(notificationId);
+            }, 1500);
         }
     }
 });
 
 async function openChatById(chatId) {
-    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!chatId) return;
+
+    console.log(`Попытка открыть чат: ${chatId}`);
+
+    document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+
+    let chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+
     if (chatItem) {
+        console.log('Чат найден в DOM');
+        chatItem.click();
+        return;
+    }
+
+    console.log('Чат не найден, загружаем список...');
+    await loadChats();
+
+    chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (chatItem) {
+        console.log('Чат найден после загрузки');
         chatItem.click();
     } else {
-        await loadChats();
-        const newItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-        if (newItem)
-            newItem.click();
+        console.warn(`Чат ${chatId} не найден даже после перезагрузки списка`);
+        showToast('Не удалось открыть чат', 'warning');
+    }
+}
+
+async function markNotificationAsRead(notificationId) {
+    try {
+        const token = getAuthToken();
+        if (!token) {
+            console.warn('markNotificationAsRead: токен отсутствует');
+            return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/push/${notificationId}/read`, {
+            method: 'POST',
+            headers: {
+                'Authorization': token,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            console.log(`Уведомление ${notificationId} помечено как прочитанное`);
+        } else {
+            console.warn(`Ошибка отметки: ${response.status}`);
+        }
+    } catch (err) {
+        console.error('Ошибка markNotificationAsRead:', err);
     }
 }

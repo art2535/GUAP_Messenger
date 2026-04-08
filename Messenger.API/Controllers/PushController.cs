@@ -1,5 +1,5 @@
-﻿using Messenger.Core.Interfaces;
-using Messenger.Core.DTOs.Push;
+﻿using Messenger.Core.DTOs.Push;
+using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -18,30 +18,32 @@ namespace Messenger.API.Controllers
         private readonly VapidDetails _vapidDetails;
         private readonly ILogger<PushController> _logger;
         private readonly IUserService _userService;
+        private readonly INotificationService _notificationService;
 
         public PushController(IPushSubscriptionService subscriptionService, IConfiguration configuration,
-            ILogger<PushController> logger, IUserService userService)
+            ILogger<PushController> logger, IUserService userService, INotificationService notificationService)
         {
             _subscriptionService = subscriptionService;
             _logger = logger;
 
             var vapidSection = configuration.GetSection("Vapid");
 
-            _vapidDetails = new VapidDetails(
-                subject: vapidSection["Subject"] ?? "mailto:admin@guap.ru",
-                publicKey: vapidSection["PublicKey"]!,
-                privateKey: vapidSection["PrivateKey"]!
-            );
+            _vapidDetails = new VapidDetails(vapidSection["Subject"], vapidSection["PublicKey"]!, 
+                vapidSection["PrivateKey"]!);
 
             _userService = userService;
+            _notificationService = notificationService;
         }
 
         [HttpPost("subscribe")]
         [SwaggerOperation(
-            Summary = "Подписка на push-уведомления",
-            Description = "Сохраняет push-подписку пользователя для отправки веб-уведомлений")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно сохранена")]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные подписки или отсутствуют ключи шифрования")]
+            Summary = "Подписка пользователя на push-уведомления",
+            Description = "Сохраняет push-подписку браузера/устройства пользователя для последующей отправки веб-уведомлений. " +
+                         "Если подписка с таким Endpoint уже существует — она будет заменена.",
+            OperationId = "SubscribeToPush")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно сохранена", typeof(object))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные подписки или отсутствуют ключи шифрования", typeof(object))]
+        [Consumes("application/json")]
         public async Task<IActionResult> SubscribeAsync(
             [SwaggerParameter(Description = "Данные для создания подписки")][FromBody] PushSubscriptionRequest subscriptionDto)
         {
@@ -82,9 +84,11 @@ namespace Messenger.API.Controllers
         [HttpDelete("unsubscribe")]
         [SwaggerOperation(
             Summary = "Отписка от push-уведомлений",
-            Description = "Удаляет push-подписку по указанному endpoint")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно удалена")]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Endpoint не указан")]
+            Description = "Удаляет push-подписку по указанному endpoint.",
+            OperationId = "UnsubscribeFromPush")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно удалена", typeof(object))]
+        [SwaggerResponse(StatusCodes.Status400BadRequest, "Endpoint не указан", typeof(object))]
+        [Consumes("application/json")]
         public async Task<IActionResult> UnsubscribeAsync(
             [SwaggerParameter(Description = "Endpoint для удаления подписки")][FromBody] string endpoint)
         {
@@ -96,11 +100,25 @@ namespace Messenger.API.Controllers
             return Ok(new { message = "Подписка удалена" });
         }
 
+        [HttpPost("{notificationId}/read")]
+        [SwaggerOperation(
+            Summary = "Пометить уведомление как прочитанное",
+            Description = "Отмечает конкретное push-уведомление как прочитанное для текущего пользователя.",
+            OperationId = "MarkNotificationAsRead")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Уведомление помечено как прочитанное", typeof(object))]
+        public async Task<IActionResult> MarkAsReadAsync(Guid notificationId)
+        {
+            await _notificationService.MarkAsReadAsync(notificationId);
+
+            return Ok(new { message = "Уведомление помечено как прочитанное" });
+        }
+
         [HttpGet("vapid-public-key")]
         [SwaggerOperation(
-            Summary = "Получить публичный VAPID ключ",
-            Description = "Возвращает публичный ключ VAPID, необходимый для подписки на push-уведомления в браузере")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Публичный VAPID ключ", typeof(string))]
+            Summary = "Получить публичный VAPID-ключ",
+            Description = "Возвращает публичный VAPID-ключ, который необходим на клиентской стороне (в браузере) для создания push-подписки.",
+            OperationId = "GetVapidPublicKey")]
+        [SwaggerResponse(StatusCodes.Status200OK, "Публичный VAPID-ключ в виде строки", typeof(string))]
         public IActionResult GetVapidPublicKey()
         {
             var publicKey = _vapidDetails.PublicKey;

@@ -4,7 +4,8 @@ namespace Messenger.Core.Interfaces
 {
     public interface INotificationService
     {
-        Task CreateNotificationAsync(Guid userId, string text, CancellationToken token = default);
+        Task<Guid> CreateNotificationAsync(Guid userId, string text, CancellationToken token = default);
         Task<IEnumerable<Notification>> GetNotificationsAsync(Guid userId, CancellationToken token = default);
+        Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default);
     }
 }

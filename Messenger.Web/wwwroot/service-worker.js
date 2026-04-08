@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'guap-messenger-v0.3.5';
+﻿const CACHE_NAME = 'guap-messenger-v0.3.7';
 
 const STATIC_ASSETS = [
     '/',
@@ -49,71 +49,62 @@ self.addEventListener('push', event => {
         body: 'Новое сообщение',
         sender: 'Кто-то',
         chatId: null,
-        url: '/Account/Chats'
+        notificationId: null
     };
 
     if (event.data) {
         try {
-            const parsed = event.data.json();
-            data = { ...data, ...parsed };
+            data = { ...data, ...event.data.json() };
         } catch (e) {
             data.body = event.data.text();
         }
     }
 
-    const title = data.sender || 'Новое сообщение';
-    const body = data.body || data.message || 'У вас новое сообщение';
-
     const options = {
-        body: body,
+        body: data.body || 'У вас новое сообщение',
         icon: '/images/web-app-manifest-192x192.png',
         badge: '/images/web-app-manifest-192x192.png',
         vibrate: [200, 100, 200],
         tag: data.chatId ? `chat-${data.chatId}` : 'default',
         renotify: true,
         data: {
-            url: data.chatId
-                ? `/Account/Chats?chatId=${data.chatId}`
-                : '/Account/Chats',
-            chatId: data.chatId
+            url: data.chatId ? `/Account/Chats?chatId=${data.chatId}` : '/Account/Chats',
+            chatId: data.chatId,
+            notificationId: data.notificationId
         }
     };
 
-    event.waitUntil(
-        self.registration.showNotification(title, options)
-    );
+    event.waitUntil(self.registration.showNotification(data.sender || 'Новое сообщение', options));
 
     setTimeout(() => {
         self.registration.getNotifications({ tag: options.tag })
-            .then(notifications => {
-                notifications.forEach(notification => notification.close());
-            });
+            .then(nots => nots.forEach(n => n.close()));
     }, 5000);
 });
 
 self.addEventListener('notificationclick', event => {
     event.notification.close();
 
-    const urlToOpen = event.notification.data?.url || '/Account/Chats';
-    const chatId = event.notification.data?.chatId;
+    const { chatId, notificationId } = event.notification.data || {};
+    const targetUrl = chatId
+        ? `/Account/Chats?chatId=${chatId}`
+        : '/Account/Chats';
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-            for (const client of clientList) {
-                if (client.url.includes('/Account/Chats') && 'focus' in client) {
-                    if (chatId) {
-                        client.postMessage({
-                            type: 'OPEN_CHAT',
-                            chatId: chatId
-                        });
-                    }
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(existingClients => {
+            for (let client of existingClients) {
+                if (client.url.includes('/Account/Chats')) {
+                    client.postMessage({
+                        type: 'OPEN_SPECIFIC_CHAT',
+                        chatId: chatId,
+                        notificationId: notificationId
+                    });
                     return client.focus();
                 }
             }
 
-            if (clients.openWindow) {
-                return clients.openWindow(urlToOpen);
-            }
+            console.log(`[SW] Открываем чат напрямую: ${targetUrl}`);
+            return clients.openWindow(targetUrl);
         })
     );
 });

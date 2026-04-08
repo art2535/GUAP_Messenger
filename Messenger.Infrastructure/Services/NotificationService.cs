@@ -13,22 +13,29 @@ namespace Messenger.Infrastructure.Services
             _repository = repository;
         }
 
-        public async Task CreateNotificationAsync(Guid userId, string text, CancellationToken token = default)
+        public async Task<Guid> CreateNotificationAsync(Guid userId, string text, CancellationToken token = default)
         {
             var notification = new Notification
             {
                 NotificationId = Guid.NewGuid(),
+                UserId = userId,
                 Text = text,
-                CreationDate = DateTime.UtcNow,
+                CreationDate = Notification.Now,
                 Read = false
             };
 
             await _repository.AddNotificationAsync(notification, token);
+            return notification.NotificationId;
         }
 
         public async Task<IEnumerable<Notification>> GetNotificationsAsync(Guid userId, CancellationToken token = default)
         {
             return await _repository.GetNotificationsByUserIdAsync(userId, token);
+        }
+        
+        public async Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default)
+        {
+            await _repository.MarkAsReadAsync(notificationId, token);
         }
     }
 }
