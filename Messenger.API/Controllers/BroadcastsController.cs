@@ -1,5 +1,4 @@
 ﻿using Messenger.API.Responses;
-using Messenger.Infrastructure.Services;
 using Messenger.Core.DTOs.Broadcasts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +14,10 @@ namespace Messenger.API.Controllers
     [SwaggerTag("Контроллер для управления рассылками сообщений")]
     public class BroadcastsController : ControllerBase
     {
-        private readonly BroadcastService _service;
+        private readonly IBroadcastService _service;
         private readonly IUserService _userService;
 
-        public BroadcastsController(BroadcastService service, IUserService userService)
+        public BroadcastsController(IBroadcastService service, IUserService userService)
         {
             _service = service;
             _userService = userService;

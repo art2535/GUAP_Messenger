@@ -1,11 +1,10 @@
-﻿using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
+﻿using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Repositories
 {
-    public class BroadcastRepository : IBroadcastRepository
+    public class BroadcastRepository
     {
         private readonly GuapMessengerContext _context;
 
