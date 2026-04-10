@@ -1,0 +1,47 @@
+{
+  "name": "GUAP Messenger",
+  "short_name": "GUAP Chat",
+  "description": "Мессенджер Санкт-Петербургского государственного университета аэрокосмического приборостроения",
+  "start_url": "/Authorization/Authorization",
+  "id": "/Authorization/Authorization",
+  "lang": "ru-RU",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "categories": [ "social", "communication" ],
+  "icons": [
+    {
+      "src": "/images/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Открыть чаты",
+      "short_name": "Чаты",
+      "url": "/Account/Chats",
+      "icons": [
+        {
+          "src": "/images/web-app-manifest-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

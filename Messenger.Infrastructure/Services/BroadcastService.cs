@@ -1,14 +1,15 @@
 ﻿using Messenger.Core.DTOs.Broadcasts;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Repositories;
 
 namespace Messenger.Infrastructure.Services
 {
-    public class BroadcastService
+    public class BroadcastService : IBroadcastService
     {
-        private readonly IBroadcastRepository _repository;
+        private readonly BroadcastRepository _repository;
 
-        public BroadcastService(IBroadcastRepository repository)
+        public BroadcastService(BroadcastRepository repository)
         {
             _repository = repository;
         }

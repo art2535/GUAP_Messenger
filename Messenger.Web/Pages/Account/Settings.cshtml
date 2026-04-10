@@ -12,7 +12,7 @@
     var firstName = Model.Profile.FirstName;
     var middleName = Model.Profile.MiddleName;
 
-    var fullName = $"{lastName} {firstName.FirstOrDefault()}." +
+    var fullName = $"{lastName} {firstName?.FirstOrDefault() ?? '.'}." +
                    (!string.IsNullOrEmpty(middleName) ? middleName[0].ToString() + "." : "");
 }
 
@@ -23,10 +23,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="access-token" content="@Model.AccessToken">
     <title>Настройки</title>
+    <partial name="_LayoutPWA"/>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
     <style>
         html, body {
             height: 100%;
@@ -146,6 +148,20 @@
             .toast.info {
                 background: linear-gradient(135deg, #1e40af, #3b82f6);
             }
+
+        #notification-types {
+            transition: all 0.3s ease-in-out;
+            overflow: hidden;
+        }
+
+            #notification-types.hidden {
+                opacity: 0;
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+            }
     </style>
 </head>
 <body class="flex">
@@ -157,7 +173,8 @@
             <h1 class="text-xl font-bold text-gray-800">GUAP Messenger</h1>
         </div>
         <nav class="flex-1 p-4">
-            <a asp-page="/Account/Chats" class="block py-2.5 px-4 text-gray-600 rounded-lg hover:bg-gray-100 transition">Чаты</a>
+            <a asp-page="/Account/Chats" asp-route-id=""
+               class="block py-2.5 px-4 text-gray-600 rounded-lg hover:bg-gray-100 transition">Чаты</a>
             <a href="#" class="block py-2.5 px-4 bg-blue-50 text-blue-600 rounded-lg font-medium">Настройки</a>
             <div class="pl-6 mt-3 space-y-1">
                 <a href="#profile" class="block py-1.5 px-4 text-sm text-gray-600 hover:bg-gray-100 rounded">Профиль</a>
@@ -179,6 +196,7 @@
                 });
             </script>
         }
+
         <h2 class="text-3xl font-bold text-gray-800 mb-8">Настройки</h2>
 
         <form method="post" enctype="multipart/form-data" asp-page-handler="Save" class="max-w-4xl mx-auto space-y-8">
@@ -267,27 +285,37 @@
                 </div>
             </section>
 
+            <!-- ==================== УВЕДОМЛЕНИЯ ==================== -->
             <section id="notifications" class="bg-white rounded-xl shadow-md p-8">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-6">Уведомления</h3>
-                <div class="space-y-5">
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <div class="flex items-center">
-                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-3 font-medium">Сообщения</span>
+                
+                <div class="space-y-6">
+                    <!-- Главный toggle -->
+                    <div class="flex items-center justify-between py-4 border-t border-gray-100">
+                        <div>
+                            <p class="font-medium text-gray-800">Push-уведомления</p>
+                            <p class="text-sm text-gray-500">Получать уведомления даже когда приложение закрыто</p>
                         </div>
-                    </label>
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <div class="flex items-center">
-                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-3 font-medium">Групповые чаты</span>
-                        </div>
-                    </label>
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <div class="flex items-center">
-                            <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-3 font-medium">Объявления</span>
-                        </div>
-                    </label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="push-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    <div id="notification-types" class="space-y-4 pl-6 border-l-2 border-gray-100 transition-all duration-300">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="font-medium">Сообщения</span>
+                            <input type="checkbox" id="notifyMessages" checked class="h-5 w-5 text-blue-600 rounded">
+                        </label>
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="font-medium">Групповые чаты</span>
+                            <input type="checkbox" id="notifyGroup" checked class="h-5 w-5 text-blue-600 rounded">
+                        </label>
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="font-medium">Упоминания</span>
+                            <input type="checkbox" id="notifyMentions" checked class="h-5 w-5 text-blue-600 rounded">
+                        </label>
+                    </div>
                 </div>
             </section>
 
@@ -331,12 +359,10 @@
         </div>
     </div>
 
+    <script src="~/app.js"></script>
     <script>
-        const HUB_URL = 'https://localhost:7001/hubs/chat';
         const API_URL = 'https://localhost:7001/api';
         let connection = null;
-        let searchTimer;
-        let confirmCallback = null;
 
         const avatarInput = document.getElementById('avatarInput');
         let currentAvatar = document.getElementById('current-avatar');
@@ -345,32 +371,50 @@
         const cancelPreviewBtn = document.getElementById('cancel-preview');
         const deleteAvatarTrigger = document.getElementById('delete-avatar-trigger');
         const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
+
         let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
+
+        let pushToggle = null;
+        let currentSubscription = null;
 
         function getJwtToken() {
             const meta = document.querySelector('meta[name="access-token"]');
             return meta ? meta.content : '';
         }
 
+        function getAuthToken() {
+            let token = document.querySelector('meta[name="access-token"]')?.content?.trim();
+
+            if (!token) {
+                token = localStorage.getItem('token')?.trim();
+            }
+
+            if (!token) {
+                console.warn("Токен авторизации не найден!");
+                return null;
+            }
+
+            if (!token.startsWith('Bearer ')) {
+                token = 'Bearer ' + token;
+            }
+
+            return token;
+        }
+
         async function apiFetch(endpoint, options = {}) {
-            const token = getJwtToken();
+            const token = getAuthToken();
             const headers = {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': token,
                 'Content-Type': 'application/json',
                 ...options.headers
             };
+
             const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(errorText || `Ошибка: ${response.statusText}`);
             }
             return response.json();
-        }
-
-        function decodeHtml(html) {
-            const txt = document.createElement('textarea');
-            txt.innerHTML = html;
-            return txt.value;
         }
 
         function showToast(message, type = 'info', duration = 4000) {
@@ -384,7 +428,7 @@
 
             const toast = document.createElement('div');
             toast.className = 'px-6 py-4 rounded-xl shadow-2xl text-white font-medium min-w-80 max-w-sm transform translate-x-full opacity-0 transition-all duration-500 ease-out flex items-center gap-3';
-        
+
             const colors = {
                 success: 'bg-green-600',
                 error: 'bg-red-600',
@@ -425,60 +469,28 @@
         }
 
         async function initSignalR() {
-                const token = getJwtToken();
+            const token = getJwtToken();
             if (!token) {
                 console.error("Нет токена - SignalR не запускается");
                 return;
             }
 
-            console.log("Запуск SignalR с токеном:", token.substring(0, 20) + "...");
-
             connection = new signalR.HubConnectionBuilder()
-                .withUrl(HUB_URL, { accessTokenFactory: () => token })
-                .withAutomaticReconnect({
-                    nextRetryDelayInMilliseconds: retryContext => {
-                        console.log("Попытка переподключения после", retryContext.previousRetryCount, "попыток");
-                        return Math.min(1000 * Math.pow(2, retryContext.previousRetryCount), 30000);
-                    }
-                })
+                .withUrl('https://localhost:7001/hubs/chat', { accessTokenFactory: () => token })
+                .withAutomaticReconnect()
                 .configureLogging(signalR.LogLevel.Information)
                 .build();
 
-            connection.onclose(error => {
-                console.error("SignalR закрыто:", error);
-            });
-
-            connection.onreconnecting(error => {
-                console.warn("SignalR переподключается:", error);
-            });
-
-            connection.onreconnected(connectionId => {
-                console.log("SignalR переподключён, connectionId:", connectionId);
-            });
-
             connection.on('UserBlockStatusChanged', (data) => {
-                const me = '@Model.CurrentUser.UserId'.toLowerCase();
-                const actor = data.actorId?.toLowerCase();
-                const target = data.targetId?.toLowerCase();
-                const blocked = data.isBlocked;
-
-                console.log("Settings получил UserBlockStatusChanged", { actor, target, blocked, me });
-
-                if (target === me) {
-                    showToast(
-                        blocked ? "Вас добавил в чёрный список" : "Вас убрал из чёрного списка",
-                        blocked ? "warning" : "info"
-                    );
-                }
-
-                if (actor === me) {
-                    loadBlockedUsers();
+                const me = '@Model.CurrentUser?.UserId'.toLowerCase();
+                if (data.targetId?.toLowerCase() === me) {
+                    showToast(data.isBlocked ? "Вас добавили в чёрный список" : "Вас убрали из чёрного списка",
+                        data.isBlocked ? "warning" : "info");
                 }
             });
 
             connection.on("ProfileUpdated", (data) => {
-                const currentUserId = '@(Model.CurrentUser?.UserId.ToString() ?? "")'.toLowerCase();
-                if (data.userId.toLowerCase() === currentUserId) {
+                if (data.userId.toLowerCase() === '@(Model.CurrentUser?.UserId ?? "")'.toLowerCase()) {
                     updateAvatarDisplay(data.avatarUrl);
                     hasOriginalAvatar = !!data.avatarUrl;
                     deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
@@ -493,121 +505,10 @@
             }
         }
 
-        async function loadBlockedUsers() {
-            try {
-                const response = await apiFetch('/users/blocked');
-                const users = response.data || response; 
-                const list = document.getElementById('blocked-users-list');
-
-                if (!users || users.length === 0) {
-                    list.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
-                    return;
-                }
-
-                list.innerHTML = users.map(user => `
-                    <div class="blocked-user-item flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition" data-user-id="${user.id}">
-                        <div class="flex items-center space-x-4">
-                            <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                                <i data-feather="user-x" class="w-6 h-6 text-gray-500"></i>
-                            </div>
-                            <div>
-                                <p class="font-medium text-gray-800">${user.fullName || user.name || 'Пользователь'}</p>
-                                ${user.userName ? `<p class="text-sm text-gray-500">@@${user.userName}</p>` : ''}
-                            </div>
-                        </div>
-                        <button type="button" class="unblock-btn text-red-600 hover:text-red-800 font-medium text-sm" 
-                                data-id="${user.id}" data-name="${user.fullName || user.name}">
-                            Разблокировать
-                        </button>
-                    </div>
-                `).join('');
-                feather.replace();
-            } catch (err) {
-                console.error("Load blocked error:", err);
-            }
-        }
-
-        async function fetchUserAndAddToBlocked(userId) {
-            if (document.querySelector(`[data-user-id="${userId}"]`)) return;
-            loadBlockedUsers();
-        }
-
-        function removeFromBlockedList(userId) {
-            const item = document.querySelector(`.blocked-user-item[data-user-id="${userId}"]`);
-            if (item) {
-                item.remove();
-                const list = document.getElementById('blocked-users-list');
-                if (!list.querySelector('.blocked-user-item')) {
-                    list.innerHTML = '<p class="text-gray-500 italic text-center py-8">Чёрный список пуст</p>';
-                }
-            }
-        }
-
-        async function handleUnblockClick(userId, userName, btnElement) {
-            const ok = await openConfirm('Разблокировка', `Разблокировать пользователя «${userName}»?`);
-            if (!ok) return;
-
-            try {
-                await apiFetch(`/users/unblock/${userId}`, { method: 'POST' });
-                showToast(`«${userName}» разблокирован`, 'success');
-                removeFromBlockedList(userId);
-            } catch (err) {
-                showToast(err.message || 'Ошибка разблокировки', 'error');
-            }
-        }
-
-        document.getElementById('user-search-input').addEventListener('input', function() {
-            clearTimeout(searchTimer);
-            const query = this.value.trim();
-            const results = document.getElementById('search-results');
-        
-            if (query.length < 2) {
-                results.classList.add('hidden');
-                return;
-            }
-
-            searchTimer = setTimeout(async () => {
-                try {
-                    const response = await apiFetch(`/users/search?query=${encodeURIComponent(query)}`);
-                    const users = response.data || response;
-
-                    if (!users || users.length === 0) {
-                        results.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Ничего не найдено</div>';
-                    } else {
-                        results.innerHTML = users.map(u => `
-                            <div class="flex items-center space-x-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" 
-                                 onclick="confirmBlock('${u.id}', '${u.fullName || u.name}')">
-                                <img src="${u.avatarUrl || '/images/default-avatar.png'}" class="w-10 h-10 rounded-full object-cover">
-                                <div><p class="font-medium">${u.fullName || u.name}</p></div>
-                            </div>
-                        `).join('');
-                    }
-                    results.classList.remove('hidden');
-                } catch (err) {
-                    console.error(err);
-                }
-            }, 300);
-        });
-
-        async function confirmBlock(userId, userName) {
-            const ok = await openConfirm('Блокировка', `Заблокировать пользователя «${userName}»?`);
-            if (!ok) return;
-
-            try {
-                await apiFetch(`/users/block/${userId}`, { method: 'POST' });
-                showToast(`«${userName}» заблокирован`, 'success');
-                document.getElementById('user-search-input').value = '';
-                document.getElementById('search-results').classList.add('hidden');
-                loadBlockedUsers();
-            } catch (err) {
-                showToast(err.message || 'Ошибка при блокировке', 'error');
-            }
-        }
-
         function updateAvatarDisplay(avatarUrl) {
-            const fallback = '/images/default-avatar.png';
+            const fallback = '/images/logo.png';
             const urlWithCache = avatarUrl ? `${avatarUrl}?t=${new Date().getTime()}` : fallback;
-        
+
             if (currentAvatar.tagName === 'IMG') {
                 currentAvatar.src = urlWithCache;
             } else {
@@ -620,10 +521,10 @@
             }
         }
 
-        avatarInput.addEventListener('change', function(e) {
+        avatarInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return hidePreview();
-        
+
             if (!file.type.startsWith('image/') || file.size > 2 * 1024 * 1024) {
                 showToast('Выберите изображение до 2 МБ', 'error');
                 this.value = '';
@@ -646,36 +547,186 @@
             if (hasOriginalAvatar) deleteAvatarTrigger.classList.remove('hidden');
         }
 
-        cancelPreviewBtn.onclick = () => { avatarInput.value = ''; hidePreview(); };
+        cancelPreviewBtn.onclick = () => {
+            avatarInput.value = '';
+            hidePreview();
+        };
 
         deleteAvatarTrigger.onclick = async () => {
             if (!confirm('Удалить аватар?')) return;
             deleteAvatarFlag.value = 'true';
             updateAvatarDisplay(null);
             hidePreview();
-            showToast('Аватар будет удален после сохранения', 'info');
+            showToast('Аватар будет удалён после сохранения', 'info');
         };
+
+        function toggleNotificationTypes() {
+            const typesContainer = document.getElementById('notification-types');
+            if (!typesContainer || !pushToggle) return;
+
+            if (pushToggle.checked) {
+                typesContainer.classList.remove('hidden');
+                setTimeout(() => typesContainer.style.opacity = '1', 10);
+            } else {
+                typesContainer.style.opacity = '0';
+                setTimeout(() => typesContainer.classList.add('hidden'), 300);
+            }
+        }
+
+        async function checkPushStatus() {
+            pushToggle = document.getElementById('push-toggle');
+            if (!pushToggle) return;
+
+            if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
+                pushToggle.disabled = true;
+                pushToggle.parentElement.style.opacity = '0.5';
+                return;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                currentSubscription = await registration.pushManager.getSubscription();
+                pushToggle.checked = !!currentSubscription;
+
+                if (Notification.permission === 'denied') {
+                    pushToggle.disabled = true;
+                }
+
+                toggleNotificationTypes();
+            } catch (e) {
+                console.error('Ошибка проверки статуса push:', e);
+            }
+        }
+
+        async function togglePushNotifications() {
+            if (!pushToggle) return;
+            toggleNotificationTypes();
+
+            if (pushToggle.checked) {
+                await subscribeToPush();
+            } else {
+                await unsubscribeFromPush();
+            }
+        }
+
+        async function subscribeToPush() {
+            try {
+                if (Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        pushToggle.checked = false;
+                        showToast('Разрешение на уведомления отклонено', 'error');
+                        return;
+                    }
+                }
+
+                const registration = await navigator.serviceWorker.ready;
+                const keyRes = await fetch(`${API_URL}/push/vapid-public-key`);
+                const vapidPublicKey = await keyRes.text();
+
+                let subscription = await registration.pushManager.getSubscription();
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                    });
+                }
+
+                const token = getAuthToken();
+                const subJson = subscription.toJSON();
+
+                const res = await fetch(`${API_URL}/push/subscribe`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({
+                        endpoint: subscription.endpoint,
+                        p256dh: subJson.keys.p256dh,
+                        auth: subJson.keys.auth
+                    })
+                });
+
+                if (res.ok) {
+                    currentSubscription = subscription;
+                    showToast('Push-уведомления включены', 'success');
+                } else {
+                    throw new Error('Не удалось сохранить подписку на сервере');
+                }
+            } catch (err) {
+                console.error(err);
+                if (pushToggle) pushToggle.checked = false;
+                showToast('Не удалось включить push-уведомления', 'error');
+            }
+        }
+
+        async function unsubscribeFromPush() {
+            try {
+                if (!currentSubscription) {
+                    const registration = await navigator.serviceWorker.ready;
+                    currentSubscription = await registration.pushManager.getSubscription();
+                }
+
+                if (currentSubscription) {
+                    await currentSubscription.unsubscribe();
+
+                    const token = getAuthToken();
+                    await fetch(`${API_URL}/push/unsubscribe`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+                        body: JSON.stringify(currentSubscription.endpoint)
+                    });
+
+                    currentSubscription = null;
+                    showToast('Push-уведомления отключены', 'info');
+                }
+            } catch (err) {
+                console.error(err);
+                if (pushToggle) pushToggle.checked = true;
+                showToast('Не удалось отключить push-уведомления', 'error');
+            }
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             initSignalR();
-            loadBlockedUsers();
 
-            document.getElementById('blocked-users-list').addEventListener('click', (e) => {
-                const btn = e.target.closest('.unblock-btn');
-                if (btn) handleUnblockClick(btn.dataset.id, btn.dataset.name, btn);
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('#user-search-input') && !e.target.closest('#search-results')) {
-                    document.getElementById('search-results').classList.add('hidden');
-                }
-            });
+            checkPushStatus();
+            const pushToggleEl = document.getElementById('push-toggle');
+            if (pushToggleEl) {
+                pushToggleEl.addEventListener('change', togglePushNotifications);
+            }
 
             document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
+
             document.querySelectorAll('.modal-overlay').forEach(m => {
-                m.onclick = (e) => { if (e.target === m) { m.classList.remove('active'); if (m.id === 'confirmModal') closeConfirm(false); } };
+                m.onclick = (e) => {
+                    if (e.target === m) {
+                        m.classList.remove('active');
+                        if (m.id === 'confirmModal') closeConfirm(false);
+                    }
+                };
             });
+
+            if (cancelPreviewBtn)
+                cancelPreviewBtn.onclick = () => { 
+                    avatarInput.value = ''; hidePreview(); 
+                };
         });
     </script>
 </body>
