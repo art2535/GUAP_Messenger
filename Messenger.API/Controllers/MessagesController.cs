@@ -1,15 +1,17 @@
-﻿using Messenger.API.Responses;
+﻿using MassTransit;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Org.BouncyCastle.Crypto.Tls;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Claims;
 
 namespace Messenger.API.Controllers
 {
@@ -23,29 +25,29 @@ namespace Messenger.API.Controllers
         private readonly IMessageService _messageService;
         private readonly IMessageStatusService _messageStatusService;
         private readonly IReactionService _reactionService;
-        private readonly IAttachmentService _attachmentService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
-        private readonly IPushSubscriptionService _subscriptionService;
         private readonly ILogger<MessagesController> _logger;
+        private readonly IPublishEndpoint _publishEndpoint;
+        private readonly IPushSubscriptionService _subscriptionService;
 
         public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
-            IReactionService reactionService, IHubContext<ChatHub> hubContext, IAttachmentService attachmentService, 
-            IChatService chatService, IUserService userService, IEncryptionService encryptionService,
-            IPushSubscriptionService subscriptionService, ILogger<MessagesController> logger)
+            IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
+            IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
+            IPublishEndpoint publishEndpoint, IPushSubscriptionService subscriptionService)
         {
             _messageService = messageService;
             _messageStatusService = messageStatusService;
             _reactionService = reactionService;
             _hubContext = hubContext;
-            _attachmentService = attachmentService;
             _chatService = chatService;
             _userService = userService;
             _encryptionService = encryptionService;
-            _subscriptionService = subscriptionService;
             _logger = logger;
+            _publishEndpoint = publishEndpoint;
+            _subscriptionService = subscriptionService;
         }
 
         [HttpGet("{chatId}/search")]
@@ -91,7 +93,7 @@ namespace Messenger.API.Controllers
         [SwaggerOperation(
             Summary = "Отправить сообщение в чат",
             Description = "Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +
-                          "Сообщение рассылается всем участникам чата через SignalR.")]
+                "Сообщение сохраняется асинхронно через consumer и рассылается через SignalR.")]
         [Consumes("multipart/form-data", "application/json")]
         [SwaggerResponse(StatusCodes.Status200OK, "Сообщение успешно отправлено", typeof(SendMessageSuccessResponse))]
         [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные или пользователь заблокирован", typeof(ErrorResponse))]
@@ -100,21 +102,18 @@ namespace Messenger.API.Controllers
         [SwaggerResponse(StatusCodes.Status404NotFound, "Чат не найден", typeof(ErrorResponse))]
         [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
         public async Task<IActionResult> SendMessageAsync(
-            [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId, 
-            [FromForm] [SwaggerParameter(Description = "Текст сообщения (опционально)")] string? messageText, 
-            [FromForm] [SwaggerParameter(Description = "Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files, 
+            [SwaggerParameter(Description = "Идентификатор чата (GUID)")] Guid chatId,
+            [FromForm][SwaggerParameter(Description = "Текст сообщения (опционально)")] string? messageText,
+            [FromForm][SwaggerParameter(Description = "Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files,
             CancellationToken cancellationToken = default)
         {
             try
             {
                 var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
                 if (error != null)
-                {
                     return error;
-                }
 
                 const long MAX_FILE_SIZE = 10 * 1024 * 1024;
-
                 if (files != null && files.Length > 0)
                 {
                     foreach (var file in files)
@@ -134,25 +133,20 @@ namespace Messenger.API.Controllers
                 var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
                 if (chat == null)
                 {
-                    return NotFound(new ErrorResponse
-                    { 
-                        Error = "Чат не найден" 
-                    });
+                    return NotFound(new ErrorResponse { Error = "Чат не найден" });
                 }
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
-                { 
-                    return Forbid(); 
+                {
+                    return Forbid();
                 }
 
                 if (chat.Type == "private")
                 {
                     var recipientId = chat.ChatParticipants.FirstOrDefault(p => p.UserId != user!.UserId)?.UserId;
-
                     if (recipientId != null)
                     {
                         bool blockedByRecipient = await _userService.IsBlockedByAsync(recipientId.Value, user!.UserId, cancellationToken);
-
                         bool blockedByMe = await _userService.IsBlockedByAsync(user!.UserId, recipientId.Value, cancellationToken);
 
                         if (blockedByRecipient || blockedByMe)
@@ -168,22 +162,13 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                var contentToSave = string.IsNullOrWhiteSpace(messageText) ? null : _encryptionService.Encrypt(messageText.Trim());
+                var contentToSave = string.IsNullOrWhiteSpace(messageText)
+                    ? null
+                    : _encryptionService.Encrypt(messageText.Trim());
 
-                var result = await _messageService.SendMessageAsync(chatId, user!.UserId, contentToSave,
-                    files?.Any() == true, files, cancellationToken);
+                var attachmentsInfo = new List<AttachmentInfo>();
+                var attachmentDtos = new List<AttachmentDto>();
 
-                if (!result.isSuccess)
-                {
-                    return BadRequest(new ErrorResponse
-                    {
-                        Error = result.error
-                    });
-                }
-
-                var message = result.data!;
-
-                var attachments = new List<AttachmentDto>();
                 if (files != null && files.Length > 0)
                 {
                     var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
@@ -198,56 +183,61 @@ namespace Messenger.API.Controllers
                         await using var stream = new FileStream(filePath, FileMode.Create);
                         await file.CopyToAsync(stream, cancellationToken);
 
-                        var attachment = new Attachment
+                        var attachmentId = Guid.NewGuid();
+
+                        attachmentsInfo.Add(new AttachmentInfo
                         {
-                            AttachmentId = Guid.NewGuid(),
-                            MessageId = message.MessageId,
+                            AttachmentId = attachmentId,
+                            FileName = file.FileName,
+                            FileType = file.ContentType ?? "application/octet-stream",
+                            SizeInBytes = file.Length,
+                            Url = fileUrl
+                        });
+
+                        attachmentDtos.Add(new AttachmentDto
+                        {
+                            AttachmentId = attachmentId,
                             FileName = file.FileName,
                             FileType = file.ContentType ?? "application/octet-stream",
                             SizeInBytes = (int)file.Length,
                             Url = fileUrl
-                        };
-
-                        await _attachmentService.AddAttachmentAsync(attachment, cancellationToken);
-
-                        attachments.Add(new AttachmentDto
-                        {
-                            AttachmentId = attachment.AttachmentId,
-                            FileName = attachment.FileName,
-                            FileType = attachment.FileType,
-                            SizeInBytes = attachment.SizeInBytes ?? 0,
-                            Url = attachment.Url
                         });
                     }
                 }
 
+                var messageId = Guid.NewGuid();
+
+                await _publishEndpoint.Publish(new ChatMessageSent
+                {
+                    MessageId = messageId,
+                    ChatId = chatId,
+                    SenderId = user!.UserId,
+                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
+                    MessageText = contentToSave,
+                    SentAt = DateTime.Now,
+                    HasAttachments = attachmentsInfo.Count > 0,
+                    Attachments = attachmentsInfo
+                }, cancellationToken);
+
                 var messageDto = new MessageDto
                 {
-                    MessageId = message.MessageId,
-                    ChatId = message.ChatId,
-                    SenderId = user!.UserId,
-                    SenderName = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Пользователь",
+                    MessageId = messageId,
+                    ChatId = chatId,
+                    SenderId = user.UserId,
+                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                     MessageText = messageText?.Trim(),
-                    SentAt = message.SendTime,
+                    SentAt = DateTime.Now,
                     Status = "Sent",
-                    Attachments = attachments
+                    Attachments = attachmentDtos
                 };
-
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ReceiveMessage", messageDto, cancellationToken);
-
-                var senderName = $"{user!.FirstName} {user!.LastName}" 
-                    ?? User.FindFirstValue(ClaimTypes.Name) ?? "Пользователь";
-
-                Console.WriteLine("Отправка Push-уведомления");
 
                 try
                 {
                     _logger.LogInformation("ПОПЫТКА PUSH: ChatId={ChatId}, SenderId={SenderId}, Text={Text}",
-                        chatId, user!.UserId, messageText?.Trim());
+                        chatId, user.UserId, messageText?.Trim());
 
-                    await _subscriptionService.SendPushToOfflineUsersAsync(chatId, user!.UserId, senderName,
-                        messageText?.Trim(), attachments.Count > 0, cancellationToken);
+                    await _subscriptionService.SendPushToOfflineUsersAsync(chatId, user.UserId, messageDto.SenderName,
+                        messageText?.Trim(), attachmentDtos.Count > 0, cancellationToken);
 
                     _logger.LogInformation("Push-уведомления отправлены для чата {ChatId}", chatId);
                 }
@@ -256,16 +246,20 @@ namespace Messenger.API.Controllers
                     _logger.LogError(ex, "Не удалось отправить push-уведомления для чата {ChatId}", chatId);
                 }
 
-
                 return Ok(new SendMessageSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Data = messageDto 
+                {
+                    IsSuccess = true,
+                    Data = messageDto
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { isSuccess = false, error = ex.Message });
+                _logger.LogError(ex, "Ошибка при отправке сообщения в чат {ChatId}", chatId);
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
         }
 
