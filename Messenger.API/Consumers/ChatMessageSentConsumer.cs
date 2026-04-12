@@ -14,19 +14,17 @@ namespace Messenger.API.Consumers
         private readonly IMessageService _messageService;
         private readonly IAttachmentService _attachmentService;
         private readonly IEncryptionService _encryptionService;
-        private readonly IMessageStatusService _messageStatusService;
         private readonly ILogger<ChatMessageSentConsumer> _logger;
 
         public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, IMessageService messageService,
             IAttachmentService attachmentService, IEncryptionService encryptionService, 
-            ILogger<ChatMessageSentConsumer> logger, IMessageStatusService messageStatusService)
+            ILogger<ChatMessageSentConsumer> logger)
         {
             _hubContext = hubContext;
             _messageService = messageService;
             _attachmentService = attachmentService;
             _encryptionService = encryptionService;
             _logger = logger;
-            _messageStatusService = messageStatusService;
         }
 
         public async Task Consume(ConsumeContext<ChatMessageSent> context)

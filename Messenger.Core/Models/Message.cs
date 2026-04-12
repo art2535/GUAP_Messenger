@@ -42,10 +42,6 @@ public partial class Message
 
     [InverseProperty("Message")]
     [JsonIgnore]
-    public virtual ICollection<MessageStatus> MessageStatuses { get; set; } = new List<MessageStatus>();
-
-    [InverseProperty("Message")]
-    [JsonIgnore]
     public virtual ICollection<Reaction> Reactions { get; set; } = new List<Reaction>();
 
     [ForeignKey("SenderId")]

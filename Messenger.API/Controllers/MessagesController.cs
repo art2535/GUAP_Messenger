@@ -23,7 +23,6 @@ namespace Messenger.API.Controllers
     public class MessagesController : ControllerBase
     {
         private readonly IMessageService _messageService;
-        private readonly IMessageStatusService _messageStatusService;
         private readonly IReactionService _reactionService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
@@ -33,13 +32,12 @@ namespace Messenger.API.Controllers
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly IPushSubscriptionService _subscriptionService;
 
-        public MessagesController(IMessageService messageService, IMessageStatusService messageStatusService, 
+        public MessagesController(IMessageService messageService,
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
             IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
             IPublishEndpoint publishEndpoint, IPushSubscriptionService subscriptionService)
         {
             _messageService = messageService;
-            _messageStatusService = messageStatusService;
             _reactionService = reactionService;
             _hubContext = hubContext;
             _chatService = chatService;
@@ -328,82 +326,6 @@ namespace Messenger.API.Controllers
                 ".pdf" => "application/pdf",
                 _ => "application/octet-stream"
             };
-        }
-
-        [HttpPost("{messageId}/status")]
-        [SwaggerOperation(
-            Summary = "Обновить статус сообщения",
-            Description = "Устанавливает статус сообщения для текущего пользователя (например, 'Delivered', 'Read').")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно обновлён", typeof(UpdateMessageStatusSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> AddOrUpdateMessageStatusAsync(
-            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
-            [FromBody] [SwaggerParameter(Description = "Новый статус сообщения", Required = true)] UpdateMessageStatusRequest request, 
-            CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                var messageStatus = new MessageStatus
-                {
-                    MessageId = messageId,
-                    UserId = user!.UserId,
-                    Status = request.Status,
-                    ChangeDate = DateTime.UtcNow
-                };
-                await _messageStatusService.AddOrUpdateStatusAsync(messageStatus, cancellationToken);
-
-                return Ok(new UpdateMessageStatusSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Статус сообщения успешно обновлен" 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
-                });
-            }
-        }
-
-        [HttpGet("{messageId}/statuses")]
-        [SwaggerOperation(
-            Summary = "Получить статусы сообщения",
-            Description = "Возвращает статусы прочтения/доставки сообщения от всех участников.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Статусы получены", typeof(GetMessageStatusesSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> GetMessageStatusesAsync(
-            [SwaggerParameter(Description = "Идентификатор сообщения")] Guid messageId, 
-            CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var statuses = await _messageStatusService.GetStatusesByMessageIdAsync(messageId, cancellationToken);
-
-                return Ok(new GetMessageStatusesSuccessResponse
-                {
-                    IsSuccess = true,
-                    Data = statuses
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
         }
 
         [HttpPost("{messageId}/reaction")]

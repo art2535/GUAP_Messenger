@@ -29,8 +29,6 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<Message> Messages { get; set; }
 
-    public virtual DbSet<MessageStatus> MessageStatuses { get; set; }
-
     public virtual DbSet<Notification> Notifications { get; set; }
 
     public virtual DbSet<Reaction> Reactions { get; set; }
@@ -130,17 +128,6 @@ public partial class GuapMessengerContext : DbContext
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
 
             entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
-        });
-
-        modelBuilder.Entity<MessageStatus>(entity =>
-        {
-            entity.HasKey(e => new { e.MessageId, e.UserId }).HasName("Message_Statuses_pkey");
-
-            entity.Property(e => e.ChangeDate).HasDefaultValueSql("now()");
-
-            entity.HasOne(d => d.Message).WithMany(p => p.MessageStatuses).HasConstraintName("fk_status_message");
-
-            entity.HasOne(d => d.User).WithMany(p => p.MessageStatuses).HasConstraintName("fk_status_user2");
         });
 
         modelBuilder.Entity<Notification>(entity =>
