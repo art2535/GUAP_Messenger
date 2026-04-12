@@ -26,7 +26,7 @@ public partial class Message
     public DateTime SendTime { get; set; }
 
     [Column("Sequence_Number")]
-    public int SequenceNumber { get; set; }
+    public long SequenceNumber { get; set; }
 
     [Column("Delivery_Status")]
     public MessageDeliveryStatus DeliveryStatus { get; set; }
