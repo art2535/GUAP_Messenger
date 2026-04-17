@@ -19,9 +19,10 @@ namespace Messenger.Infrastructure.Services
         private readonly ILogger<PushSubscriptionService> _logger;
         private readonly IEncryptionService _encryptionService;
         private readonly IUserService _userService;
+        private readonly INotificationService _notificationService;
 
         public PushSubscriptionService(PushSubscriptionRepository repository, IChatService chatService,
-            WebPushClient webPushClient, IConfiguration configuration,
+            WebPushClient webPushClient, IConfiguration configuration, INotificationService notificationService,
             ILogger<PushSubscriptionService> logger, IEncryptionService encryptionService, IUserService userService)
         {
             _repository = repository;
@@ -34,6 +35,7 @@ namespace Messenger.Infrastructure.Services
                 vapidSection["PrivateKey"]!);
             _encryptionService = encryptionService;
             _userService = userService;
+            _notificationService = notificationService;
         }
 
         public async Task<List<PushSubscription>> GetSubscriptionsByUserIdAsync(Guid userId, CancellationToken ct = default)
@@ -120,60 +122,81 @@ namespace Messenger.Infrastructure.Services
 
                     if (settings == null || !settings.PushEnabled)
                     {
-                        _logger.LogInformation("Пропуск пользователя {UserId}: Push отключён в настройках", participant.UserId);
+                        _logger.LogWarning("Пропуск пользователя {UserId}: Push-уведомления полностью отключены", participant.UserId);
                         continue;
                     }
 
-                    if (isGroupChat && !settings.NotifyGroupChats) 
-                        continue;
-                    if (!isGroupChat && !settings.NotifyMessages) 
-                        continue;
-                    if (isMention && !settings.NotifyMentions) 
-                        continue;
-
-                    var subscriptions = await _repository.GetByUserIdAsync(participant.UserId, cancellationToken);
-
-                    if (!subscriptions.Any())
+                    if (isGroupChat && !settings.NotifyGroupChats)
                     {
-                        _logger.LogInformation("У пользователя {UserId} нет активных push-подписок", participant.UserId);
+                        _logger.LogWarning("Пропуск пользователя {UserId}: Групповые уведомления отключены", participant.UserId);
                         continue;
                     }
 
-                    foreach (var sub in subscriptions)
+                    if (!isGroupChat && !settings.NotifyMessages)
                     {
-                        if (string.IsNullOrEmpty(sub.P256dh) || string.IsNullOrEmpty(sub.Auth))
+                        _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления о сообщениях отключены", participant.UserId);
+                        continue;
+                    }
+
+                    if (isMention && !settings.NotifyMentions)
+                    {
+                        _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления об упоминаниях отключены", participant.UserId);
+                        continue;
+                    }
+
+                    try
+                    {
+                        string notificationText = $"Новое сообщение от {senderName}: {body}";
+                        var notificationId = await _notificationService.CreateNotificationAsync(participant.UserId,
+                            _encryptionService.Encrypt(notificationText), cancellationToken);
+
+                        var subscriptions = await _repository.GetByUserIdAsync(participant.UserId, cancellationToken);
+
+                        if (!subscriptions.Any())
+                        {
+                            _logger.LogInformation("У пользователя {UserId} нет активных push-подписок", participant.UserId);
                             continue;
+                        }
 
-                        try
+                        foreach (var sub in subscriptions)
                         {
-                            var pushSubscription = new WebPush.PushSubscription(sub.Endpoint, sub.P256dh, sub.Auth);
+                            if (string.IsNullOrEmpty(sub.P256dh) || string.IsNullOrEmpty(sub.Auth))
+                                continue;
 
-                            var payload = new
+                            try
                             {
-                                title = isGroupChat ? "Новое сообщение в группе" : "Новое сообщение",
-                                body = body,
-                                sender = senderName,
-                                chatId = chatId.ToString()
-                            };
+                                var pushSubscription = new WebPush.PushSubscription(sub.Endpoint, sub.P256dh, sub.Auth);
 
-                            await _webPushClient.SendNotificationAsync(pushSubscription, JsonSerializer.Serialize(payload),
-                                _vapidDetails, cancellationToken);
+                                var payload = new
+                                {
+                                    title = isGroupChat ? "Новое сообщение в группе" : "Новое сообщение",
+                                    body = body,
+                                    sender = senderName,
+                                    chatId = chatId.ToString(),
+                                    notificationId = notificationId.ToString()
+                                };
 
-                            await _repository.UpdateLastUsedAsync(sub.Id, cancellationToken);
+                                await _webPushClient.SendNotificationAsync(pushSubscription, JsonSerializer.Serialize(payload),
+                                    _vapidDetails, cancellationToken);
 
-                            _logger.LogInformation("Push успешно отправлен пользователю {UserId}", participant.UserId);
+                                await _repository.UpdateLastUsedAsync(sub.Id, cancellationToken);
+                            }
+                            catch (WebPushException webEx) when (webEx.Message.Contains("no longer valid") ||
+                                                                 webEx.Message.Contains("unsubscribed") ||
+                                                                 webEx.Message.Contains("expired"))
+                            {
+                                _logger.LogWarning("Подписка пользователя {UserId} устарела. Удаляем...", participant.UserId);
+                                await _repository.RemoveByEndpointAsync(sub.Endpoint, cancellationToken);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Ошибка отправки push пользователю {UserId}", participant.UserId);
+                            }
                         }
-                        catch (WebPushException webEx) when (webEx.Message.Contains("no longer valid") ||
-                                                             webEx.Message.Contains("unsubscribed") ||
-                                                             webEx.Message.Contains("expired"))
-                        {
-                            _logger.LogWarning("Подписка пользователя {UserId} устарела. Удаляем...", participant.UserId);
-                            await _repository.RemoveByEndpointAsync(sub.Endpoint, cancellationToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Ошибка отправки push пользователю {UserId}", participant.UserId);
-                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Ошибка при создании уведомления или отправке push для пользователя {UserId}", participant.UserId);
                     }
                 }
             }
