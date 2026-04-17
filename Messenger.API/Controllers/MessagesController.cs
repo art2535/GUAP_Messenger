@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Org.BouncyCastle.Crypto.Tls;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace Messenger.API.Controllers
@@ -30,12 +29,11 @@ namespace Messenger.API.Controllers
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<MessagesController> _logger;
         private readonly IPublishEndpoint _publishEndpoint;
-        private readonly IPushSubscriptionService _subscriptionService;
 
         public MessagesController(IMessageService messageService,
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
             IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
-            IPublishEndpoint publishEndpoint, IPushSubscriptionService subscriptionService)
+            IPublishEndpoint publishEndpoint)
         {
             _messageService = messageService;
             _reactionService = reactionService;
@@ -45,7 +43,6 @@ namespace Messenger.API.Controllers
             _encryptionService = encryptionService;
             _logger = logger;
             _publishEndpoint = publishEndpoint;
-            _subscriptionService = subscriptionService;
         }
 
         [HttpGet("{chatId}/search")]
@@ -228,21 +225,6 @@ namespace Messenger.API.Controllers
                     Status = "Sent",
                     Attachments = attachmentDtos
                 };
-
-                try
-                {
-                    _logger.LogInformation("ПОПЫТКА PUSH: ChatId={ChatId}, SenderId={SenderId}, Text={Text}",
-                        chatId, user.UserId, messageText?.Trim());
-
-                    await _subscriptionService.SendPushToOfflineUsersAsync(chatId, user.UserId, messageDto.SenderName,
-                        messageText?.Trim(), attachmentDtos.Count > 0, cancellationToken);
-
-                    _logger.LogInformation("Push-уведомления отправлены для чата {ChatId}", chatId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Не удалось отправить push-уведомления для чата {ChatId}", chatId);
-                }
 
                 return Ok(new SendMessageSuccessResponse
                 {
