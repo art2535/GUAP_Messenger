@@ -15,21 +15,28 @@ namespace Messenger.API.Consumers
         private readonly IAttachmentService _attachmentService;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<ChatMessageSentConsumer> _logger;
+        private readonly IPushSubscriptionService _subscriptionService;
 
         public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, IMessageService messageService,
             IAttachmentService attachmentService, IEncryptionService encryptionService, 
-            ILogger<ChatMessageSentConsumer> logger)
+            ILogger<ChatMessageSentConsumer> logger, IPushSubscriptionService subscriptionService)
         {
             _hubContext = hubContext;
             _messageService = messageService;
             _attachmentService = attachmentService;
             _encryptionService = encryptionService;
             _logger = logger;
+            _subscriptionService = subscriptionService;
+
+            _logger.LogInformation("=== ChatMessageSentConsumer успешно создан ===");
         }
 
         public async Task Consume(ConsumeContext<ChatMessageSent> context)
         {
             var msg = context.Message;
+
+            _logger.LogInformation("=== CONSUMER ПОЛУЧИЛ СООБЩЕНИЕ === MessageId={MessageId} ChatId={ChatId} SenderId={SenderId} HasText={HasText}",
+                msg.MessageId, msg.ChatId, msg.SenderId, !string.IsNullOrEmpty(msg.MessageText));
 
             try
             {
@@ -52,7 +59,7 @@ namespace Messenger.API.Consumers
                 );
 
                 if (!serviceResult.isSuccess || serviceResult.data == null)
-                    throw new Exception($"Не удалось сохранить сообщение: {serviceResult.error}");
+                    throw new Exception($"Не удалось сохранить сообщение: {serviceResult.error ?? "Unknown error"}");
 
                 var savedMessage = serviceResult.data;
 
@@ -111,11 +118,24 @@ namespace Messenger.API.Consumers
                         Timestamp = DateTimeOffset.UtcNow
                     }, context.CancellationToken);
 
-                _logger.LogInformation("Сообщение {MessageId} полностью обработано", msg.MessageId);
+                try
+                {
+                    await _subscriptionService.SendPushToOfflineUsersAsync(msg.ChatId, msg.SenderId,
+                        msg.SenderName ?? "Пользователь", msg.MessageText, msg.HasAttachments, false,
+                        context.CancellationToken);
+
+                    _logger.LogInformation("Push-уведомления отправлены для чата {ChatId}", msg.ChatId);
+                }
+                catch (Exception pushEx)
+                {
+                    _logger.LogWarning(pushEx, "Не удалось отправить push-уведомления для чата {ChatId}", msg.ChatId);
+                }
+
+                _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка обработки сообщения {MessageId}", msg.MessageId);
+                _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
 
                 try
                 {
@@ -130,7 +150,7 @@ namespace Messenger.API.Consumers
                 }
                 catch (Exception innerEx)
                 {
-                    _logger.LogError(innerEx, "Не удалось обновить статус Failed");
+                    _logger.LogError(innerEx, "Не удалось обновить статус Failed для сообщения {MessageId}", msg.MessageId);
                 }
 
                 await _hubContext.Clients.Group(msg.ChatId.ToString())
@@ -139,7 +159,7 @@ namespace Messenger.API.Consumers
                         MessageId = msg.MessageId,
                         ChatId = msg.ChatId,
                         Status = "Failed",
-                        Reason = "Ошибка обработки сообщения",
+                        Reason = "Ошибка обработки сообщения на сервере",
                         Timestamp = DateTimeOffset.UtcNow
                     }, context.CancellationToken);
 
