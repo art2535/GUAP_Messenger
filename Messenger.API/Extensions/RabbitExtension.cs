@@ -13,12 +13,6 @@ namespace Messenger.API.Extensions
             {
                 x.SetKebabCaseEndpointNameFormatter();
 
-                x.AddEntityFrameworkOutbox<GuapMessengerContext>(o =>
-                {
-                    o.UsePostgres();
-                    o.UseBusOutbox();
-                });
-
                 x.AddConsumer<ChatMessageSentConsumer>();
 
                 x.AddConfigureEndpointsCallback((name, cfg) =>
@@ -50,6 +44,8 @@ namespace Messenger.API.Extensions
                     cfg.ConfigureEndpoints(context);
                 });
             });
+
+            services.AddMassTransitHostedService();
         }
     }
 }
