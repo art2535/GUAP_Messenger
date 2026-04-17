@@ -1013,9 +1013,9 @@
             sendButton.disabled = true;
 
             const tempId = 'temp-' + Date.now();
+            const hasAttachments = selectedFiles.length > 0;
 
             appendOptimisticMessage(text, selectedFiles, tempId);
-
             updateChatLastMessagePreview(currentChatId, text, selectedFiles.map(f => ({
                 fileType: f.type,
                 fileName: f.name
@@ -1031,14 +1031,24 @@
                     body: formData
                 });
 
-                if (!res?.ok) throw new Error('HTTP ошибка');
+                if (!res?.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
 
                 const result = await res.json();
 
-                if (result?.data?.sentAt) {
-                    updateChatLastMessagePreview(currentChatId, text, selectedFiles.map(f => ({
-                        fileType: f.type
-                    })), result.data.sentAt);
+                if (result?.isSuccess || result?.success) {
+                    updateMessageStatus(tempId, 'sent');
+
+                    if (result?.data?.sentAt) {
+                        updateChatLastMessagePreview(currentChatId, text, selectedFiles.map(f => ({
+                            fileType: f.type
+                        })), result.data.sentAt);
+                    }
+
+                    console.log(`[SEND] Сообщение успешно отправлено в чат ${currentChatId}`);
+                } else {
+                    throw new Error(result?.error || 'Неизвестная ошибка сервера');
                 }
 
                 messageInput.value = '';
@@ -1047,8 +1057,8 @@
                 fileInput.value = '';
 
             } catch (err) {
-                console.error(err);
-                updateMessageStatus(tempId, 'failed', 'Ошибка отправки');
+                console.error('Ошибка отправки сообщения:', err);
+                updateMessageStatus(tempId, 'failed', err.message || 'Ошибка отправки');
                 showToast('Не удалось отправить сообщение', 'error');
             } finally {
                 isSending = false;
