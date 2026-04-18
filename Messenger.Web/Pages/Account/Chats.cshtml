@@ -538,6 +538,7 @@
         const lightbox = document.getElementById('lightbox');
         const lightboxImg = document.getElementById('lightbox-img');
 
+        let pendingMessages = new Map();
         let currentChatId = null;
         let userStatuses = new Map();
         let selectedFiles = [];
@@ -840,7 +841,7 @@
                 return;
             }
 
-            const isMyMessage = msg.senderId === '@Model.UserId' || msg.senderId === me;
+            const isMyMessage = String(msg.senderId) === String(me);
 
             updateChatLastMessagePreview(
                 msg.chatId,
@@ -854,36 +855,38 @@
 
             let displayText = msg.messageText || "";
 
-            if (displayText && displayText.match(/^[A-Za-z0-9+/=]{20,}$/) && !displayText.includes(' ')) {
-                displayText = "[Сообщение зашифровано или повреждено]";
+            if (displayText && displayText.length > 20 && !displayText.includes(' ') && !displayText.includes('\n') &&
+                /^[A-Za-z0-9+/=]+$/.test(displayText)) {
+
+                if (!displayText || displayText.trim() === "") {
+                    displayText = "[Сообщение]";
+                }
             }
 
-            const currentUserId = '@Model.UserId';
-            const isMine = msg.senderId === currentUserId;
             const isGroupChat = currentChatInfo?.type === 'group';
 
             const div = document.createElement('div');
-            div.className = `mb-6 flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            div.className = `mb-6 flex ${isMyMessage ? 'justify-end' : 'justify-start'}`;
             if (msg.messageId) div.dataset.mid = msg.messageId;
 
             const time = formatDateTime(msg.sentAt);
 
             let senderNameHtml = '';
-            if (isGroupChat && !isMine) {
+            if (isGroupChat && !isMyMessage) {
                 senderNameHtml = `<span class="sender-name font-medium text-gray-700 block mb-1">Загрузка...</span>`;
             }
 
             div.innerHTML = `
-                <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-xs lg:max-w-md">
+                <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-xs lg:max-w-md">
                     ${senderNameHtml}
                     <div class="inline-block px-4 py-2.5 rounded-2xl shadow-sm
-                                ${isMine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
-                        ${msg.messageText ? `<p class="break-words whitespace-pre-wrap leading-relaxed">${msg.messageText.replace(/\n/g, '<br>')}</p>` : ''}
+                                ${isMyMessage ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
+                        ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
                         ${renderAttachments(msg.attachments || [])}
                     </div>
-                    <div class="text-xs text-gray-500 mt-1 ${isMine ? 'text-right' : 'text-left'}">
+                    <div class="text-xs text-gray-500 mt-1 ${isMyMessage ? 'text-right' : 'text-left'}">
                         ${time}
-                        ${isGroupChat && isMine ? ' · Вы' : ''}
+                        ${isGroupChat && isMyMessage ? ' · Вы' : ''}
                     </div>
                 </div>
             `;
@@ -891,7 +894,7 @@
             messagesContainer.appendChild(div);
             feather.replace();
 
-            if (isGroupChat && !isMine) {
+            if (isGroupChat && !isMyMessage) {
                 loadUserName(msg.senderId).then(name => {
                     const nameEl = div.querySelector('.sender-name');
                     if (nameEl) nameEl.textContent = name;
@@ -998,14 +1001,6 @@
         async function sendMessage() {
             if (!currentChatId || isSending) return;
 
-            const MAX_SIZE_BYTES = 10 * 1024 * 1024;
-            for (let file of selectedFiles) {
-                if (file.size > MAX_SIZE_BYTES) {
-                    showToast(`Файл "${file.name}" превышает 10 МБ`, 'error');
-                    return;
-                }
-            }
-
             const text = messageInput.value.trim();
             if (!text && selectedFiles.length === 0) return;
 
@@ -1013,13 +1008,9 @@
             sendButton.disabled = true;
 
             const tempId = 'temp-' + Date.now();
-            const hasAttachments = selectedFiles.length > 0;
 
             appendOptimisticMessage(text, selectedFiles, tempId);
-            updateChatLastMessagePreview(currentChatId, text, selectedFiles.map(f => ({
-                fileType: f.type,
-                fileName: f.name
-            })));
+            updateChatLastMessagePreview(currentChatId, text, selectedFiles);
 
             try {
                 const formData = new FormData();
@@ -1031,39 +1022,32 @@
                     body: formData
                 });
 
-                if (!res?.ok) {
-                    throw new Error(`HTTP error! status: ${res.status}`);
-                }
+                if (!res?.ok) throw new Error(`HTTP ${res.status}`);
 
                 const result = await res.json();
+                const serverMessageId = result?.data?.messageId || result?.messageId;
 
-                if (result?.isSuccess || result?.success) {
-                    updateMessageStatus(tempId, 'sent');
-
-                    if (result?.data?.sentAt) {
-                        updateChatLastMessagePreview(currentChatId, text, selectedFiles.map(f => ({
-                            fileType: f.type
-                        })), result.data.sentAt);
-                    }
-
-                    console.log(`[SEND] Сообщение успешно отправлено в чат ${currentChatId}`);
-                } else {
-                    throw new Error(result?.error || 'Неизвестная ошибка сервера');
+                if (serverMessageId) {
+                    pendingMessages.set(tempId, { serverMessageId });
                 }
 
-                messageInput.value = '';
-                attachedFiles.innerHTML = '';
-                selectedFiles = [];
-                fileInput.value = '';
+                clearInputAfterSend();
 
             } catch (err) {
-                console.error('Ошибка отправки сообщения:', err);
-                updateMessageStatus(tempId, 'failed', err.message || 'Ошибка отправки');
+                console.error('Ошибка отправки:', err);
+                updateMessageStatus(tempId, 'failed', err.message || 'Ошибка');
                 showToast('Не удалось отправить сообщение', 'error');
             } finally {
                 isSending = false;
                 sendButton.disabled = false;
             }
+        }
+
+        function clearInputAfterSend() {
+            messageInput.value = '';
+            attachedFiles.innerHTML = '';
+            selectedFiles = [];
+            fileInput.value = '';
         }
 
         function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false) {
@@ -1122,19 +1106,14 @@
             div.className = `mb-6 flex justify-end`;
             div.dataset.mid = tempId;
 
-            let contentHTML = '';
-
-            if (text) {
-                contentHTML = `<p class="break-words whitespace-pre-wrap">${text.replace(/\n/g, '<br>')}</p>`;
-            } else if (files.length > 0) {
-                contentHTML = `<div class="opacity-70 text-sm">Отправка ${files.length} вложений...</div>`;
-            }
+            let content = text
+                ? `<p class="break-words whitespace-pre-wrap">${text.replace(/\n/g, '<br>')}</p>`
+                : `<div class="opacity-70 text-sm">Отправка ${files.length} вложений...</div>`;
 
             div.innerHTML = `
                 <div class="flex flex-col items-end max-w-xs lg:max-w-md">
                     <div class="inline-block px-4 py-2.5 rounded-2xl bg-blue-600 text-white relative">
-                        ${contentHTML}
-
+                        ${content}
                         <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-xs mt-1.5 opacity-75">
                             <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
                             <span>Отправляется...</span>
@@ -1147,7 +1126,16 @@
             feather.replace();
             scrollToBottom();
 
-            messageStatusMap.set(tempId, div);
+            setTimeout(() => {
+                const stillExists = document.querySelector(`[data-mid="${tempId}"]`);
+                if (stillExists) {
+                    const statusEl = stillExists.querySelector('.message-status');
+                    if (statusEl && statusEl.textContent.includes('Отправляется')) {
+                        updateMessageStatus(tempId, 'failed', 'Таймаут подтверждения от сервера');
+                        console.warn(`[Timeout] Сообщение ${tempId} не получило подтверждение`);
+                    }
+                }
+            }, 15000);
         }
 
         function removeEmptyStateIfNeeded() {
@@ -1158,50 +1146,19 @@
             }
         }
 
-        function updateMessageStatus(messageIdOrTempId, status, reason = null) {
-            const messageEl = messageStatusMap.get(messageIdOrTempId) ||
-                             document.querySelector(`[data-mid="${messageIdOrTempId}"]`);
+        function updateMessageStatus(id, status, reason = null) {
+            let el = document.querySelector(`[data-mid="${id}"]`);
+            if (!el) return;
 
-            if (!messageEl) return;
+            const container = el.querySelector('.message-status');
+            if (!container) return;
 
-            const statusContainer = messageEl.querySelector('.message-status');
-            if (!statusContainer) return;
-
-            const icon = statusContainer.querySelector('i');
-            const textSpan = statusContainer.querySelector('span');
-
-            switch (status.toLowerCase()) {
-                case 'sent':
-                case 'delivered':
-                    if (icon) icon.remove();
-                    statusContainer.innerHTML = `
-                        <span class="text-blue-200">${formatDateTime(new Date().toISOString())}</span>
-                    `;
-                    messageEl.dataset.mid = messageIdOrTempId;
-                    messageStatusMap.delete(messageIdOrTempId);
-                    break;
-
-                case 'failed':
-                case 'error':
-                    statusContainer.className = 'message-status flex items-center gap-1.5 text-xs mt-1.5 text-red-400 font-medium';
-                    if (icon) icon.outerHTML = `<i data-feather="alert-triangle" class="w-4 h-4"></i>`;
-
-                    statusContainer.innerHTML = `
-                        <i data-feather="alert-triangle" class="w-4 h-4"></i>
-                        <span>Ошибка отправки</span>
-                    `;
-
-                    if (reason) {
-                        messageEl.title = reason;
-                    }
-
-                    messageStatusMap.delete(messageIdOrTempId);
-                    break;
-
-                default:
-                    break;
+            if (status === 'sent') {
+                container.innerHTML = `<span class="text-blue-200">${formatDateTime(new Date())}</span>`;
+            } else if (status === 'failed') {
+                container.className = 'message-status flex items-center gap-1.5 text-xs mt-1.5 text-red-400 font-medium';
+                container.innerHTML = `<i data-feather="alert-triangle" class="w-4 h-4"></i><span>${reason || 'Ошибка'}</span>`;
             }
-
             feather.replace();
         }
 
@@ -1269,13 +1226,9 @@
 
             connection = new signalR.HubConnectionBuilder()
                 .withUrl(HUB_URL, {
-                    accessTokenFactory: async () => {
-                        token = await getFreshToken() || token;
-                        console.log("SignalR → свежий токен:", token.substring(0, 20) + "...");
-                        return token;
-                    }
+                    accessTokenFactory: () => token
                 })
-                .withAutomaticReconnect([0, 2000, 10000, 30000])
+                .withAutomaticReconnect([0, 2000, 5000, 10000])
                 .build();
 
             connection.on('ParticipantCountChanged', (data) => {
@@ -1501,23 +1454,58 @@
                 }
             });
 
-            connection.on('MessageSendingStatus', (statusData) => {
-                console.log('MessageSendingStatus:', statusData);
+            connection.on('MessageSendingStatus', (data) => {
+                const msgId = data.MessageId || data.messageId;
+                let status = (data.Status || data.status || '').toLowerCase();
+                const reason = data.Reason || data.reason;
 
-                updateMessageStatus(
-                    statusData.MessageId || statusData.messageId,
-                    statusData.Status || statusData.status,
-                    statusData.Reason || statusData.reason
-                );
+                console.log(`[Status] ${msgId} → ${status}`, data);
+
+                let element = document.querySelector(`[data-mid="${msgId}"]`);
+                if (!element) {
+                    for (const [tempId, info] of pendingMessages) {
+                        if (info.serverMessageId === msgId) {
+                            element = document.querySelector(`[data-mid="${tempId}"]`);
+                            console.log(`[Status] Найдено по pendingMessages: ${tempId} → ${msgId}`);
+                            break;
+                        }
+                    }
+                }
+
+                if (element) {
+                    if (status === 'sent' || status === 'delivered') {
+                        updateMessageStatus(msgId, 'sent');
+                        console.log(`[Status] Обновлено на Sent для ${msgId}`);
+                    } else if (status === 'failed') {
+                        updateMessageStatus(msgId, 'failed', reason || 'Ошибка');
+                    }
+                } else {
+                    console.warn(`[Status] Элемент не найден для ${msgId} (уже удалён ReceiveMessage?)`);
+                }
             });
 
             connection.on('ReceiveMessage', (msg) => {
+                console.log(`[ReceiveMessage] ${msg.messageId} в чате ${msg.chatId}`);
+
                 if (msg.chatId !== currentChatId) return;
 
-                const tempEl = document.querySelector(`[data-mid^="temp-"]`);
-                if (tempEl) tempEl.remove();
+                const optimisticElements = document.querySelectorAll('[data-mid^="temp-"]');
+                optimisticElements.forEach(el => {
+                    console.log(`[ReceiveMessage] Удаляем optimistic: ${el.dataset.mid}`);
+                    el.remove();
+                });
+
+                if (document.querySelector(`[data-mid="${msg.messageId}"]`)) {
+                    console.log(`[ReceiveMessage] Сообщение ${msg.messageId} уже показано`);
+                    return;
+                }
 
                 appendMessage(msg);
+
+                if (String(msg.senderId) === String(me)) {
+                    clearInputAfterSend();
+                    console.log(`[ReceiveMessage] Поле ввода очищено`);
+                }
             });
 
             connection.on('MessageDeliveryFailed', data => {
