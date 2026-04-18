@@ -22,7 +22,7 @@ namespace Messenger.API.Extensions
                         b.MessageDeliveryTimeout = TimeSpan.FromSeconds(30);
                     });
 
-                    o.QueryDelay = TimeSpan.FromSeconds(5);
+                    o.QueryDelay = TimeSpan.FromSeconds(3);
                     o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
                 });
 
