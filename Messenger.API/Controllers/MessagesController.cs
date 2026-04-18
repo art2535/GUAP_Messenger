@@ -6,10 +6,12 @@ using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace Messenger.API.Controllers
@@ -29,11 +31,12 @@ namespace Messenger.API.Controllers
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<MessagesController> _logger;
         private readonly IPublishEndpoint _publishEndpoint;
+        private readonly GuapMessengerContext _context;
 
         public MessagesController(IMessageService messageService,
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
             IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
-            IPublishEndpoint publishEndpoint)
+            IPublishEndpoint publishEndpoint, GuapMessengerContext context)
         {
             _messageService = messageService;
             _reactionService = reactionService;
@@ -43,6 +46,7 @@ namespace Messenger.API.Controllers
             _encryptionService = encryptionService;
             _logger = logger;
             _publishEndpoint = publishEndpoint;
+            _context = context;
         }
 
         [HttpGet("{chatId}/search")]
@@ -202,35 +206,59 @@ namespace Messenger.API.Controllers
 
                 var messageId = Guid.NewGuid();
 
-                await _publishEndpoint.Publish(new ChatMessageSent
-                {
-                    MessageId = messageId,
-                    ChatId = chatId,
-                    SenderId = user!.UserId,
-                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                    MessageText = contentToSave,
-                    SentAt = DateTime.Now,
-                    HasAttachments = attachmentsInfo.Count > 0,
-                    Attachments = attachmentsInfo
-                }, cancellationToken);
+                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-                var messageDto = new MessageDto
+                try
                 {
-                    MessageId = messageId,
-                    ChatId = chatId,
-                    SenderId = user.UserId,
-                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                    MessageText = messageText?.Trim(),
-                    SentAt = DateTime.Now,
-                    Status = "Sent",
-                    Attachments = attachmentDtos
-                };
+                    var encryptedText = string.IsNullOrWhiteSpace(messageText)
+                        ? null
+                        : _encryptionService.Encrypt(messageText.Trim());
 
-                return Ok(new SendMessageSuccessResponse
+                    await _publishEndpoint.Publish(new ChatMessageSent
+                    {
+                        MessageId = messageId,
+                        ChatId = chatId,
+                        SenderId = user!.UserId,
+                        SenderName = $"{user.FirstName} {user.LastName}".Trim(),
+                        MessageText = encryptedText,
+                        SentAt = DateTime.UtcNow,
+                        HasAttachments = attachmentsInfo.Count > 0,
+                        Attachments = attachmentsInfo
+                    }, cancellationToken);
+
+                    await _context.SaveChangesAsync(cancellationToken);
+
+                    await transaction.CommitAsync(cancellationToken);
+
+                    var messageDto = new MessageDto
+                    {
+                        MessageId = messageId,
+                        ChatId = chatId,
+                        SenderId = user.UserId,
+                        SenderName = $"{user.FirstName} {user.LastName}".Trim(),
+                        MessageText = messageText?.Trim(),
+                        SentAt = DateTime.UtcNow,
+                        Status = "Sent",
+                        Attachments = attachmentDtos
+                    };
+
+                    return Ok(new SendMessageSuccessResponse
+                    {
+                        IsSuccess = true,
+                        Data = messageDto
+                    });
+                }
+                catch (Exception ex)
                 {
-                    IsSuccess = true,
-                    Data = messageDto
-                });
+                    await transaction.RollbackAsync(cancellationToken);
+                    _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
+
+                    return StatusCode(500, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Внутренняя ошибка сервера при отправке сообщения"
+                    });
+                }
             }
             catch (Exception ex)
             {

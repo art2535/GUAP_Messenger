@@ -13,6 +13,19 @@ namespace Messenger.API.Extensions
             {
                 x.SetKebabCaseEndpointNameFormatter();
 
+                x.AddEntityFrameworkOutbox<GuapMessengerContext>(o =>
+                {
+                    o.UsePostgres();
+                    o.UseBusOutbox(b =>
+                    {
+                        b.MessageDeliveryLimit = 100;
+                        b.MessageDeliveryTimeout = TimeSpan.FromSeconds(30);
+                    });
+
+                    o.QueryDelay = TimeSpan.FromSeconds(5);
+                    o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
+                });
+
                 x.AddConsumer<ChatMessageSentConsumer>();
 
                 x.AddConfigureEndpointsCallback((name, cfg) =>
@@ -44,8 +57,6 @@ namespace Messenger.API.Extensions
                     cfg.ConfigureEndpoints(context);
                 });
             });
-
-            services.AddMassTransitHostedService();
         }
     }
 }
