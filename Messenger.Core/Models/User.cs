@@ -75,10 +75,6 @@ public partial class User
 
     [InverseProperty("User")]
     [JsonIgnore]
-    public virtual ICollection<MessageStatus> MessageStatuses { get; set; } = new List<MessageStatus>();
-
-    [InverseProperty("User")]
-    [JsonIgnore]
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
     [InverseProperty("User")]

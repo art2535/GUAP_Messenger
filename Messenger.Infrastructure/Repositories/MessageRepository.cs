@@ -17,7 +17,7 @@ namespace Messenger.Infrastructure.Repositories
         {
             var lastSeq = await _context.Messages
                 .Where(m => m.ChatId == message.ChatId)
-                .MaxAsync(m => (int?)m.SequenceNumber, token) ?? 0;
+                .MaxAsync(m => (long?)m.SequenceNumber, token) ?? 0;
 
             message.SequenceNumber = lastSeq + 1;
             message.DeliveryStatus = MessageDeliveryStatus.Pending;

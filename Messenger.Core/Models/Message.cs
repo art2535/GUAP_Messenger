@@ -26,7 +26,7 @@ public partial class Message
     public DateTime SendTime { get; set; }
 
     [Column("Sequence_Number")]
-    public int SequenceNumber { get; set; }
+    public long SequenceNumber { get; set; }
 
     [Column("Delivery_Status")]
     public MessageDeliveryStatus DeliveryStatus { get; set; }
@@ -39,10 +39,6 @@ public partial class Message
     [InverseProperty("Messages")]
     [JsonIgnore]
     public virtual Chat Chat { get; set; } = null!;
-
-    [InverseProperty("Message")]
-    [JsonIgnore]
-    public virtual ICollection<MessageStatus> MessageStatuses { get; set; } = new List<MessageStatus>();
 
     [InverseProperty("Message")]
     [JsonIgnore]

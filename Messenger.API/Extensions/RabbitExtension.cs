@@ -16,7 +16,14 @@ namespace Messenger.API.Extensions
                 x.AddEntityFrameworkOutbox<GuapMessengerContext>(o =>
                 {
                     o.UsePostgres();
-                    o.UseBusOutbox();
+                    o.UseBusOutbox(b =>
+                    {
+                        b.MessageDeliveryLimit = 100;
+                        b.MessageDeliveryTimeout = TimeSpan.FromSeconds(30);
+                    });
+
+                    o.QueryDelay = TimeSpan.FromSeconds(3);
+                    o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
                 });
 
                 x.AddConsumer<ChatMessageSentConsumer>();

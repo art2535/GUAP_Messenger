@@ -86,29 +86,17 @@ namespace Messenger.Infrastructure.Services
                     SenderId = senderId,
                     MessageText = content ?? string.Empty,
                     HasAttachments = hasAttachments,
-                    SendTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    SendTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                    DeliveryStatus = MessageDeliveryStatus.Pending
                 };
 
                 await _repository.AddMessageAsync(message, token);
-                var sentMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
 
-                await _publishEndpoint.Publish(new ChatMessageSent
-                {
-                    MessageId = sentMessage.MessageId,
-                    ChatId = sentMessage.ChatId,
-                    SequenceNumber = sentMessage.SequenceNumber,
-                    SenderId = sentMessage.SenderId,
-                    MessageText = sentMessage.MessageText,
-                    SentAt = sentMessage.SendTime,
-                    HasAttachments = sentMessage.HasAttachments
-                }, token);
+                var savedMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
 
-                sentMessage.DeliveryStatus = MessageDeliveryStatus.Sent;
-                await _context.SaveChangesAsync(token);
-
-                return sentMessage != null
-                    ? ServiceResult<Message>.Success(sentMessage)
-                    : ServiceResult<Message>.Failure("Не удалось загрузить сообщение");
+                return savedMessage != null
+                    ? ServiceResult<Message>.Success(savedMessage)
+                    : ServiceResult<Message>.Failure("Не удалось сохранить сообщение");
             }
             catch (Exception ex)
             {

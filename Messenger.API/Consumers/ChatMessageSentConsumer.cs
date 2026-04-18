@@ -1,81 +1,132 @@
 ﻿using MassTransit;
+using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.API.Consumers
 {
     public class ChatMessageSentConsumer : IConsumer<ChatMessageSent>
     {
         private readonly IHubContext<ChatHub> _hubContext;
-        private readonly GuapMessengerContext _dbContext;
+        private readonly IMessageService _messageService;
+        private readonly IAttachmentService _attachmentService;
+        private readonly IEncryptionService _encryptionService;
         private readonly ILogger<ChatMessageSentConsumer> _logger;
+        private readonly IPushSubscriptionService _subscriptionService;
 
-        public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, GuapMessengerContext dbContext,
-            ILogger<ChatMessageSentConsumer> logger)
+        public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, IMessageService messageService,
+            IAttachmentService attachmentService, IEncryptionService encryptionService, 
+            ILogger<ChatMessageSentConsumer> logger, IPushSubscriptionService subscriptionService)
         {
             _hubContext = hubContext;
-            _dbContext = dbContext;
+            _messageService = messageService;
+            _attachmentService = attachmentService;
+            _encryptionService = encryptionService;
             _logger = logger;
+            _subscriptionService = subscriptionService;
+
+            _logger.LogInformation("=== ChatMessageSentConsumer успешно создан ===");
         }
 
         public async Task Consume(ConsumeContext<ChatMessageSent> context)
         {
             var msg = context.Message;
 
+            _logger.LogInformation("=== CONSUMER ПОЛУЧИЛ СООБЩЕНИЕ === MessageId={MessageId} ChatId={ChatId} SenderId={SenderId} HasText={HasText}",
+                msg.MessageId, msg.ChatId, msg.SenderId, !string.IsNullOrEmpty(msg.MessageText));
+
             try
             {
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("MessageSendingStatus", new
-                    {
-                        MessageId = msg.MessageId,
-                        ChatId = msg.ChatId,
-                        Status = "Processing",
-                        Timestamp = DateTimeOffset.UtcNow
-                    });
+                var serviceResult = await _messageService.SendMessageAsync(
+                    chatId: msg.ChatId,
+                    senderId: msg.SenderId,
+                    content: msg.MessageText,
+                    hasAttachments: msg.HasAttachments,
+                    files: null,
+                    token: context.CancellationToken);
 
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("ReceiveMessage", msg, context.CancellationToken);
+                if (!serviceResult.isSuccess || serviceResult.data == null)
+                    throw new Exception(serviceResult.error ?? "Unknown error");
 
-                var dbMessage = await _dbContext.Messages
-                    .FirstOrDefaultAsync(m => m.MessageId == msg.MessageId, context.CancellationToken);
+                var savedMessage = serviceResult.data;
 
-                if (dbMessage != null)
+                if (msg.Attachments?.Any() == true)
                 {
-                    dbMessage.DeliveryStatus = MessageDeliveryStatus.Delivered;
-                    await _dbContext.SaveChangesAsync(context.CancellationToken);
+                    foreach (var attInfo in msg.Attachments)
+                    {
+                        var attachment = new Attachment
+                        {
+                            AttachmentId = attInfo.AttachmentId,
+                            MessageId = savedMessage.MessageId,
+                            FileName = attInfo.FileName,
+                            FileType = attInfo.FileType,
+                            SizeInBytes = (int)attInfo.SizeInBytes,
+                            Url = attInfo.Url
+                        };
+                        await _attachmentService.AddAttachmentAsync(attachment, context.CancellationToken);
+                    }
                 }
 
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("MessageSendingStatus", new MessageSendingStatus
-                    {
-                        MessageId = msg.MessageId,
-                        ChatId = msg.ChatId,
-                        Status = "Sent",
-                        Timestamp = DateTimeOffset.UtcNow
-                    });
+                savedMessage.DeliveryStatus = MessageDeliveryStatus.Delivered;
+                await _messageService.UpdateMessageAsync(savedMessage, context.CancellationToken);
 
-                _logger.LogInformation("Сообщение {MessageId} успешно обработано", msg.MessageId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка обработки сообщения {MessageId}", msg.MessageId);
+                var decryptedText = string.IsNullOrEmpty(msg.MessageText)
+                    ? null
+                    : _encryptionService.TryDecryptSafe(msg.MessageText);
+
+                var finalMessageDto = new MessageDto
+                {
+                    MessageId = savedMessage.MessageId,
+                    ChatId = savedMessage.ChatId,
+                    SenderId = savedMessage.SenderId,
+                    SenderName = msg.SenderName ?? "Пользователь",
+                    MessageText = decryptedText,
+                    SentAt = savedMessage.SendTime,
+                    Status = "Sent",
+                    Attachments = msg.Attachments?.Select(a => new AttachmentDto
+                    {
+                        AttachmentId = a.AttachmentId,
+                        FileName = a.FileName,
+                        FileType = a.FileType,
+                        SizeInBytes = (int)a.SizeInBytes,
+                        Url = a.Url
+                    }).ToList() ?? new List<AttachmentDto>()
+                };
 
                 try
                 {
-                    var tracked = await _dbContext.Messages.FindAsync([msg.MessageId], context.CancellationToken);
-                    if (tracked != null)
+                    await _subscriptionService.SendPushToOfflineUsersAsync(
+                        msg.ChatId, msg.SenderId, msg.SenderName ?? "Пользователь",
+                        msg.MessageText, msg.HasAttachments, false, context.CancellationToken);
+                }
+                catch (Exception pushEx)
+                {
+                    _logger.LogWarning(pushEx, "Не удалось отправить push для чата {ChatId}", msg.ChatId);
+                }
+
+                _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
+
+                try
+                {
+                    var failedMessage = await _messageService.GetMessageByIdAsync(
+                        msg.ChatId, msg.MessageId, context.CancellationToken);
+
+                    if (failedMessage != null)
                     {
-                        tracked.DeliveryStatus = MessageDeliveryStatus.Failed;
-                        await _dbContext.SaveChangesAsync(context.CancellationToken);
+                        failedMessage.DeliveryStatus = MessageDeliveryStatus.Failed;
+                        await _messageService.UpdateMessageAsync(failedMessage, context.CancellationToken);
                     }
                 }
-                catch (Exception innnerEx)
+                catch (Exception innerEx)
                 {
-                    _logger.LogError(innnerEx, "Ошибка обновления статуса доставки сообщения {MessageId}", msg.MessageId);
+                    _logger.LogError(innerEx, "Не удалось обновить статус Failed для сообщения {MessageId}", msg.MessageId);
                 }
 
                 await _hubContext.Clients.Group(msg.ChatId.ToString())
@@ -84,9 +135,9 @@ namespace Messenger.API.Consumers
                         MessageId = msg.MessageId,
                         ChatId = msg.ChatId,
                         Status = "Failed",
-                        Reason = "Ошибка обработки сообщения",
+                        Reason = "Ошибка обработки сообщения на сервере",
                         Timestamp = DateTimeOffset.UtcNow
-                    });
+                    }, context.CancellationToken);
 
                 throw;
             }

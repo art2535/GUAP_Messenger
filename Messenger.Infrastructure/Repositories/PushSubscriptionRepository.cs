@@ -1,4 +1,5 @@
-﻿using Messenger.Core.Models;
+﻿using Messenger.Core.DTOs.Push;
+using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -77,6 +78,53 @@ namespace Messenger.Infrastructure.Repositories
             if (sub != null)
             {
                 sub.LastUsedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync(ct);
+            }
+        }
+
+        public async Task<AccountSetting?> GetAccountSettingsAsync(Guid accountId, CancellationToken ct = default)
+        {
+            return await _context.AccountSettings
+                .FirstOrDefaultAsync(s => s.AccountId == accountId, ct);
+        }
+
+        public async Task SavePushSettingsAsync(Guid accountId, PushSubscriptionUpdateRequest request, CancellationToken ct = default)
+        {
+            var settings = await _context.AccountSettings
+                .FirstOrDefaultAsync(s => s.AccountId == accountId, ct);
+
+            if (settings == null)
+            {
+                settings = new AccountSetting
+                {
+                    AccountId = accountId,
+                    PushEnabled = request.PushEnabled,
+                    NotifyMessages = request.NotifyMessages,
+                    NotifyGroupChats = request.NotifyGroupChats,
+                    NotifyMentions = request.NotifyMentions
+                };
+                _context.AccountSettings.Add(settings);
+            }
+            else
+            {
+                settings.PushEnabled = request.PushEnabled;
+                settings.NotifyMessages = request.NotifyMessages;
+                settings.NotifyGroupChats = request.NotifyGroupChats;
+                settings.NotifyMentions = request.NotifyMentions;
+            }
+
+            await _context.SaveChangesAsync(ct);
+        }
+
+        public async Task RemoveAllSubscriptionsForUserAsync(Guid userId, CancellationToken ct = default)
+        {
+            var subscriptions = await _context.PushSubscriptions
+                .Where(s => s.UserId == userId)
+                .ToListAsync(ct);
+
+            if (subscriptions.Any())
+            {
+                _context.PushSubscriptions.RemoveRange(subscriptions);
                 await _context.SaveChangesAsync(ct);
             }
         }

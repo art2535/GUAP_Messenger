@@ -285,12 +285,10 @@
                 </div>
             </section>
 
-            <!-- ==================== УВЕДОМЛЕНИЯ ==================== -->
             <section id="notifications" class="bg-white rounded-xl shadow-md p-8">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-6">Уведомления</h3>
-                
+
                 <div class="space-y-6">
-                    <!-- Главный toggle -->
                     <div class="flex items-center justify-between py-4 border-t border-gray-100">
                         <div>
                             <p class="font-medium text-gray-800">Push-уведомления</p>
@@ -298,23 +296,27 @@
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="push-toggle" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <div id="push-toggle-slider"
+                                 class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 transition-colors">
+                            </div>
                         </label>
                     </div>
 
-                    <div id="notification-types" class="space-y-4 pl-6 border-l-2 border-gray-100 transition-all duration-300">
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <span class="font-medium">Сообщения</span>
-                            <input type="checkbox" id="notifyMessages" checked class="h-5 w-5 text-blue-600 rounded">
-                        </label>
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <span class="font-medium">Групповые чаты</span>
-                            <input type="checkbox" id="notifyGroup" checked class="h-5 w-5 text-blue-600 rounded">
-                        </label>
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <span class="font-medium">Упоминания</span>
-                            <input type="checkbox" id="notifyMentions" checked class="h-5 w-5 text-blue-600 rounded">
-                        </label>
+                    <div id="notification-types" class="hidden">
+                        <div class="space-y-4 pl-6 border-l-2 border-gray-100">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="font-medium">Сообщения</span>
+                                <input type="checkbox" id="notifyMessages" class="h-5 w-5 text-blue-600 rounded">
+                            </label>
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="font-medium">Групповые чаты</span>
+                                <input type="checkbox" id="notifyGroup" class="h-5 w-5 text-blue-600 rounded">
+                            </label>
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="font-medium">Упоминания</span>
+                                <input type="checkbox" id="notifyMentions" class="h-5 w-5 text-blue-600 rounded">
+                            </label>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -579,33 +581,20 @@
 
             if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
                 pushToggle.disabled = true;
-                pushToggle.parentElement.style.opacity = '0.5';
+                const slider = document.getElementById('push-toggle-slider');
+                if (slider) slider.classList.add('!bg-gray-400');
                 return;
             }
 
             try {
                 const registration = await navigator.serviceWorker.ready;
                 currentSubscription = await registration.pushManager.getSubscription();
-                pushToggle.checked = !!currentSubscription;
 
                 if (Notification.permission === 'denied') {
                     pushToggle.disabled = true;
                 }
-
-                toggleNotificationTypes();
             } catch (e) {
                 console.error('Ошибка проверки статуса push:', e);
-            }
-        }
-
-        async function togglePushNotifications() {
-            if (!pushToggle) return;
-            toggleNotificationTypes();
-
-            if (pushToggle.checked) {
-                await subscribeToPush();
-            } else {
-                await unsubscribeFromPush();
             }
         }
 
@@ -702,15 +691,99 @@
             return outputArray;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        async function loadPushSettings() {
+            try {
+                const settings = await apiFetch('/push/settings');
+
+                pushToggle = document.getElementById('push-toggle');
+                const slider = document.getElementById('push-toggle-slider');
+                const typesContainer = document.getElementById('notification-types');
+
+                const isEnabled = !!settings.pushEnabled;
+
+                console.log('Настройки загружены из API: PushEnabled =', isEnabled);
+
+                if (pushToggle) {
+                    pushToggle.checked = isEnabled;
+                }
+
+                if (slider) {
+                    if (isEnabled) {
+                        slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+                    } else {
+                        slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+                    }
+                }
+
+                if (typesContainer) {
+                    typesContainer.classList.toggle('hidden', !isEnabled);
+                }
+
+                document.getElementById('notifyMessages').checked = !!settings.notifyMessages;
+                document.getElementById('notifyGroup').checked = !!settings.notifyGroupChats;
+                document.getElementById('notifyMentions').checked = !!settings.notifyMentions;
+
+            } catch (e) {
+                console.error('Не удалось загрузить настройки push:', e);
+            }
+        }
+
+        async function togglePushNotifications() {
+            if (!pushToggle) return;
+
+            const slider = document.getElementById('push-toggle-slider');
+            const typesContainer = document.getElementById('notification-types');
+
+            const isEnabled = pushToggle.checked;
+
+            if (isEnabled) {
+                slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+                await subscribeToPush();
+                if (typesContainer) typesContainer.classList.remove('hidden');
+            } else {
+                slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+                await unsubscribeFromPush();
+                if (typesContainer) typesContainer.classList.add('hidden');
+            }
+
+            await saveNotificationSettings();
+        }
+
+        async function saveNotificationSettings() {
+            const dto = {
+                pushEnabled: document.getElementById('push-toggle').checked,
+                notifyMessages: document.getElementById('notifyMessages').checked,
+                notifyGroupChats: document.getElementById('notifyGroup').checked,
+                notifyMentions: document.getElementById('notifyMentions').checked
+            };
+
+            try {
+                await apiFetch('/push/settings', {
+                    method: 'POST',
+                    body: JSON.stringify(dto)
+                });
+            } catch (err) {
+                console.error('Ошибка сохранения настроек:', err);
+                showToast('Не удалось сохранить настройки уведомлений', 'error');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
             feather.replace();
             initSignalR();
 
+            await loadPushSettings();
+            console.log('Страница загружена, PushEnabled загружен из БД');
             checkPushStatus();
+
             const pushToggleEl = document.getElementById('push-toggle');
             if (pushToggleEl) {
                 pushToggleEl.addEventListener('change', togglePushNotifications);
             }
+            
+            document.querySelectorAll('#notification-types input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', saveNotificationSettings);
+            });
 
             document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
 
@@ -723,10 +796,12 @@
                 };
             });
 
-            if (cancelPreviewBtn)
-                cancelPreviewBtn.onclick = () => { 
-                    avatarInput.value = ''; hidePreview(); 
+            if (cancelPreviewBtn) {
+                cancelPreviewBtn.onclick = () => {
+                    avatarInput.value = '';
+                    hidePreview();
                 };
+            }
         });
     </script>
 </body>

@@ -20,7 +20,7 @@ namespace Messenger.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(password))
                 throw new Exception("Пароль не должен быть пустым");
 
-            if (!Regex.IsMatch(password, @".{8,20}"))
+            if (!Regex.IsMatch(password, @"^.{8,20}$"))
                 throw new Exception("Пароль должен содержать от 8 до 20 символов");
 
             if (!Regex.IsMatch(password, @"[A-Z]"))

@@ -21,6 +21,18 @@ public partial class AccountSetting
     [StringLength(15)]
     public string? Theme { get; set; }
 
+    [Column("Push_Enabled")]
+    public bool PushEnabled { get; set; } = true;
+
+    [Column("Notify_Messages")]
+    public bool NotifyMessages { get; set; } = true;
+
+    [Column("Notify_GroupChats")]
+    public bool NotifyGroupChats { get; set; } = true;
+
+    [Column("Notify_Mentions")]
+    public bool NotifyMentions { get; set; } = true;
+
     [InverseProperty("Account")]
     [JsonIgnore]
     public virtual ICollection<User> Users { get; set; } = new List<User>();
