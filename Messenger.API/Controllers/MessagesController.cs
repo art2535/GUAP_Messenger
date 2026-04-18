@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace Messenger.API.Controllers
@@ -230,22 +229,39 @@ namespace Messenger.API.Controllers
 
                     await transaction.CommitAsync(cancellationToken);
 
-                    var messageDto = new MessageDto
+                    var decryptedText = string.IsNullOrEmpty(encryptedText) ? null
+                        : _encryptionService.TryDecryptSafe(encryptedText);
+
+                    var finalMessageDto = new MessageDto
                     {
                         MessageId = messageId,
                         ChatId = chatId,
                         SenderId = user.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                        MessageText = messageText?.Trim(),
+                        MessageText = decryptedText,
                         SentAt = DateTime.UtcNow,
                         Status = "Sent",
                         Attachments = attachmentDtos
                     };
 
+                    await _hubContext.Clients.Group(chatId.ToString())
+                        .SendAsync("ReceiveMessage", finalMessageDto);
+
+                    await _hubContext.Clients.Group(chatId.ToString())
+                        .SendAsync("MessageSendingStatus", new
+                        {
+                            MessageId = messageId,
+                            ChatId = chatId,
+                            Status = "Sent",
+                            Timestamp = DateTimeOffset.UtcNow
+                        });
+
+                    _logger.LogInformation("Сообщение {MessageId} отправлено через SignalR из контроллера", messageId);
+
                     return Ok(new SendMessageSuccessResponse
                     {
                         IsSuccess = true,
-                        Data = messageDto
+                        Data = finalMessageDto
                     });
                 }
                 catch (Exception ex)

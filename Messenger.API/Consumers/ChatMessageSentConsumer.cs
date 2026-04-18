@@ -40,26 +40,16 @@ namespace Messenger.API.Consumers
 
             try
             {
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("MessageSendingStatus", new
-                    {
-                        MessageId = msg.MessageId,
-                        ChatId = msg.ChatId,
-                        Status = "Processing",
-                        Timestamp = DateTimeOffset.UtcNow
-                    }, context.CancellationToken);
-
                 var serviceResult = await _messageService.SendMessageAsync(
                     chatId: msg.ChatId,
                     senderId: msg.SenderId,
                     content: msg.MessageText,
                     hasAttachments: msg.HasAttachments,
                     files: null,
-                    token: context.CancellationToken
-                );
+                    token: context.CancellationToken);
 
                 if (!serviceResult.isSuccess || serviceResult.data == null)
-                    throw new Exception($"Не удалось сохранить сообщение: {serviceResult.error ?? "Unknown error"}");
+                    throw new Exception(serviceResult.error ?? "Unknown error");
 
                 var savedMessage = serviceResult.data;
 
@@ -106,29 +96,15 @@ namespace Messenger.API.Consumers
                     }).ToList() ?? new List<AttachmentDto>()
                 };
 
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("ReceiveMessage", finalMessageDto, context.CancellationToken);
-
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("MessageSendingStatus", new MessageSendingStatus
-                    {
-                        MessageId = msg.MessageId,
-                        ChatId = msg.ChatId,
-                        Status = "Sent",
-                        Timestamp = DateTimeOffset.UtcNow
-                    }, context.CancellationToken);
-
                 try
                 {
-                    await _subscriptionService.SendPushToOfflineUsersAsync(msg.ChatId, msg.SenderId,
-                        msg.SenderName ?? "Пользователь", msg.MessageText, msg.HasAttachments, false,
-                        context.CancellationToken);
-
-                    _logger.LogInformation("Push-уведомления отправлены для чата {ChatId}", msg.ChatId);
+                    await _subscriptionService.SendPushToOfflineUsersAsync(
+                        msg.ChatId, msg.SenderId, msg.SenderName ?? "Пользователь",
+                        msg.MessageText, msg.HasAttachments, false, context.CancellationToken);
                 }
                 catch (Exception pushEx)
                 {
-                    _logger.LogWarning(pushEx, "Не удалось отправить push-уведомления для чата {ChatId}", msg.ChatId);
+                    _logger.LogWarning(pushEx, "Не удалось отправить push для чата {ChatId}", msg.ChatId);
                 }
 
                 _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);
