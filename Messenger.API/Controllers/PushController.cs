@@ -207,6 +207,7 @@ namespace Messenger.API.Controllers
         }
 
         [HttpGet("vapid-public-key")]
+        [AllowAnonymous]
         [SwaggerOperation(
             Summary = "Получить публичный VAPID-ключ",
             Description = "Возвращает публичный VAPID-ключ, необходимый на клиентской стороне для создания push-подписки через Service Worker.",
@@ -216,6 +217,6 @@ namespace Messenger.API.Controllers
         {
             var publicKey = _vapidDetails.PublicKey;
             return Content(publicKey, "text/plain");
-        }        
+        }      
     }
 }
