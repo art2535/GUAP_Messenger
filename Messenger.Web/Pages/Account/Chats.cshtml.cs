@@ -20,7 +20,7 @@ namespace Messenger.Web.Pages.Account
             _userService = userService;
         }
 
-        public async Task<IActionResult> OnGetAsync()
+        public async Task<IActionResult> OnGetAsync(bool tokenSaved = false)
         {
             if (User.Identity?.IsAuthenticated == true)
             {
@@ -53,6 +53,8 @@ namespace Messenger.Web.Pages.Account
                 HttpContext.Session.SetString("USER_NAME", UserName);
                 HttpContext.Session.SetString("USER_ROLE", UserRole);
             }
+
+            ViewData["TokenSaved"] = tokenSaved;
 
             return Page();
         }

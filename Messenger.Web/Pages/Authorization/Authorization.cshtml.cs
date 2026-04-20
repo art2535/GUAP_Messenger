@@ -155,7 +155,14 @@ namespace Messenger.Web.Pages.Authorization
                 return Page();
             }
 
-            return RedirectToPage("/Account/Chats");
+            var accessTokenToRedirect = await HttpContext.GetTokenAsync("access_token");
+
+            if (!string.IsNullOrEmpty(accessTokenToRedirect))
+            {
+                HttpContext.Session.SetString("ACCESS_TOKEN", accessTokenToRedirect);
+            }
+
+            return RedirectToPage("/Account/Chats", new { tokenSaved = true });
         }
 
         public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
