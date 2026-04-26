@@ -141,8 +141,7 @@
 
 5. **Применение миграций**
    ```bash
-   cd Messenger.Infrastructure
-   dotnet ef migrations add InitialCreate
+   dotnet ef migrations add InitialCreate --project Messenger.Infrastructure --startup-project Messenger.API
    dotnet ef database update
    ```
 
