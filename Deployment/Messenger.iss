@@ -38,13 +38,13 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Types]
-Name: "full"; Description: "Сервер и клиент (рекомендуется)"; Flags: iscustom
-Name: "serveronly"; Description: "Только сервер"
-Name: "clientonly"; Description: "Только клиент"
+Name: "full"; Description: "РЎРµСЂРІРµСЂ Рё РєР»РёРµРЅС‚ (СЂРµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ)"; Flags: iscustom
+Name: "serveronly"; Description: "РўРѕР»СЊРєРѕ СЃРµСЂРІРµСЂ"
+Name: "clientonly"; Description: "РўРѕР»СЊРєРѕ РєР»РёРµРЅС‚"
 
 [Components]
-Name: "server"; Description: "Сервер API"; Types: full serveronly
-Name: "client"; Description: "Клиент Messenger.Web"; Types: full clientonly
+Name: "server"; Description: "РЎРµСЂРІРµСЂ API"; Types: full serveronly
+Name: "client"; Description: "РљР»РёРµРЅС‚ Messenger.Web"; Types: full clientonly
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; Components: client
@@ -55,25 +55,25 @@ Source: "..\publish\win-x64\Messenger.Web\*"; DestDir: "{app}\Web"; Flags: ignor
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\Web\{#MyAppExeNameWeb}"; WorkingDir: "{app}\Web"; Components: client
-Name: "{group}\API (Сервер)"; Filename: "{app}\API\{#MyAppExeNameAPI}"; WorkingDir: "{app}\API"; Flags: preventpinning; Components: server
+Name: "{group}\API (РЎРµСЂРІРµСЂ)"; Filename: "{app}\API\{#MyAppExeNameAPI}"; WorkingDir: "{app}\API"; Flags: preventpinning; Components: server
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\Web\{#MyAppExeNameWeb}"; WorkingDir: "{app}\Web"; Tasks: desktopicon; Components: client
 
 [Run]
-Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeNameAPI} /t /fi ""status eq running"""; Flags: runhidden; StatusMsg: "Очистка портов API..."
-Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeNameWeb} /t /fi ""status eq running"""; Flags: runhidden; StatusMsg: "Очистка портов Web..."
+Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeNameAPI} /t /fi ""status eq running"""; Flags: runhidden; StatusMsg: "РћС‡РёСЃС‚РєР° РїРѕСЂС‚РѕРІ API..."
+Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeNameWeb} /t /fi ""status eq running"""; Flags: runhidden; StatusMsg: "РћС‡РёСЃС‚РєР° РїРѕСЂС‚РѕРІ Web..."
 
 Filename: "{app}\API\{#MyAppExeNameAPI}"; \
     Parameters: "--urls ""https://localhost:7001"" --environment Development"; \
     WorkingDir: "{app}\API"; \
     Flags: nowait runhidden; \
-    Description: "Запуск сервера API"; \
+    Description: "Р—Р°РїСѓСЃРє СЃРµСЂРІРµСЂР° API"; \
     Components: server
 
 Filename: "{app}\Web\{#MyAppExeNameWeb}"; \
     Parameters: "--urls ""https://localhost:7010"" --environment Development"; \
     WorkingDir: "{app}\Web"; \
     Flags: nowait runhidden; \
-    Description: "Запуск Web-интерфейса"; \
+    Description: "Р—Р°РїСѓСЃРє Web-РёРЅС‚РµСЂС„РµР№СЃР°"; \
     Components: client
 
 [UninstallRun]
