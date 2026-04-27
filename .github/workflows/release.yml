@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
   build-all:
@@ -38,10 +37,9 @@ jobs:
           dotnet publish ./Messenger.Web/Messenger.Web.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ./publish/linux-x64/Messenger.Web
           
       - name: Compile Inno Setup
-        uses: aybe/Inno-Setup-Action@v1.2.2
-        with:
-          filepath: ./Deployment/Messenger.iss
-          options: /DAppVersion=${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Q /DAppVersion=${{ github.ref_name }} ./Deployment/Messenger.iss
           
       - name: Prepare Artifacts with Version
         shell: bash
