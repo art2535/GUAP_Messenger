@@ -25,7 +25,6 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 
-VersionInfoVersion={#AppVersion}
 VersionInfoTextVersion={#AppVersion}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoCompany={#MyAppPublisher}
