@@ -15,6 +15,9 @@ namespace Messenger.Web.Pages.Account
         public string? UserRole { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
 
+        [BindProperty(SupportsGet = true)]
+        public bool TokenSaved { get; set; }
+
         public ChatsModel(IUserService userService)
         {
             _userService = userService;
@@ -22,6 +25,11 @@ namespace Messenger.Web.Pages.Account
 
         public async Task<IActionResult> OnGetAsync()
         {
+            if (User.Identity?.IsAuthenticated != true && !TokenSaved)
+            {
+                return RedirectToPage("/Authorization/Authorization");
+            }
+
             if (User.Identity?.IsAuthenticated == true)
             {
                 var externalId = User.FindFirstValue("sub")
@@ -48,11 +56,15 @@ namespace Messenger.Web.Pages.Account
                         ?? "Пользователь";
 
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
-                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken ?? "");
-                HttpContext.Session.SetString("USER_ID", UserId ?? ""); 
-                HttpContext.Session.SetString("USER_NAME", UserName);
-                HttpContext.Session.SetString("USER_ROLE", UserRole);
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+                }
             }
+
+            HttpContext.Session.SetString("USER_ID", UserId ?? "");
+            HttpContext.Session.SetString("USER_NAME", UserName ?? "");
+            HttpContext.Session.SetString("USER_ROLE", UserRole ?? "");
 
             return Page();
         }

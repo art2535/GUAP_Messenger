@@ -68,7 +68,8 @@ namespace Messenger.Web.Pages.Authorization
 
                 await SendToSignalRAsync(client, userStatusRequest);
 
-                return RedirectToPage("/Account/Chats");
+                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+                return RedirectToPage("/Account/Chats", new { tokenSaved = true });
             }
 
             var properties = new AuthenticationProperties
@@ -147,6 +148,8 @@ namespace Messenger.Web.Pages.Authorization
                 };
 
                 await SendToSignalRAsync(httpClient, userStatusRequest);
+
+                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
             }
             catch (Exception ex)
             {
@@ -155,7 +158,7 @@ namespace Messenger.Web.Pages.Authorization
                 return Page();
             }
 
-            return RedirectToPage("/Account/Chats");
+            return RedirectToPage("/Account/Chats", new { tokenSaved = true });
         }
 
         public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
