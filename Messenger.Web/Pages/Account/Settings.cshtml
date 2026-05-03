@@ -361,7 +361,31 @@
         </div>
     </div>
 
+    <script>
+        const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
+        if (sessionToken) {
+            localStorage.setItem('token', sessionToken);
+        }
+
+        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
+        const tokenSaved = @Model.TokenSaved.ToString().ToLower();
+
+        if (!isAuthenticated && !tokenSaved) {
+            console.warn("Settings: Неавторизованный доступ - редирект");
+            window.location.href = "/Authorization/Authorization";
+        } else {
+            console.log("✅ Settings: Доступ разрешён (TokenSaved =", tokenSaved, ")");
+        }
+
+        function getAuthToken() {
+            return '@Model.AccessToken' ||
+                   localStorage.getItem('token') ||
+                   sessionToken;
+        }
+    </script>
+
     <script src="~/app.js"></script>
+
     <script>
         const API_URL = 'https://localhost:7001/api';
         let connection = null;

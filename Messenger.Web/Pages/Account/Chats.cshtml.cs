@@ -1,11 +1,13 @@
 ﻿using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Account
 {
+    [Authorize]
     public class ChatsModel : PageModel
     {
         private readonly IUserService _userService;

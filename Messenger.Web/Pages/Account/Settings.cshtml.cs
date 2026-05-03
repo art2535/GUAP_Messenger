@@ -30,6 +30,9 @@ namespace Messenger.Web.Pages.Account
         [BindProperty]
         public bool DeleteAvatar { get; set; }
 
+        [BindProperty(SupportsGet = true)]
+        public bool TokenSaved { get; set; }
+
         public bool HasAvatar { get; private set; }
         public string? AvatarUrl { get; private set; }
         public UserProfileDto? CurrentUser { get; private set; }
@@ -40,6 +43,12 @@ namespace Messenger.Web.Pages.Account
 
         public async Task OnGetAsync()
         {
+            if (User.Identity?.IsAuthenticated != true && !TokenSaved)
+            {
+                Response.Redirect("/Authorization/Authorization");
+                return;
+            }
+
             AccessToken = await HttpContext.GetTokenAsync("access_token") ?? "";
             await LoadProfileAsync();
         }

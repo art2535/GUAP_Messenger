@@ -494,15 +494,25 @@
     </div>
 
     <script>
-        const sessionToken = '@HttpContext.Session.GetString("ACCESS_TOKEN")' ||
-                             '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
-
+        const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
         if (sessionToken) {
             localStorage.setItem('token', sessionToken);
-            console.log("✅ Токен из сессии сохранен в localStorage");
-        } else {
-            console.warn("⚠️ Токен в сессии не найден");
         }
+
+        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
+        const tokenSaved = @Model.TokenSaved.ToString().ToLower();
+
+        if (!isAuthenticated && !tokenSaved) {
+            console.warn("Неавторизованный доступ - редирект на авторизацию");
+            window.location.href = "/Authorization/Authorization";
+        } else {
+            console.log("✅ Доступ разрешён (IsAuthenticated:", isAuthenticated, "TokenSaved:", tokenSaved, ")");
+        }
+
+        let token = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")' ||
+                    localStorage.getItem('token') || '';
+
+        let me = '@Model.UserId';
     </script>
 
     <script src="~/app.js"></script>
@@ -519,13 +529,6 @@
         console.log("DEBUG: Session USER_ID from Razor:", '@HttpContext.Session.GetString("USER_ID")');
         console.log("DEBUG: Model.UserId from Razor:", '@Model.UserId');
         console.log("DEBUG: Итоговое me:", '@HttpContext.Session.GetString("USER_ID")' || '@Model.UserId');
-
-        let token = '@HttpContext.Session.GetString("ACCESS_TOKEN")' || '@HttpContext.Session.GetString("JWT_TOKEN")' || '';
-
-        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
-        if (!isAuthenticated) {
-            window.location.href = "/Authorization/Authorization";
-        }
 
         console.log("Access Token:", token.substring(0, 20) + "...");
 
@@ -548,7 +551,6 @@
         let lastQuery = '';
         let searchTimeout = null;
         let allChatItems = [];
-        let me = '@Model.UserId';
 
         const userNameCache = new Map();
         userNameCache.clear();
