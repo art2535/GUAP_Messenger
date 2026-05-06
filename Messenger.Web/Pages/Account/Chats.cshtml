@@ -551,6 +551,7 @@
         let lastQuery = '';
         let searchTimeout = null;
         let allChatItems = [];
+        let hasBeenKickedNotificationShown = false;
 
         const userNameCache = new Map();
         userNameCache.clear();
@@ -1650,20 +1651,40 @@
                 }
             });
 
-            connection.on('YouWereRemovedFromChat', (chatId) => {
-                const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-                if (item) item.remove();
+            connection.on('YouWereRemovedFromChat', (data) => {
+                chatId = String(data?.chatId || data?.ChatId || data || "").trim();
 
-                if (currentChatId === chatId) {
-                    currentChatId = null;
-                    currentChatInfo = null;
-                    messagesContainer.innerHTML = '<div class="flex items-center h-full text-gray-500">Вы были удалены из чата</div>';
-                    document.getElementById('chat-title').textContent = 'Выберите чат';
+                if (!chatId) {
+                    console.warn("[YouWereRemovedFromChat] Получен пустой chatId");
+                    return;
                 }
 
-                connection.invoke("LeaveChat", chatId).catch(err => console.error(err));
+                console.log(`[KICKED] Вас удалили из чата ${chatId}`);
 
-                showToast('Вы были удалены из чата', 'info');
+                const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                if (chatItem) {
+                    chatItem.remove();
+                }
+
+                if (currentChatId === chatId) {
+                    if (!hasBeenKickedNotificationShown) {
+                        hasBeenKickedNotificationShown = true;
+                        showToast("Вы были удалены из чата", "info", 5000);
+                    }
+
+                    setTimeout(() => {
+                        closeCurrentChat();
+                        hasBeenKickedNotificationShown = false;
+                    }, 700);
+                }
+
+                setTimeout(() => {
+                    loadChats();
+                }, 400);
+
+                if (connection?.state === signalR.HubConnectionState.Connected) {
+                    connection.invoke("LeaveChat", chatId).catch(() => {});
+                }
             });
 
             connection.on('ParticipantRemoved', ({ chatId, userId }) => {
@@ -1676,8 +1697,6 @@
                     currentChatInfo.participants = currentChatInfo.participants.filter(p => p.id !== userId);
                     document.getElementById('participants-count').textContent = `(${currentChatInfo.participants.length})`;
                 }
-
-                showToast('Участник удалён', 'info');
             });
 
             connection.on('ParticipantAdded', ({ chatId, user }) => {
@@ -3213,7 +3232,7 @@
 
         function closeCurrentChat() {
             if (currentChatId && connection?.state === 'Connected') {
-                leaveChat(currentChatId);
+                leaveChat(currentChatId).catch(() => {});
             }
 
             currentChatId = null;
@@ -3222,7 +3241,6 @@
             document.getElementById('chat-header').classList.add('hidden');
             document.getElementById('messages-container').classList.add('hidden');
             document.getElementById('chat-input-area').classList.add('hidden');
-
             document.getElementById('empty-right-panel').classList.remove('hidden');
 
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
@@ -3231,6 +3249,27 @@
             document.getElementById('attached-files').innerHTML = '';
             selectedFiles = [];
         }
+
+        const originalAppendMessage = appendMessage;
+        appendMessage = function (msg) {
+            if (msg.messageText && msg.messageText.includes("Вы были удалены из чата")) {
+                if (document.querySelectorAll('.system-kicked-message').length > 0) {
+                    return;
+                }
+                const div = document.createElement('div');
+                div.className = 'mb-6 flex justify-center system-kicked-message';
+                div.innerHTML = `
+                    <div class="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-4 rounded-2xl text-center">
+                        <p class="font-medium">${msg.messageText}</p>
+                    </div>
+                `;
+                messagesContainer.appendChild(div);
+                scrollToBottom();
+                return;
+            }
+
+            originalAppendMessage.call(this, msg);
+        };
 
         function openChatInfo() {
             if (!currentChatId) {
