@@ -18,7 +18,7 @@
 
 **GUAP Messenger** — современное веб-приложение для обмена сообщениями в реальном времени, разработанное специально для сообщества **Государственного университета аэрокосмического приборостроения (ГУАП)**.
 
-Проект реализуется по классической каскадной модели (**Waterfall**).  
+Проект реализуется по классической каскадной модели (**Waterfall**) с активным внедрением DevOps-практик.  
 **Заказчик** — ГУАП.  
 **Дата старта проекта:** 17 сентября 2025 года.
 
@@ -26,47 +26,50 @@
 
 ### Реализовано
 - Личные (1:1) и групповые чаты
-- Отправка текстовых сообщений и файлов
-- Уведомления и обновления в реальном времени через **SignalR**
-- Индикатор «Печатает…» (typing)
-- Онлайн-статус пользователей
-- Аутентификация через **OIDC SSO ГУАП** (Keycloak)
-- Гибридный режим: fallback на **JWT** для локальной разработки и тестирования
-- Синхронизация профиля пользователя из SSO-claims в локальную БД
-- Политика авторизации на основе claims и ролей
-- Шифрование чувствительных данных (AES)
+- Отправка текстовых сообщений и файлов (с хранением на сервере)
+- Обновления в реальном времени через **SignalR**
+- Индикатор «Печатает…» и онлайн-статус пользователей
+- Аутентификация через **OIDC SSO ГУАП** (Keycloak `sso.guap.ru`)
+- Гибридный режим: **OIDC + JWT fallback** (для локальной разработки)
+- Синхронизация профиля из SSO-claims
+- Policy-based авторизация
+- Шифрование чувствительных данных (**AES**)
+- **Push-уведомления (VAPID)**
+- **RabbitMQ** (Outbox-паттерн для надёжной доставки уведомлений)
 
 ### В активной разработке
-- Дальнейшее улучшение UI/UX
-- Расширение функционала чатов и уведомлений
-- Автоматизация тестирования и развёртывания
+- Улучшение UI/UX и отзывчивости интерфейса
+- Расширение функционала групповых чатов
+- Подготовка к переходу хранения файлов на MinIO/S3
+- Автоматизация сборки установщиков и дальнейшее развитие CI/CD
 
 ## Технологический стек
 
-| Компонент          | Технология                          | Описание |
-|--------------------|-------------------------------------|----------|
-| **Frontend**       | ASP.NET Razor Pages + SignalR Client | Серверный рендеринг + клиент реального времени |
-| **Real-time**      | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления |
-| **Backend**        | ASP.NET Core Web API                | REST API + SignalR Hubs |
-| **Архитектура**    | **Clean Architecture**              | Core / Infrastructure / API / Web |
-| **ORM**            | Entity Framework Core               | Database First |
-| **БД**             | PostgreSQL 17                       | Хранение пользователей, чатов, сообщений |
-| **Аутентификация** | OpenID Connect (OIDC) + JWT fallback| SSO ГУАП (Keycloak) |
-| **Авторизация**    | Policy-based + Claims               | Роли и права из SSO |
-| **Шифрование**     | AES (мастер-ключ)                   | Защита чувствительных данных |
-| **CI/CD**          | **GitHub Actions**                  | Автоматическая сборка, запуск тестов |
-| **Тестирование**   | xUnit + ручное UI-тестирование      | Юнит-тесты в пайплайне |
+| Компонент            | Технология                          | Описание |
+|----------------------|-------------------------------------|----------|
+| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA | Серверный рендеринг + реальное время |
+| **Real-time**        | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления |
+| **Backend**          | ASP.NET Core Web API                | REST API + SignalR Hubs |
+| **Архитектура**      | **Clean Architecture**              | Core / Infrastructure / API / Web |
+| **БД**               | PostgreSQL 17                       | EF Core (Database First) |
+| **Messaging**        | RabbitMQ                            | Outbox-паттерн |
+| **Push**             | VAPID                               | Браузерные push-уведомления |
+| **Аутентификация**   | OIDC (Keycloak) + JWT fallback      | SSO ГУАП |
+| **Шифрование**       | AES                                 | Мастер-ключ в конфигурации |
+| **CI/CD**            | GitHub Actions                      | Сборка, тесты, релиз |
+| **Тестирование**     | xUnit                               | Unit-тесты |
 
 ## Установка и запуск (локально)
 
 ### Требования
 - .NET SDK 9.0+
 - PostgreSQL 17
+- RabbitMQ (рекомендуется)
 - Git
 
-### Шаги
+### Пошаговая инструкция
 
-1. **Клонирование и переход на ветку**
+1. **Клонирование**
    ```bash
    git clone https://github.com/art2535/GUAP_Messenger.git
    cd GUAP_Messenger
@@ -77,126 +80,60 @@
    dotnet restore
    ```
 
-3. **Настройка конфигурации**
+3. **Настройка конфигурации**  
+   Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`.
 
-   Рекомендуется использовать **User Secrets** (для локальной разработки) или создать файл `appsettings.Development.json` (он уже добавлен в `.gitignore`).
-  
-    **Пример минимально необходимой конфигурации** (`appsettings.Development.json`):
-    
-    ```json
-    {
-      "DetailedErrors": true,
-      "Logging": {
-        "LogLevel": {
-          "Default": "Information",
-          "Microsoft.AspNetCore": "Warning"
-        }
-      },
-      "Vapid": {
-        "Subject": "mailto:your-email@example.com",
-        "PublicKey": "{YOUR_VAPID_PUBLIC_KEY}",
-        "PrivateKey": "{YOUR_VAPID_PRIVATE_KEY}"
-      },
-      "RabbitMQ": {
-        "Host": "localhost",
-        "Port": "5672",
-        "Username": "{RABBITMQ_USERNAME}",
-        "Password": "{RABBITMQ_PASSWORD}"
-      },
-      "AzureAd": {
-        "Instance": "https://sso.guap.ru/realms/",
-        "TenantId": "master",
-        "ClientId": "messager",
-        "ClientSecret": "{KEYCLOAK_CLIENT_SECRET}",
-        "CallbackPath": "/signin-oidc",
-        "SignedOutCallbackPath": "/signout-callback-oidc",
-        "Domain": "guap.ru",
-        "Audience": "messager"
-      },
-      "URL": {
-        "API": {
-          "HTTPS": "https://localhost:7001",
-          "HTTP": "http://localhost:5245"
-        },
-        "Web": {
-          "HTTPS": "https://localhost:7010",
-          "HTTP": "http://localhost:5207"
-        }
-      },
-      "Jwt": {
-        "Key": "{YOUR_LONG_JWT_SIGNING_KEY_BASE64_MIN_256_BIT}",
-        "Issuer": "https://localhost:7001",
-        "Audience": "https://localhost:7010"
-      },
-      "Encryption": {
-        "MasterKeyBase64": "{YOUR_32_BYTE_ENCRYPTION_MASTER_KEY_BASE64}"
-      }
-    }
-    ```
-    
-    > **Важно**:  
-    > - Никогда не коммитьте реальные секреты в репозиторий.  
-    > - Используйте `dotnet user-secrets set "AzureAd:ClientSecret" "ваш_секрет"` для локальной разработки.  
-    > - Для production окружения секреты должны задаваться через переменные окружения или Secrets Manager.
-
-5. **Применение миграций**
+4. **Применение миграций**
    ```bash
-   dotnet ef migrations add InitialCreate --project Messenger.Infrastructure --startup-project Messenger.API
-   dotnet ef database update
+   dotnet ef database update --project Messenger.Infrastructure --startup-project Messenger.API
    ```
 
-6. **Запуск**
+5. **Запуск**
+   - **Через Visual Studio**: Multiple startup projects → `Messenger.API` + `Messenger.Web`
+   - **Через терминал** (два окна):
+     ```bash
+     # API + SignalR
+     cd Messenger.API && dotnet run
+     
+     # Web-интерфейс
+     cd Messenger.Web && dotnet run
+     ```
 
-   Рекомендуется через **Visual Studio** (Multiple startup projects: `Messenger.API` + `Messenger.Web`).
-
-   Или вручную:
-   ```bash
-   # Терминал 1 — API + SignalR
-   cd Messenger.API
-   dotnet run
-
-   # Терминал 2 — Web (Razor Pages)
-   cd Messenger.Web
-   dotnet run
-   ```
+Подробная инструкция → **[Инструкции по запуску](https://github.com/art2535/GUAP_Messenger/wiki/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D0%B8)**
 
 ## CI/CD
 
-В репозитории настроены **GitHub Actions**.  
-Пайплайн автоматически:
-- восстанавливает зависимости,
-- собирает решение,
-- запускает юнит-тесты (`Messenger.Tests`).
-
-Статус последних запусков можно посмотреть по бейджу выше или в разделе **[Actions](https://github.com/art2535/GUAP_Messenger/actions)**.
+Настроены **GitHub Actions**:
+- Автоматическая сборка и запуск тестов при push/merge в `main`
+- Поддержка ручного запуска workflow
+- Release workflow + сборка Windows Installer (Inno Setup)
 
 ## Структура проекта
-- `Messenger.Core` — доменные модели и бизнес-логика
-- `Messenger.Infrastructure` — EF Core, репозитории, миграции
-- `Messenger.API` — Web API и SignalR хабы
-- `Messenger.Web` — Razor Pages + клиентская часть
+
+- `Messenger.Core` — доменная модель и бизнес-логика
+- `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ
+- `Messenger.API` — REST API + SignalR Hub
+- `Messenger.Web` — Razor Pages + клиент
 - `Messenger.Tests` — юнит-тесты
+- `Deployment/` — файлы для Windows Installer
 
 ## Документация
-Подробная информация находится в **[GitHub Wiki](https://github.com/art2535/GUAP_Messenger/wiki)**.
+
+Полная документация доступна в **[GitHub Wiki](https://github.com/art2535/GUAP_Messenger/wiki)**.
 
 ## Как внести вклад
+
 1. Форкните репозиторий
-2. Создайте ветку от `main` (`feature/название-функции` или `fix/проблема`)
-3. Внесите изменения
-4. Откройте **Pull Request** в ветку `main`
+2. Создайте ветку от `main` (`feature/название` или `fix/проблема`)
+3. Внесите изменения + тесты (при необходимости)
+4. Откройте **Pull Request**
 
-Ищите задачи с метками `good first issue` или `help wanted`.
-
-## Поддержка
-- Баги и предложения → [Issues](https://github.com/art2535/GUAP_Messenger/issues)
-- Критические проблемы → Issues с меткой `critical`
+Ищите задачи с метками `good first issue`, `help wanted`, `ci-cd`, `notifications`.
 
 ## Ведущий разработчик
-**[Артём Петров (art2535)](https://github.com/art2535)** — студент 4 курса ФСПО ГУАП  
-Специальность: 09.02.07 «Информационные системы и программирование»
+**[Артём Петров (art2535)](https://github.com/art2535)** — студент 4 курса ФСПО ГУАП
 
 ---
 
 **Спасибо за интерес к проекту!**  
-Присоединяйтесь — вместе сделаем лучший университетский мессенджер в России 🚀
+Вместе сделаем лучший университетский мессенджер в России 🚀
