@@ -41,13 +41,13 @@ jobs:
 
       - name: Publish Windows
         run: |
-          dotnet publish ./Messenger.API/Messenger.API.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64/API
-          dotnet publish ./Messenger.Web/Messenger.Web.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64/Web
+          dotnet publish ./Messenger.API/Messenger.API.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64/Messenger.API
+          dotnet publish ./Messenger.Web/Messenger.Web.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64/Messenger.Web
 
       - name: Publish Linux
         run: |
-          dotnet publish ./Messenger.API/Messenger.API.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/linux-x64/API
-          dotnet publish ./Messenger.Web/Messenger.Web.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/linux-x64/Web
+          dotnet publish ./Messenger.API/Messenger.API.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/linux-x64/Messenger.API
+          dotnet publish ./Messenger.Web/Messenger.Web.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/linux-x64/Messenger.Web
 
       - name: Compile Inno Setup
         shell: pwsh
