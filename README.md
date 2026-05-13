@@ -30,12 +30,11 @@
 - Обновления в реальном времени через **SignalR**
 - Индикатор «Печатает…» и онлайн-статус пользователей
 - Аутентификация через **OIDC SSO ГУАП** (Keycloak `sso.guap.ru`)
-- Гибридный режим: **OIDC + JWT fallback** (для локальной разработки)
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
 - Шифрование чувствительных данных (**AES**)
 - **Push-уведомления (VAPID)**
-- **RabbitMQ** (Outbox-паттерн для надёжной доставки уведомлений)
+- **RabbitMQ** (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
 
 ### В активной разработке
 - Улучшение UI/UX и отзывчивости интерфейса
@@ -45,26 +44,26 @@
 
 ## Технологический стек
 
-| Компонент            | Технология                          | Описание |
-|----------------------|-------------------------------------|----------|
+| Компонент            | Технология                          | Описание                                    |
+|----------------------|-------------------------------------|---------------------------------------------|
 | **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA | Серверный рендеринг + реальное время |
-| **Real-time**        | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления |
-| **Backend**          | ASP.NET Core Web API                | REST API + SignalR Hubs |
-| **Архитектура**      | **Clean Architecture**              | Core / Infrastructure / API / Web |
-| **БД**               | PostgreSQL 17                       | EF Core (Database First) |
-| **Messaging**        | RabbitMQ                            | Outbox-паттерн |
-| **Push**             | VAPID                               | Браузерные push-уведомления |
-| **Аутентификация**   | OIDC (Keycloak) + JWT fallback      | SSO ГУАП |
-| **Шифрование**       | AES                                 | Мастер-ключ в конфигурации |
-| **CI/CD**            | GitHub Actions                      | Сборка, тесты, релиз |
-| **Тестирование**     | xUnit                               | Unit-тесты |
+| **Real-time**        | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления      |
+| **Backend**          | ASP.NET Core Web API                | REST API + SignalR Hubs                     |
+| **Архитектура**      | **Clean Architecture**              | Core / Infrastructure / API / Web           |
+| **БД**               | PostgreSQL 17                       | EF Core (Database First)                    |
+| **Messaging**        | RabbitMQ                            | Outbox-паттерн                              |
+| **Push**             | VAPID                               | Браузерные push-уведомления                 |
+| **Аутентификация**   | OIDC                                | SSO ГУАП                                    |
+| **Шифрование**       | AES                                 | Мастер-ключ в конфигурации                  |
+| **CI/CD**            | GitHub Actions                      | Сборка, тесты, релиз                        |
+| **Тестирование**     | xUnit                               | Unit-тесты                                  |
 
 ## Установка и запуск (локально)
 
 ### Требования
 - .NET SDK 9.0+
 - PostgreSQL 17
-- RabbitMQ (рекомендуется)
+- RabbitMQ
 - Git
 
 ### Пошаговая инструкция
@@ -106,7 +105,7 @@
 Настроены **GitHub Actions**:
 - Автоматическая сборка и запуск тестов при push/merge в `main`
 - Поддержка ручного запуска workflow
-- Release workflow + сборка Windows Installer (Inno Setup)
+- Release workflow (сборка под ОС Windows и Linux)
 
 ## Структура проекта
 
