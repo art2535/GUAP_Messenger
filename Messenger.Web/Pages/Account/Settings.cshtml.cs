@@ -1,5 +1,6 @@
 ﻿using Messenger.Core.DTOs.Users;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -41,16 +42,31 @@ namespace Messenger.Web.Pages.Account
         public string? ErrorMessage { get; private set; }
         public string AccessToken { get; set; } = string.Empty;
 
-        public async Task OnGetAsync()
+        public async Task<IActionResult> OnGetAsync()
         {
+            if (Request.Query.ContainsKey("handler") || Request.Query.ContainsKey("refreshed"))
+            {
+                return RedirectToPage("/Account/Settings", new { TokenSaved = true });
+            }
+
             if (User.Identity?.IsAuthenticated != true && !TokenSaved)
             {
-                Response.Redirect("/Authorization/Authorization");
-                return;
+                return Redirect("/Authorization/Authorization");
             }
 
             AccessToken = await HttpContext.GetTokenAsync("access_token") ?? "";
+
+            if (string.IsNullOrEmpty(AccessToken))
+            {
+                var authResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                if (authResult.Succeeded)
+                {
+                    AccessToken = authResult.Properties.GetTokenValue("access_token") ?? "";
+                }
+            }
+
             await LoadProfileAsync();
+            return Page();
         }
 
         private async Task LoadProfileAsync()
@@ -196,7 +212,7 @@ namespace Messenger.Web.Pages.Account
                 if (response.IsSuccessStatusCode)
                 {
                     TempData["SuccessMessage"] = "Настройки успешно сохранены";
-                    return RedirectToPage(new { refreshed = true });
+                    return RedirectToPage("/Account/Settings", new { TokenSaved = true });
                 }
                 else
                 {

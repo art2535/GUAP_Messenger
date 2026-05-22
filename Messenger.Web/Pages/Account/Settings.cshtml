@@ -258,11 +258,11 @@
                         <div class="grid md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Фамилия</label>
-                                <input asp-for="Profile.LastName" class="input-field" required>
+                                <input asp-for="Profile.LastName" class="input-field" readonly>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
-                                <input asp-for="Profile.FirstName" class="input-field" required>
+                                <input asp-for="Profile.FirstName" class="input-field" readonly>
                             </div>
                         </div>
 
@@ -274,7 +274,7 @@
                         <div class="grid md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Логин (email)</label>
-                                <input asp-for="Profile.Login" type="email" class="input-field" required>
+                                <input asp-for="Profile.Login" type="email" class="input-field" readonly>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
@@ -404,26 +404,23 @@
         let currentSubscription = null;
 
         function getJwtToken() {
-            const meta = document.querySelector('meta[name="access-token"]');
-            return meta ? meta.content : '';
-        }
-
-        function getAuthToken() {
             let token = document.querySelector('meta[name="access-token"]')?.content?.trim();
 
             if (!token) {
                 token = localStorage.getItem('token')?.trim();
             }
-
             if (!token) {
-                console.warn("Токен авторизации не найден!");
-                return null;
+                token = sessionStorage.getItem('token')?.trim();
             }
 
-            if (!token.startsWith('Bearer ')) {
+            return token || '';
+        }
+
+        function getAuthToken() {
+            let token = getJwtToken();
+            if (token && !token.startsWith('Bearer ')) {
                 token = 'Bearer ' + token;
             }
-
             return token;
         }
 
@@ -497,14 +494,16 @@
         async function initSignalR() {
             const token = getJwtToken();
             if (!token) {
-                console.error("Нет токена - SignalR не запускается");
+                console.warn("⚠️ SignalR: Токен не найден");
                 return;
             }
 
             connection = new signalR.HubConnectionBuilder()
-                .withUrl('https://localhost:7001/hubs/chat', { accessTokenFactory: () => token })
+                .withUrl('https://localhost:7001/hubs/chat', {
+                    accessTokenFactory: () => token
+                })
                 .withAutomaticReconnect()
-                .configureLogging(signalR.LogLevel.Information)
+                .configureLogging(signalR.LogLevel.Warning)
                 .build();
 
             connection.on('UserBlockStatusChanged', (data) => {

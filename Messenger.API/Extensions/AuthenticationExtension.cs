@@ -51,9 +51,15 @@ namespace Messenger.API.Extensions
                 options.LoginPath = "/Authorization";
                 options.ExpireTimeSpan = TimeSpan.FromHours(12);
                 options.SlidingExpiration = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
+
+                options.Cookie.Name = ".GuapMessenger.Cookie";
+                options.Cookie.SameSite = SameSiteMode.Lax; 
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.IsEssential = true;
+
+                options.Cookie.Path = "/";
+                options.Cookie.MaxAge = TimeSpan.FromHours(12);
             })
             .AddOpenIdConnect(options =>
             {
@@ -65,13 +71,16 @@ namespace Messenger.API.Extensions
                 options.ResponseType = "code";
                 options.SaveTokens = true;
                 options.GetClaimsFromUserInfoEndpoint = true;
+
                 options.Scope.Add("openid");
                 options.Scope.Add("profile");
                 options.Scope.Add("email");
+
                 options.TokenValidationParameters.ValidateIssuer = true;
                 options.TokenValidationParameters.NameClaimType = "name";
                 options.TokenValidationParameters.RoleClaimType = "role";
-                options.CallbackPath = "/signin-oidc";
+
+                options.UseTokenLifetime = true;
             });
         }
     }
