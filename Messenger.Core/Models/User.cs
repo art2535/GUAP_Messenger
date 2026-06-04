@@ -25,9 +25,6 @@ public partial class User
     [StringLength(50)]
     public string? MiddleName { get; set; }
 
-    [Column("Birth_Date")]
-    public DateOnly? BirthDate { get; set; }
-
     [Column("Registration_Date")]
     public DateOnly RegistrationDate { get; set; }
 

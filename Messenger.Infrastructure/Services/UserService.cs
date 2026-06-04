@@ -121,7 +121,6 @@ namespace Messenger.Infrastructure.Services
                 MiddleName = middleName,
                 LastName = lastName,
                 Phone = phone,
-                BirthDate = birthDateOnly,
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {
@@ -350,7 +349,6 @@ namespace Messenger.Infrastructure.Services
                 FirstName = firstName,
                 LastName = lastName,
                 MiddleName = middleName,
-                BirthDate = null,
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {
