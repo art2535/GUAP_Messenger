@@ -11,8 +11,9 @@ namespace Messenger.API
 
             builder.EnsureSharedDevelopmentEncryptionKey();
             builder.Services.AddControllers();
+            builder.Services.AddValidation();
             builder.Services.AddSignalRService();
-            builder.Services.AddSwagger();
+            builder.Services.AddScalarApi();
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRepositories();
             builder.Services.AddServices();
@@ -40,7 +41,7 @@ namespace Messenger.API
 
             if (app.Environment.IsDevelopment())
             {
-                app.UseSwaggerInterface();
+                app.MapScalarApi();
             }
 
             app.Use(async (context, next) =>
