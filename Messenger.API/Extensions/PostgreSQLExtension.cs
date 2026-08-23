@@ -5,27 +5,30 @@ namespace Messenger.API.Extensions
 {
     public static class PostgreSQLExtension
     {
-        public static void AddPostgreSQL(this IServiceCollection services, IConfiguration? configuration = null)
+        extension(IServiceCollection services)
         {
-            var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString",
-                EnvironmentVariableTarget.Machine) ?? string.Empty;
-
-            if (string.IsNullOrEmpty(connectionString))
+            public void AddPostgreSQL(IConfiguration? configuration = null)
             {
-                if (configuration is null)
+                var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString",
+                    EnvironmentVariableTarget.Machine) ?? string.Empty;
+
+                if (string.IsNullOrEmpty(connectionString))
                 {
-                    throw new InvalidOperationException(
-                        "Не указана строка подключения к PostgreSQL. " +
-                        "Добавьте переменную окружения 'PostgresConnectionString' " +
-                        "или настройте 'DefaultConnection' в appsettings.json."
-                    );
+                    if (configuration is null)
+                    {
+                        throw new InvalidOperationException(
+                            "Не указана строка подключения к PostgreSQL. " +
+                            "Добавьте переменную окружения 'PostgresConnectionString' " +
+                            "или настройте 'DefaultConnection' в appsettings.json."
+                        );
+                    }
+
+                    connectionString = configuration.GetConnectionString("DefaultConnection");
                 }
 
-                connectionString = configuration.GetConnectionString("DefaultConnection");
+                services.AddDbContext<GuapMessengerContext>(options =>
+                    options.UseNpgsql(connectionString));
             }
-
-            services.AddDbContext<GuapMessengerContext>(options =>
-                options.UseNpgsql(connectionString));
         }
 
         public static void SetTheEnvironmentVariable(bool forMachine = false)

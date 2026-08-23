@@ -8,25 +8,34 @@ namespace Messenger.API.Extensions
 {
     public static class ServiceExtension
     {
-        public static void AddServices(this IServiceCollection services)
+        extension(IServiceCollection services)
         {
-            services.AddScoped<IUserService, UserService>();
-            services.AddScoped<IChatService, ChatService>();
-            services.AddScoped<INotificationService, NotificationService>();
-            services.AddScoped<IAttachmentService, AttachmentService>();
-            services.AddScoped<IReactionService, ReactionService>();
-            services.AddScoped<ILoginService, LoginService>();
-            services.AddScoped<IUserStatusService, UserStatusService>();          
-            services.AddScoped<IBroadcastService, BroadcastService>();
-            services.AddScoped<IMessageService, MessageService>();
-            services.AddSingleton<WebPushClient>();
-            services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
-        }
+            public void AddServices()
+            {
+                services.AddScoped<IUserService, UserService>();
+                services.AddScoped<IChatService, ChatService>();
+                services.AddScoped<INotificationService, NotificationService>();
+                services.AddScoped<IAttachmentService, AttachmentService>();
+                services.AddScoped<IReactionService, ReactionService>();
+                services.AddScoped<ILoginService, LoginService>();
+                services.AddScoped<IUserStatusService, UserStatusService>();
+                services.AddScoped<IBroadcastService, BroadcastService>();
+                services.AddScoped<IMessageService, MessageService>();
+                services.AddSingleton<WebPushClient>();
+                services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
+            }
 
-        public static void AddSignalRService(this IServiceCollection services)
-        {
-            services.AddSignalR();
-            services.AddSingleton<IUserIdProvider, NameUserIdProvider>();
+            public void AddSignalRService()
+            {
+                services.AddSignalR();
+                services.AddSingleton<IUserIdProvider, NameUserIdProvider>();
+            }
+
+            public void AddEncryption(IConfiguration configuration)
+            {
+                services.Configure<AesGcmEncryptionOptions>(configuration.GetSection("Encryption"));
+                services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
+            }
         }
     }
 }
