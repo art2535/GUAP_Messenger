@@ -1,20 +1,24 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.Notifications;
 using Messenger.Core.Interfaces;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления уведомлениями
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для управления уведомлениями")]
+    [Tags("Notifications")]
     public class NotificationsController : ControllerBase
     {
         private readonly INotificationService _notificationService;
@@ -26,19 +30,21 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// Создать новое уведомление
+        /// </summary>
         [HttpPost]
-        [SwaggerOperation(
-            Summary = "Создать новое уведомление",
-            Description = "Создаёт уведомление для указанного пользователя. " +
-                          "Обычно вызывается внутренними сервисами (например, при новом сообщении, добавлении в чат и т.д.).")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Уведомление успешно создано", typeof(CreateNotificationSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Пользователь с указанным ID не найден", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("CreateNotification")]
+        [EndpointSummary("Создать новое уведомление")]
+        [EndpointDescription("Создаёт уведомление для указанного пользователя. Обычно вызывается внутренними сервисами " +
+            "(например, при новом сообщении, добавлении в чат и т.д.).")]
+        [ProducesResponseType(typeof(CreateNotificationSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateNotificationAsync(
-            [FromBody] [SwaggerParameter(Description = "Данные для создания уведомления", Required = true)] 
-            CreateNotificationRequest request, 
+            [FromBody, Description("Данные для создания уведомления")] CreateNotificationRequest request, 
             CancellationToken cancellationToken = default)
         {
             try
@@ -77,13 +83,16 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить уведомления текущего пользователя
+        /// </summary>
         [HttpGet]
-        [SwaggerOperation(
-            Summary = "Получить уведомления текущего пользователя",
-            Description = "Возвращает список всех активных и непрочитанных уведомлений авторизованного пользователя.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Уведомления успешно получены", typeof(GetNotificationsSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetNotifications")]
+        [EndpointSummary("Получить уведомления текущего пользователя")]
+        [EndpointDescription("Возвращает список всех активных и непрочитанных уведомлений авторизованного пользователя.")]
+        [ProducesResponseType(typeof(GetNotificationsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetNotificationsAsync(CancellationToken cancellationToken = default)
         {
             try

@@ -1,20 +1,25 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.Users;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления пользователями
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
-    [SwaggerTag("Контроллер для управления личным кабинетом пользователей")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
+    [Tags("Users")]
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -26,15 +31,47 @@ namespace Messenger.API.Controllers
             _hubContext = hubContext;
         }
 
+        /// <summary>
+        /// Получить пользователя по внешнему идентификатору (OIDC / Keycloak)
+        /// </summary>
+        [HttpGet("{externalId}")]
+        [EndpointName("GetUserByExternalId")]
+        [EndpointSummary("Получить пользователя по externalId")]
+        [EndpointDescription("Возвращает пользователя по внешнему идентификатору из SSO (Keycloak).")]
+        [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetUserByExternalIdAsync(
+            [Description("Внешний идентификатор пользователя из SSO")] string externalId)
+        {
+            try
+            {
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Поиск пользователей
+        /// </summary>
         [HttpGet("search")]
-        [SwaggerOperation(
-            Summary = "Поиск пользователей",
-            Description = "Возвращает список пользователей, соответствующих поисковому запросу (минимум 2 символа). Используется для автодополнения при добавлении в чат или поиске контактов.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Результат поиска успешно получен", typeof(SearchUsersSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> Search(
-            [FromQuery] [SwaggerParameter(Description = "Поисковый запрос (минимум 2 символа)")] string query, 
+        [EndpointName("SearchUsers")]
+        [EndpointSummary("Поиск пользователей")]
+        [EndpointDescription("Возвращает список пользователей, соответствующих поисковому запросу (минимум 2 символа). " +
+            "Используется для автодополнения при добавлении в чат или поиске контактов.")]
+        [ProducesResponseType(typeof(SearchUsersSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> SearchAsync(
+            [FromQuery, Description("Поисковый запрос (минимум 2 символа)")] string query, 
             CancellationToken token = default)
         {
             try
@@ -73,13 +110,16 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить список всех пользователей
+        /// </summary>
         [HttpGet]
-        [SwaggerOperation(
-            Summary = "Получить список всех пользователей",
-            Description = "Возвращает полный список зарегистрированных пользователей системы.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Список пользователей получен", typeof(GetAllUsersSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetAllUsers")]
+        [EndpointSummary("Получить список всех пользователей")]
+        [EndpointDescription("Возвращает полный список зарегистрированных пользователей системы.")]
+        [ProducesResponseType(typeof(GetAllUsersSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllUsersAsync(CancellationToken token = default)
         {
             try
@@ -102,13 +142,16 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить список всех ролей
+        /// </summary>
         [HttpGet("roles")]
-        [SwaggerOperation(
-            Summary = "Получить список всех ролей",
-            Description = "Возвращает список всех доступных ролей в системе (например, User, Admin).")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Список ролей получен", typeof(GetRolesSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetAllRoles")]
+        [EndpointSummary("Получить список всех ролей")]
+        [EndpointDescription("Возвращает список всех доступных ролей в системе.")]
+        [ProducesResponseType(typeof(GetRolesSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllRolesAsync(CancellationToken token = default)
         {
             try
@@ -131,16 +174,18 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить отображаемое имя пользователя по ID
+        /// </summary>
         [HttpGet("{userId}/name")]
-        [SwaggerOperation(
-            Summary = "Получить отображаемое имя пользователя по ID",
-            Description = "Возвращает полное имя (Имя Фамилия) пользователя по его GUID.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Имя пользователя получено", typeof(GetUserNameSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Пользователь не найден", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> GetUserDisplayName(
-            [SwaggerParameter(Description = "Идентификатор пользователя (GUID)")] Guid userId)
+        [EndpointName("GetUserDisplayName")]
+        [EndpointSummary("Получить отображаемое имя пользователя")]
+        [EndpointDescription("Возвращает полное имя (Имя Фамилия) пользователя по его GUID.")]
+        [ProducesResponseType(typeof(GetUserNameSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetUserDisplayName([Description("Идентификатор пользователя (GUID)")] Guid userId)
         {
             try
             {
@@ -172,14 +217,17 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить информацию о текущем пользователе
+        /// </summary>
         [HttpGet("info")]
-        [SwaggerOperation(
-            Summary = "Получить информацию о текущем пользователе",
-            Description = "Возвращает личные данные авторизованного пользователя: имя, логин, телефон, аватар и тему.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Информация о пользователе получена", typeof(GetCurrentUserSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Пользователь не найден", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetCurrentUserInfo")]
+        [EndpointSummary("Получить информацию о текущем пользователе")]
+        [EndpointDescription("Возвращает личные данные авторизованного пользователя: имя, логин, телефон, аватар и тему.")]
+        [ProducesResponseType(typeof(GetCurrentUserSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserByIdAsync(CancellationToken token = default)
         {
             try
@@ -190,7 +238,7 @@ namespace Messenger.API.Controllers
                     return error;
                 }
 
-                var currentUser = await _userService.GetUserByIdAsync(user!.UserId);
+                var currentUser = await _userService.GetUserByIdAsync(user!.UserId, token);
                 if (currentUser == null)
                 {
                     return NotFound(new ErrorResponse
@@ -231,16 +279,20 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Обновить профиль текущего пользователя
+        /// </summary>
         [HttpPut("update-profile")]
-        [SwaggerOperation(
-            Summary = "Обновить профиль текущего пользователя",
-            Description = "Обновляет личные данные пользователя (имя, телефон и т.д.) и тему интерфейса. Аватар можно передать отдельно через upload-avatar.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Профиль успешно обновлён", typeof(UpdateProfileSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("UpdateUserProfile")]
+        [EndpointSummary("Обновить профиль текущего пользователя")]
+        [EndpointDescription("Обновляет личные данные пользователя (имя, телефон и т.д.) и тему интерфейса. " +
+            "Аватар можно передать отдельно через upload-avatar.")]
+        [ProducesResponseType(typeof(UpdateProfileSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateUserProfileByIdAsync(
-            [FromBody] [SwaggerParameter(Description = "Новые данные профиля", Required = true)] UpdateUserProfileRequest request,
-            [FromQuery] [SwaggerParameter(Description = "Опциональный URL аватара")] string? avatarUrl = null, 
+            [FromBody, Description("Новые данные профиля")] UpdateUserProfileRequest request,
+            [FromQuery, Description("Опциональный URL аватара")] string? avatarUrl = null,
             CancellationToken token = default)
         {
             try
@@ -280,110 +332,19 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpGet("blocked")]
-        [SwaggerOperation(
-            Summary = "Получить список заблокированных пользователей",
-            Description = "Возвращает список пользователей, которых текущий пользователь добавил в чёрный список.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Список заблокированных получен", typeof(GetBlockedUsersSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> GetBlockedUsersAsync(CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                var blockedUsers = await _userService.GetBlockedUsersAsync(user!.UserId, token);
-
-                var result = blockedUsers.Select(u => new
-                {
-                    id = u.UserId.ToString(),
-                    name = $"{u.LastName} {u.FirstName}".Trim(),
-                    login = u.Login,
-                    avatar = u.Account?.Avatar ?? "/images/default-avatar.png"
-                });
-
-                return Ok(new GetBlockedUsersSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Data = result 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse 
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
-                });
-            }
-        }
-
-        [HttpPost("block/{blockedUserId}")]
-        [SwaggerOperation(
-            Summary = "Заблокировать пользователя",
-            Description = "Добавляет указанного пользователя в чёрный список текущего пользователя. Уведомления отправляются через SignalR.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Пользователь заблокирован", typeof(BlockUserSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Нельзя заблокировать себя", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Пользователь не найден", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> BlockUserAsync(
-            [SwaggerParameter(Description = "Идентификатор блокируемого пользователя")] Guid blockedUserId, 
-            CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                if (user!.UserId == blockedUserId)
-                {
-                    return BadRequest(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Нельзя заблокировать себя"
-                    });
-                }
-
-                await _userService.BlockUserAsync(user!.UserId, blockedUserId, token);
-
-                await NotifyBlockStatus(user.UserId, blockedUserId, true);
-
-                return Ok(new BlockUserSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Пользователь успешно заблокирован" 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
+        /// <summary>
+        /// Загрузить аватар пользователя
+        /// </summary>
         [HttpPost("upload-avatar")]
-        [ApiExplorerSettings(IgnoreApi = true)]
-        [SwaggerOperation(
-            Summary = "Загрузить аватар пользователя",
-            Description = "Загружает изображение аватара для текущего пользователя (макс. 2 МБ). Возвращает URL загруженного аватара.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Аватар успешно загружен", typeof(UploadAvatarSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Файл не выбран или слишком большой", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("UploadAvatar")]
+        [EndpointSummary("Загрузить аватар пользователя")]
+        [EndpointDescription("Загружает изображение аватара для текущего пользователя (макс. 2 МБ). Возвращает URL загруженного аватара.")]
+        [ProducesResponseType(typeof(UploadAvatarSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UploadAvatar(
-            [FromForm] [SwaggerParameter(Description = "Файл аватара (изображение)", Required = true)] IFormFile avatarFile, 
+            [FromForm, Description("Файл аватара (изображение)")] IFormFile avatarFile, 
             CancellationToken token = default)
         {
             if (avatarFile == null || avatarFile.Length == 0)
@@ -445,92 +406,18 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpPost("unblock/{blockedUserId}")]
-        [SwaggerOperation(
-            Summary = "Разблокировать пользователя",
-            Description = "Удаляет пользователя из чёрного списка текущего пользователя. Уведомления отправляются через SignalR.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Пользователь разблокирован", typeof(UnblockUserSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> UnblockUserAsync(
-            [SwaggerParameter(Description = "Идентификатор разблокируемого пользователя")] Guid blockedUserId, 
-            CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                await _userService.UnblockUserAsync(user!.UserId, blockedUserId, token);
-
-                await NotifyBlockStatus(user.UserId, blockedUserId, false);
-
-                return Ok(new UnblockUserSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Пользователь успешно разблокирован" 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
-        [HttpPost("change-password")]
-        [SwaggerOperation(
-            Summary = "Сменить пароль",
-            Description = "Меняет пароль текущего пользователя после проверки старого пароля.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Пароль успешно изменён", typeof(ChangePasswordSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверный старый пароль", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> ChangePasswordAsync(
-            [FromBody] [SwaggerParameter(Description = "Старый и новый пароль", Required = true)] ChangePasswordRequest request,
-            CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                await _userService.ChangePasswordAsync(user!.UserId, request.OldPassword, request.NewPassword, token);
-
-                return Ok(new ChangePasswordSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Пароль успешно обновлен"
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
+        /// <summary>
+        /// Назначить роль текущему пользователю
+        /// </summary>
         [HttpPost("assign-role/{roleId}")]
-        [SwaggerOperation(
-            Summary = "Назначить роль текущему пользователю",
-            Description = "Назначает указанную роль авторизованному пользователю (для администраторов).")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Роль успешно назначена", typeof(AssignRoleSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("AssignRole")]
+        [EndpointSummary("Назначить роль текущему пользователю")]
+        [EndpointDescription("Назначает указанную роль авторизованному пользователю (для администраторов).")]
+        [ProducesResponseType(typeof(AssignRoleSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> AssignRoleAsync(
-            [SwaggerParameter(Description = "Идентификатор роли")] Guid roleId, CancellationToken token = default)
+            [Description("Идентификатор роли")] Guid roleId, CancellationToken token = default)
         {
             try
             {
@@ -558,84 +445,16 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpGet("is-blocked-by/{userId}")]
-        [SwaggerOperation(
-            Summary = "Проверить, заблокировал ли пользователь текущего",
-            Description = "Возвращает true, если указанный пользователь добавил текущего в чёрный список.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Результат проверки получен", typeof(IsBlockedByResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> IsBlockedByUser(
-            [SwaggerParameter(Description = "Идентификатор пользователя, которого проверяем")] Guid userId, 
-            CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                var isBlocked = await _userService.IsBlockedByAsync(userId, user!.UserId, token);
-
-                return Ok(new IsBlockedByResponse 
-                { 
-                    IsBlocked = isBlocked 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
-        [HttpDelete("delete-account")]
-        [SwaggerOperation(
-            Summary = "Удалить аккаунт",
-            Description = "Безвозвратно удаляет аккаунт текущего пользователя из системы.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Аккаунт успешно удалён", typeof(DeleteAccountSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> DeleteAccountAsync(CancellationToken token = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                await _userService.DeleteAccountAsync(user!.UserId, token);
-
-                return Ok(new DeleteAccountSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Аккаунт успешно удален"
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
+        /// <summary>
+        /// Удалить аватар
+        /// </summary>
         [HttpDelete("delete-avatar")]
-        [SwaggerOperation(
-            Summary = "Удалить аватар",
-            Description = "Удаляет текущий аватар пользователя и устанавливает стандартный. Уведомление рассылается через SignalR.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Аватар успешно удалён", typeof(DeleteAvatarSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("DeleteAvatar")]
+        [EndpointSummary("Удалить аватар")]
+        [EndpointDescription("Удаляет текущий аватар пользователя и устанавливает стандартный. Уведомление рассылается через SignalR.")]
+        [ProducesResponseType(typeof(DeleteAvatarSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteAvatar(CancellationToken token = default)
         {
             try
@@ -668,22 +487,6 @@ namespace Messenger.API.Controllers
                     Error = ex.Message 
                 });
             }
-        }
-
-        private async Task NotifyBlockStatus(Guid actorId, Guid targetId, bool isBlocked)
-        {
-            var actorExternalId = actorId.ToString().ToLowerInvariant();
-            var targetExternalId = targetId.ToString().ToLowerInvariant();
-
-            var payload = new
-            {
-                actorId = actorExternalId,
-                targetId = targetExternalId,
-                isBlocked = isBlocked
-            };
-
-            await _hubContext.Clients.Group($"User_{actorExternalId}").SendAsync("UserBlockStatusChanged", payload);
-            await _hubContext.Clients.Group($"User_{targetExternalId}").SendAsync("UserBlockStatusChanged", payload);
         }
     }
 }

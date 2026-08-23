@@ -1,17 +1,22 @@
-﻿using Messenger.Core.DTOs.Push;
+﻿using Asp.Versioning;
+using Messenger.Core.DTOs.Push;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 using System.Security.Claims;
 using WebPush;
 
 namespace Messenger.API.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
+    /// <summary>
+    /// Push-уведомления — управление подписками, настройками и отправкой веб-push
+    /// </summary>
     [Authorize]
-    [SwaggerTag("Push-уведомления — управление подписками, настройками и отправкой веб-push")]
+    [ApiController]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
+    [Tags("Push")]
     public class PushController : ControllerBase
     {
         private readonly IPushSubscriptionService _subscriptionService;
@@ -35,17 +40,20 @@ namespace Messenger.API.Controllers
             _notificationService = notificationService;
         }
 
+        /// <summary>
+        /// Подписать пользователя на push-уведомления
+        /// </summary>
         [HttpPost("subscribe")]
-        [SwaggerOperation(
-            Summary = "Подписать пользователя на push-уведомления",
-            Description = "Сохраняет push-подписку браузера для последующей отправки веб-уведомлений. " +
-                         "Если подписка с таким Endpoint уже существует — она будет заменена.",
-            OperationId = "SubscribeToPush")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно сохранена")]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные подписки или отсутствуют ключи шифрования")]
+        [EndpointName("SubscribeToPush")]
+        [EndpointSummary("Подписать пользователя на push-уведомления")]
+        [EndpointDescription("Сохраняет push-подписку браузера для последующей отправки веб-уведомлений. " +
+            "Если подписка с таким Endpoint уже существует — она будет заменена.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [Consumes("application/json")]
         public async Task<IActionResult> SubscribeAsync(
-            [SwaggerParameter(Description = "Данные для создания подписки")][FromBody] PushSubscriptionRequest subscriptionDto)
+            [FromBody, Description("Данные для создания подписки")] PushSubscriptionRequest subscriptionDto)
         {
             if (subscriptionDto == null || string.IsNullOrEmpty(subscriptionDto.Endpoint))
                 return BadRequest(new { error = "Некорректные данные подписки" });
@@ -81,16 +89,19 @@ namespace Messenger.API.Controllers
             return Ok(new { message = "Подписка успешно сохранена" });
         }
 
+        /// <summary>
+        /// Отписать пользователя от push-уведомлений
+        /// </summary>
         [HttpDelete("unsubscribe")]
-        [SwaggerOperation(
-            Summary = "Отписать пользователя от push-уведомлений",
-            Description = "Удаляет push-подписку по указанному endpoint.",
-            OperationId = "UnsubscribeFromPush")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Подписка успешно удалена")]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Endpoint не указан")]
+        [EndpointName("UnsubscribeFromPush")]
+        [EndpointSummary("Отписать пользователя от push-уведомлений")]
+        [EndpointDescription("Удаляет push-подписку по указанному endpoint.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [Consumes("application/json")]
         public async Task<IActionResult> UnsubscribeAsync(
-            [SwaggerParameter(Description = "Endpoint для удаления подписки")][FromBody] string endpoint)
+            [FromBody, Description("Endpoint для удаления подписки")] string endpoint)
         {
             if (string.IsNullOrEmpty(endpoint))
                 return BadRequest();
@@ -100,25 +111,31 @@ namespace Messenger.API.Controllers
             return Ok(new { message = "Подписка удалена" });
         }
 
+        /// <summary>
+        /// Пометить уведомление как прочитанное
+        /// </summary>
         [HttpPost("{notificationId}/read")]
-        [SwaggerOperation(
-            Summary = "Пометить уведомление как прочитанное",
-            Description = "Отмечает конкретное push-уведомление как прочитанное для текущего пользователя.",
-            OperationId = "MarkNotificationAsRead")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Уведомление успешно помечено как прочитанное")]
-        public async Task<IActionResult> MarkAsReadAsync(Guid notificationId)
+        [EndpointName("MarkNotificationAsRead")]
+        [EndpointSummary("Пометить уведомление как прочитанное")]
+        [EndpointDescription("Отмечает конкретное push-уведомление как прочитанное для текущего пользователя.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> MarkAsReadAsync([Description("Идентификатор уведомления")] Guid notificationId)
         {
             await _notificationService.MarkAsReadAsync(notificationId);
 
             return Ok(new { message = "Уведомление помечено как прочитанное" });
         }
 
+        /// <summary>
+        /// Получить настройки push-уведомлений текущего пользователя
+        /// </summary>
         [HttpGet("settings")]
-        [SwaggerOperation(
-            Summary = "Получить настройки push-уведомлений текущего пользователя",
-            Description = "Возвращает текущие настройки push-уведомлений (включены ли уведомления, о сообщениях, группах и упоминаниях).",
-            OperationId = "GetPushSettings")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Настройки успешно получены", typeof(PushSubscriptionUpdateRequest))]
+        [EndpointName("GetPushSettings")]
+        [EndpointSummary("Получить настройки push-уведомлений")]
+        [EndpointDescription("Возвращает текущие настройки push-уведомлений (включены ли уведомления, о сообщениях, группах и упоминаниях).")]
+        [ProducesResponseType(typeof(PushSubscriptionUpdateRequest), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetSettingsAsync(CancellationToken token = default)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -149,13 +166,18 @@ namespace Messenger.API.Controllers
             });
         }
 
+        /// <summary>
+        /// Сохранить настройки push-уведомлений
+        /// </summary>
         [HttpPost("settings")]
-        [SwaggerOperation(
-            Summary = "Сохранить настройки push-уведомлений",
-            Description = "Обновляет настройки push-уведомлений пользователя (включение/отключение всех уведомлений, сообщений, групп и упоминаний).",
-            OperationId = "SavePushSettings")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Настройки успешно сохранены")]
-        public async Task<IActionResult> SaveSettingsAsync([FromBody] PushSubscriptionUpdateRequest request,
+        [EndpointName("SavePushSettings")]
+        [EndpointSummary("Сохранить настройки push-уведомлений")]
+        [EndpointDescription("Обновляет настройки push-уведомлений пользователя " +
+            "(включение/отключение всех уведомлений, сообщений, групп и упоминаний).")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> SaveSettingsAsync(
+            [FromBody, Description("Настройки push-уведомлений")] PushSubscriptionUpdateRequest request,
             CancellationToken token = default)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -168,17 +190,19 @@ namespace Messenger.API.Controllers
             return Ok(new { message = "Настройки push-уведомлений успешно сохранены" });
         }
 
+        /// <summary>
+        /// Отправить push-уведомления участникам чата
+        /// </summary>
         [HttpPost("send")]
-        [SwaggerOperation(
-            Summary = "Отправить push-уведомления участникам чата",
-            Description = "Отправляет веб-push уведомления всем участникам чата (кроме отправителя), " +
-                         "у которых включены соответствующие настройки. Вызывается после отправки сообщения.",
-            OperationId = "SendPushNotification")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Push-уведомления успешно обработаны")]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса")]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
+        [EndpointName("SendPushNotification")]
+        [EndpointSummary("Отправить push-уведомления участникам чата")]
+        [EndpointDescription("Отправляет веб-push уведомления всем участникам чата (кроме отправителя), у которых включены соответствующие настройки. Вызывается после отправки сообщения.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> SendPushNotificationAsync(
-            [FromBody][SwaggerParameter(Description = "Данные для отправки уведомления")] SendPushNotificationRequest request,
+            [FromBody, Description("Данные для отправки уведомления")] SendPushNotificationRequest request,
             CancellationToken cancellationToken = default)
         {
             if (request == null || request.ChatId == Guid.Empty)
@@ -205,13 +229,16 @@ namespace Messenger.API.Controllers
                 return StatusCode(500, new { error = "Внутренняя ошибка сервера при отправке push" });
             }
         }
-
+        /// <summary>
+        /// Получить публичный VAPID-ключ
+        /// </summary>
         [HttpGet("vapid-public-key")]
-        [SwaggerOperation(
-            Summary = "Получить публичный VAPID-ключ",
-            Description = "Возвращает публичный VAPID-ключ, необходимый на клиентской стороне для создания push-подписки через Service Worker.",
-            OperationId = "GetVapidPublicKey")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Публичный VAPID-ключ возвращён", typeof(string))]
+        [AllowAnonymous]
+        [EndpointName("GetVapidPublicKey")]
+        [EndpointSummary("Получить публичный VAPID-ключ")]
+        [EndpointDescription("Возвращает публичный VAPID-ключ, необходимый на клиентской стороне для создания push-подписки " +
+            "через Service Worker.")]
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         public IActionResult GetVapidPublicKey()
         {
             var publicKey = _vapidDetails.PublicKey;

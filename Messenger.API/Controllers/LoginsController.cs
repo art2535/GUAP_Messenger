@@ -1,21 +1,25 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления входами в мессенджер
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для управления входами в мессенджер")]
+    [Tags("Logins")]
     public class LoginsController : ControllerBase
     {
         private readonly ILoginService _loginService;
@@ -27,14 +31,17 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// Получение истории входов текущего пользователя
+        /// </summary>
         [HttpGet]
-        [SwaggerOperation(
-            Summary = "Получение истории входов текущего пользователя",
-            Description = "Возвращает список всех сессий (входов) авторизованного пользователя. " +
-                          "Включает информацию о токене, IP-адресе, времени входа и статусе активности.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "История входов успешно получена", typeof(GetLoginsSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetLogins")]
+        [EndpointSummary("Получение истории входов текущего пользователя")]
+        [EndpointDescription("Возвращает список всех сессий (входов) авторизованного пользователя. " +
+            "Включает информацию о токене, IP-адресе, времени входа и статусе активности.")]
+        [ProducesResponseType(typeof(GetLoginsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetLoginsAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -63,18 +70,19 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Регистрация нового входа в систему
+        /// </summary>
         [HttpPost]
-        [SwaggerOperation(
-            Summary = "Регистрация нового входа в систему",
-            Description = "Создаёт запись о новом входе пользователя (новая сессия). " +
-                          "Вызывается после успешной аутентификации. " +
-                          "Требуется действительный JWT-токен.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Запись о входе успешно создана", typeof(CreateLoginSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("CreateLogin")]
+        [EndpointSummary("Регистрация нового входа в систему")]
+        [EndpointDescription("Создаёт запись о новом входе пользователя (новая сессия). Вызывается после успешной аутентификации. Требуется действительный JWT-токен.")]
+        [ProducesResponseType(typeof(CreateLoginSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> LoginAsync(
-            [FromBody] [SwaggerParameter(Description = "Данные новой сессии входа", Required = true)] CreateLoginRequest request,
+            [FromBody, Description("Данные новой сессии входа")] CreateLoginRequest request,
             CancellationToken cancellationToken = default)
         {
             try
@@ -113,15 +121,17 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Регистрация выхода из системы
+        /// </summary>
         [HttpPatch]
-        [SwaggerOperation(
-            Summary = "Регистрация выхода из системы",
-            Description = "Помечает текущую активную сессию пользователя как неактивную (выход). " +
-                          "Вызывается при логауте. Устанавливает время выхода и деактивирует сессию.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Выход успешно зарегистрирован", typeof(LogoutSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Активная сессия не найдена", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("Logout")]
+        [EndpointSummary("Регистрация выхода из системы")]
+        [EndpointDescription("Помечает текущую активную сессию пользователя как неактивную (выход). Вызывается при логауте. Устанавливает время выхода и деактивирует сессию.")]
+        [ProducesResponseType(typeof(LogoutSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken = default)
         {
             try

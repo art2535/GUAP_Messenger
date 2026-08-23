@@ -1,21 +1,25 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.Reactions;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления реакциями на сообщения
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для управления реакциями на сообщения")]
+    [Tags("Reactions")]
     public class ReactionsController : ControllerBase
     {
         private readonly IReactionService _reactionService;
@@ -27,16 +31,19 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// Получить все реакции на сообщение
+        /// </summary>
         [HttpGet("{messageId}")]
-        [SwaggerOperation(
-            Summary = "Получить все реакции на сообщение",
-            Description = "Возвращает список всех реакций (эмодзи) на указанное сообщение, включая информацию о пользовнике и тип реакции.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Реакции успешно получены", typeof(GetReactionsSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение не найдено или реакций нет", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetReactionsByMessage")]
+        [EndpointSummary("Получить все реакции на сообщение")]
+        [EndpointDescription("Возвращает список всех реакций (эмодзи) на указанное сообщение, включая информацию о пользователе и тип реакции.")]
+        [ProducesResponseType(typeof(GetReactionsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetReactionsByMessageAsync(
-            [SwaggerParameter(Description = "Идентификатор сообщения (GUID)")] Guid messageId, 
+            [Description("Идентификатор сообщения (GUID)")] Guid messageId,
             CancellationToken cancellationToken = default)
         {
             try
@@ -59,18 +66,21 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Добавить реакцию на сообщение
+        /// </summary>
         [HttpPost("{messageId}")]
-        [SwaggerOperation(
-            Summary = "Добавить реакцию на сообщение",
-            Description = "Добавляет реакцию (эмодзи) от имени текущего авторизованного пользователя к указанному сообщению.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Реакция успешно добавлена", typeof(AddReactionSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректный тип реакции", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение не найдено", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("AddReaction")]
+        [EndpointSummary("Добавить реакцию на сообщение")]
+        [EndpointDescription("Добавляет реакцию (эмодзи) от имени текущего авторизованного пользователя к указанному сообщению.")]
+        [ProducesResponseType(typeof(AddReactionSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> AddReactionAsync(
-            [SwaggerParameter(Description = "Идентификатор сообщения (GUID)")] Guid messageId, 
-            [FromBody] [SwaggerParameter(Description = "Данные реакции", Required = true)] CreateReactionRequest request,
+            [Description("Идентификатор сообщения (GUID)")] Guid messageId,
+            [FromBody, Description("Данные реакции")] CreateReactionRequest request,
             CancellationToken cancellationToken = default)
         {
             try
@@ -123,16 +133,19 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Удалить свою реакцию с сообщения
+        /// </summary>
         [HttpDelete("{messageId}")]
-        [SwaggerOperation(
-            Summary = "Удалить свою реакцию с сообщения",
-            Description = "Удаляет реакцию текущего авторизованного пользователя с указанного сообщения. " +
-                          "Если у пользователя несколько реакций — удаляется только одна (обычно последняя).")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Реакция успешно удалена", typeof(DeleteReactionSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Реакция пользователя не найдена", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
-        public async Task<IActionResult> DeleteReactionAsync(Guid messageId, CancellationToken cancellationToken = default)
+        [EndpointName("DeleteReaction")]
+        [EndpointSummary("Удалить свою реакцию с сообщения")]
+        [EndpointDescription("Удаляет реакцию текущего авторизованного пользователя с указанного сообщения.")]
+        [ProducesResponseType(typeof(DeleteReactionSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteReactionAsync(
+            [Description("Идентификатор сообщения (GUID)")] Guid messageId, CancellationToken cancellationToken = default)
         {
             try
             {
