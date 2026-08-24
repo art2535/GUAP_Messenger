@@ -21,21 +21,11 @@ public partial class User
     [StringLength(50)]
     public string FirstName { get; set; } = null!;
 
-    [Column("Middle_Name")]
-    [StringLength(50)]
-    public string? MiddleName { get; set; }
-
     [Column("Registration_Date")]
     public DateOnly RegistrationDate { get; set; }
 
     [StringLength(50)]
     public string? Login { get; set; }
-
-    [StringLength(255)]
-    public string? Password { get; set; }
-
-    [StringLength(18)]
-    public string? Phone { get; set; }
 
     [Column("External_ID")]
     [StringLength(255)]
