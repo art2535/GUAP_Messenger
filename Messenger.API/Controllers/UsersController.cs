@@ -253,9 +253,7 @@ namespace Messenger.API.Controllers
                     UserId = currentUser.UserId,
                     LastName = currentUser.LastName ?? "",
                     FirstName = currentUser.FirstName ?? "",
-                    MiddleName = currentUser.MiddleName,
                     Login = currentUser.Login ?? "",
-                    Phone = currentUser.Phone,
                     Account = currentUser.Account != null ? new
                     {
                         Avatar = currentUser.Account.Avatar,
