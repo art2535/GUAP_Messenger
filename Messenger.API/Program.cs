@@ -44,11 +44,13 @@ namespace Messenger.API
                 app.MapScalarApi();
             }
 
+            var apiVersion = builder.Configuration["URL:API:Version"] ?? "1.0";
+
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path.StartsWithSegments("/hubs/chat") ||
-                    context.Request.Path.StartsWithSegments("/hubs/userstatus") ||
-                    context.Request.Path.StartsWithSegments("/hubs/notification"))
+                if (context.Request.Path.StartsWithSegments($"/api/v{apiVersion}/hubs/chat") ||
+                    context.Request.Path.StartsWithSegments($"/api/v{apiVersion}/hubs/userstatus") ||
+                    context.Request.Path.StartsWithSegments($"/api/v{apiVersion}/hubs/notification"))
                 {
                     var accessToken = context.Request.Query["access_token"];
                     if (!string.IsNullOrEmpty(accessToken) &&
@@ -69,9 +71,9 @@ namespace Messenger.API
             app.UseAuthorization();
             app.MapControllers();
 
-            app.MapHub<ChatHub>("/hubs/chat");
-            app.MapHub<UserStatusHub>("/hubs/userstatus");
-            app.MapHub<NotificationHub>("/hubs/notification");
+            app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat");
+            app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus");
+            app.MapHub<NotificationHub>($"/api/v{apiVersion}/hubs/notification");
 
             app.Run();
         }
