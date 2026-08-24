@@ -1,6 +1,7 @@
 using Messenger.API.Extensions;
-using Messenger.Core.Hubs;
+using Messenger.Web.Helpers;
 using Messenger.Web.Middleware;
+using System.Net.Http.Headers;
 
 namespace Messenger.Web
 {
@@ -10,17 +11,23 @@ namespace Messenger.Web
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRazorPages();
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
             builder.Services.AddLogging();
             builder.Services.AddAuthorization();
-            builder.Services.AddRabbitMQ(builder.Configuration);
-            builder.Services.AddServices();
-            builder.Services.AddRepositories();
             builder.Services.AddSignalRService();
-            builder.Services.AddHttpClient();
-            builder.Services.AddEncryption(builder.Configuration);
+            builder.Services.AddScoped<ApiHelper>();
+            builder.Services.AddApiVersioning()
+                .AddApiExplorer(options =>
+                {
+                    options.GroupNameFormat = "'v'VVV";
+                    options.SubstituteApiVersionInUrl = true;
+                });
+            builder.Services.AddHttpClient("Api", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
             builder.Services.AddDistributedMemoryCache();
 
             builder.Services.AddSession(options =>
@@ -57,7 +64,6 @@ namespace Messenger.Web
 
             app.MapRazorPages();
             app.MapStaticAssets();
-            app.MapHub<ChatHub>("/hubs/chat");
             app.MapControllers();
 
             app.Run();

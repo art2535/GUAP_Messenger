@@ -384,10 +384,16 @@
         }
     </script>
 
+    <script>
+        window.API_BASE_URL = '@Model.ApiBaseUrl';
+        window.HUB_URL = '@Model.HubUrl';
+    </script>
+
     <script src="~/app.js"></script>
 
     <script>
-        const API_URL = 'https://localhost:7001/api';
+        const API_URL = window.API_BASE_URL;
+
         let connection = null;
 
         const avatarInput = document.getElementById('avatarInput');
@@ -499,7 +505,7 @@
             }
 
             connection = new signalR.HubConnectionBuilder()
-                .withUrl('https://localhost:7001/hubs/chat', {
+                .withUrl(HUB_URL, {
                     accessTokenFactory: () => token
                 })
                 .withAutomaticReconnect()

@@ -1,4 +1,9 @@
-﻿const API_BASE_URL = 'https://localhost:7001/api';
+﻿const API_BASE_URL = window.API_BASE_URL;
+const HUB_URL = window.HUB_URL;
+
+if (!API_BASE_URL) {
+    console.error('❌ API_BASE_URL не задан! Проверьте, что страница передаёт window.API_BASE_URL');
+}
 
 let currentToken = null;
 
@@ -30,6 +35,13 @@ if ('serviceWorker' in navigator) {
             });
             console.log('✅ Service Worker зарегистрирован с scope:', registration.scope);
 
+            if (registration.active) {
+                registration.active.postMessage({
+                    type: 'SET_CONFIG',
+                    apiBaseUrl: API_BASE_URL
+                });
+            }
+
             setTimeout(() => {
                 initializePushNotifications(registration);
             }, 1500);
@@ -44,6 +56,11 @@ async function initializePushNotifications(registration) {
     const token = getAuthToken();
     if (!token) {
         console.warn('⚠️ Push: Токен авторизации не найден. Подписка отложена.');
+        return;
+    }
+
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL не задан');
         return;
     }
 
@@ -180,6 +197,8 @@ async function markNotificationAsRead(notificationId) {
             console.warn('markNotificationAsRead: токен отсутствует');
             return;
         }
+
+        if (!API_BASE_URL) return;
 
         const response = await fetch(`${API_BASE_URL}/push/${notificationId}/read`, {
             method: 'POST',

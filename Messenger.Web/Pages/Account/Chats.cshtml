@@ -515,13 +515,17 @@
         let me = '@Model.UserId';
     </script>
 
+    <script>
+        window.API_BASE_URL = '@Model.ApiBaseUrl';
+        window.HUB_URL = '@Model.HubUrl';
+    </script>
+
     <script src="~/app.js"></script>
 
     <script>
         feather.replace();
 
-        const API_BASE = 'https://localhost:7001/api';
-        const HUB_URL = 'https://localhost:7001/hubs/chat';
+        const API_BASE = window.API_BASE_URL;
 
         let myBlockedUsers = new Set();
         let allChats = [];
