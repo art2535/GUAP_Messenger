@@ -86,9 +86,7 @@ namespace Messenger.Web.Pages.Account
                     {
                         LastName = CurrentUser.LastName ?? "",
                         FirstName = CurrentUser.FirstName ?? "",
-                        MiddleName = CurrentUser.MiddleName ?? "",
                         Login = CurrentUser.Login ?? "",
-                        Phone = CurrentUser.Phone ?? "",
                         Theme = CurrentUser.Account?.Theme ?? "light"
                     };
 
@@ -163,9 +161,7 @@ namespace Messenger.Web.Pages.Account
                 {
                     Profile.LastName,
                     Profile.FirstName,
-                    Profile.MiddleName,
                     Profile.Login,
-                    Profile.Phone,
                     Profile.Theme
                 };
 
