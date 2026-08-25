@@ -27,6 +27,7 @@ namespace Messenger.API.Controllers
     public class MessagesController : ControllerBase
     {
         private readonly IMessageService _messageService;
+        private readonly IConfiguration _configuration;
         private readonly IReactionService _reactionService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
@@ -36,12 +37,13 @@ namespace Messenger.API.Controllers
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly GuapMessengerContext _context;
 
-        public MessagesController(IMessageService messageService,
+        public MessagesController(IMessageService messageService, IConfiguration configuration,
             IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
             IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
             IPublishEndpoint publishEndpoint, GuapMessengerContext context)
         {
             _messageService = messageService;
+            _configuration = configuration;
             _reactionService = reactionService;
             _hubContext = hubContext;
             _chatService = chatService;
@@ -186,7 +188,7 @@ namespace Messenger.API.Controllers
                     {
                         var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
                         var filePath = Path.Combine(uploadPath, fileName);
-                        var fileUrl = $"/uploads/{fileName}";
+                        var fileUrl = $"{_configuration["URL:API:HTTPS"]}/uploads/{fileName}";
 
                         await using var stream = new FileStream(filePath, FileMode.Create);
                         await file.CopyToAsync(stream, cancellationToken);
