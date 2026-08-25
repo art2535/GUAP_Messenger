@@ -300,6 +300,57 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
+        /// Пометить все сообщения чата как прочитанные (для текущего пользователя)
+        /// </summary>
+        [HttpPost("{chatId}/read")]
+        [EndpointName("MarkChatAsRead")]
+        [EndpointDescription("Обновляет статус сообщения на прочитанный")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> MarkChatAsReadAsync([Description("Идентификатор чата")] Guid chatId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null) return error;
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null) return NotFound(new ErrorResponse { Error = "Чат не найден" });
+
+                if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
+                    return Forbid();
+
+                var updated = await _messageService.MarkMessagesAsReadAsync(chatId, user!.UserId, ct);
+
+                if (updated > 0)
+                {
+                    await _hubContext.Clients.Group(chatId.ToString())
+                        .SendAsync("MessagesRead", new
+                        {
+                            chatId,
+                            readerId = user.UserId,
+                            readAt = DateTime.UtcNow
+                        }, ct);
+                }
+
+                return Ok(new { IsSuccess = true, UpdatedCount = updated });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
         /// Получить сообщения чата
         /// </summary>
         [HttpGet("{chatId}")]

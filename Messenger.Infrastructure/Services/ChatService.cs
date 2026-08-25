@@ -81,6 +81,8 @@ namespace Messenger.Infrastructure.Services
                     decryptedLastMessage = "Вложение";
                 }
 
+                int unreadCount = chat.Messages?.Count(m => m.SenderId != userId && m.ReadTime == null) ?? 0;
+
                 result.Add(new
                 {
                     chatId = chat.ChatId,
@@ -99,7 +101,8 @@ namespace Messenger.Infrastructure.Services
                     type = chat.Type,
                     lastMessage = decryptedLastMessage,
                     isOnline = true,
-                    isBlocked = isBlocked
+                    isBlocked = isBlocked,
+                    unreadCount = unreadCount
                 });
             }
 

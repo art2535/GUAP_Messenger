@@ -7,6 +7,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -67,6 +68,25 @@ namespace Messenger.Infrastructure.Services
             }
 
             return filtered.OrderBy(m => m.SentAt).ToList();
+        }
+
+        public async Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default)
+        {
+            var messages = await _context.Messages
+                .Where(m => m.ChatId == chatId
+                         && m.SenderId != readerId
+                         && m.ReadTime == null)
+                .ToListAsync(ct);
+
+            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+            foreach (var msg in messages)
+            {
+                msg.ReadTime = now;
+                msg.DeliveryStatus = MessageDeliveryStatus.Read;
+            }
+
+            await _context.SaveChangesAsync(ct);
+            return messages.Count;
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)

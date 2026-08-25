@@ -14,5 +14,6 @@ namespace Messenger.Core.Interfaces
         Task DeleteMessageAsync(Guid messageId, CancellationToken token = default);
         Task UpdateMessageAsync(Message message, CancellationToken token = default);
         Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default);
+        Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default);
     }
 }
