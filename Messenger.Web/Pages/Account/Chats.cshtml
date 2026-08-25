@@ -147,6 +147,17 @@
             transition: background-color 0.3s ease;
         }
 
+        .msg-status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .msg-status.sent { color: rgba(255,255,255,0.7); }
+        .msg-status.read { color: #93c5fd; }
+        .msg-status.pending { opacity: 0.6; }
+        .message-bubble.incoming .msg-status { display: none; }
+
         #user-search-results {
             position: absolute;
             z-index: 100;
@@ -211,6 +222,86 @@
             66% {
                 content: '...';
             }
+        }
+
+        .date-separator {
+            position: sticky;
+            top: 8px;
+            z-index: 20;
+            display: flex;
+            justify-content: center;
+            margin: 16px 0 8px;
+            padding: 0;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        .date-separator span {
+            background: #e5e7eb;
+            color: #4b5563;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 14px;
+            border-radius: 9999px;
+            box-shadow: none;
+            border: none;
+            user-select: none;
+        }
+
+        .unread-badge {
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            background: #3b82f6;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            box-shadow: 0 1px 3px rgba(59, 130, 246, 0.4);
+        }
+
+        .message-bubble {
+            position: relative;
+            max-width: 100%;
+            word-break: break-word;
+        }
+
+        .message-bubble.outgoing {
+            background: #3b82f6;
+            color: white;
+            border-radius: 16px 16px 4px 16px;
+        }
+
+        .message-bubble.incoming {
+            background: #f3f4f6;
+            color: #111827;
+            border-radius: 16px 16px 16px 4px;
+        }
+
+        .message-bubble.outgoing::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: -7px;
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            clip-path: polygon(0 0, 0 100%, 100% 100%);
+        }
+
+        .message-bubble.incoming::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -7px;
+            width: 12px;
+            height: 12px;
+            background: #f3f4f6;
+            clip-path: polygon(100% 0, 0 100%, 100% 100%);
         }
     </style>
 </head>
@@ -370,16 +461,7 @@
             </div>
 
             <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 bg-white">
-                <div id="blocked-notice" class="hidden flex items-center justify-center p-3 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium italic">
-                    <i data-feather="slash" class="w-4 h-4 mr-2"></i>
-                    <span id="blocked-notice-text">Отправка сообщений ограничена</span>
-                </div>
-
                 <div id="input-section-container">
-                    <div id="blocked-ui" class="hidden p-4 bg-gray-50 text-center text-red-500 font-medium italic">
-                        Чат заблокирован
-                    </div>
-
                     <div id="normal-input-ui">
                         <div class="flex items-center space-x-2">
                             <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700">
@@ -529,6 +611,7 @@
 
         let myBlockedUsers = new Set();
         let allChats = [];
+        let unreadCounts = new Map();
 
         console.log("DEBUG: Session USER_ID from Razor:", '@HttpContext.Session.GetString("USER_ID")');
         console.log("DEBUG: Model.UserId from Razor:", '@Model.UserId');
@@ -585,7 +668,7 @@
             return response;
         }
 
-        fileInput.onchange = function() {
+        fileInput.onchange = function () {
             const MAX_SIZE_MB = 10;
             const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
@@ -608,69 +691,15 @@
                 return;
             }
 
-            selectedFiles = validFiles;
+            selectedFiles = [...selectedFiles, ...validFiles];
             renderAttachedPreviews();
 
+            fileInput.value = '';
+
             if (hasError && validFiles.length > 0) {
-                showToast(`Некоторые файлы превышают лимит 10 МБ и были удалены`, 'warning');
+                showToast(`Некоторые файлы превышают лимит ${MAX_SIZE_MB} МБ и были пропущены`, 'warning');
             }
         };
-
-        function refreshBlockStatus() {
-            if (!currentChatId || !currentChatInfo) return;
-
-            const blockedUi = document.getElementById('blocked-ui');
-            const normalUi = document.getElementById('normal-input-ui');
-
-            if (currentChatInfo.type !== 'private') {
-                normalUi.classList.remove('hidden');
-                blockedUi.classList.add('hidden');
-                return;
-            }
-
-            const partner = currentChatInfo.participants.find(p =>
-                (p.id || p.userId || "").toLowerCase() !== me
-            );
-
-            if (!partner) {
-                normalUi.classList.remove('hidden');
-                blockedUi.classList.add('hidden');
-                return;
-            }
-
-            const partnerId = (partner.id || partner.userId || "").toLowerCase();
-            const iBlockedHim = myBlockedUsers.has(partnerId);
-            const heBlockedMe = currentChatInfo.isBlockedByPartner === true;
-
-            if (iBlockedHim || heBlockedMe) {
-                normalUi.classList.add('hidden');
-                blockedUi.classList.remove('hidden');
-                blockedUi.innerText = iBlockedHim
-                    ? "Вы заблокировали этого пользователя"
-                    : "Пользователь ограничил доступ";
-            } else {
-                normalUi.classList.remove('hidden');
-                blockedUi.classList.add('hidden');
-            }
-        }
-
-        function addBlockSystemMessage(blockerName, blockTime = null) {
-            document.querySelectorAll('.system-block-message').forEach(el => el.remove());
-
-            const div = document.createElement('div');
-            div.className = 'mb-6 flex justify-center system-block-message';
-            div.innerHTML = `
-                <div class="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-2xl text-center max-w-sm">
-                    <i data-feather="lock" class="w-8 h-8 mx-auto mb-2"></i>
-                    <p class="font-semibold text-lg">${blockerName} добавил вас в чёрный список</p>
-                    ${blockTime ? `<p class="text-sm opacity-80 mt-1">${formatDateTime(blockTime)}</p>` : ''}
-                    <p class="text-sm mt-2 opacity-90">Вы не можете отправлять сообщения в этот чат</p>
-                </div>
-            `;
-            messagesContainer.appendChild(div);
-            feather.replace();
-            scrollToBottom();
-        }
 
         async function loadAvatar() {
             try {
@@ -713,82 +742,8 @@
             document.getElementById('chat-input-area').classList.add('hidden');
         });
 
-        function blockChat(blockerName = "Этот пользователь", blockTime = null) {
-            messageInput.disabled = true;
-            messageInput.placeholder = "Вы в чёрном списке";
-            messageInput.style.backgroundColor = "#f3f4f6";
-            messageInput.style.color = "#6b7280";
-            sendButton.disabled = true;
-            sendButton.style.opacity = "0.4";
-            fileInput.disabled = true;
-            document.querySelector('label[for="file-input"]').style.opacity = "0.4";
-
-            const subtitle = document.getElementById('chat-subtitle');
-            if (subtitle) subtitle.textContent = 'Заблокировал вас';
-
-            addBlockSystemMessage(blockerName, blockTime);
-        }
-
-        function unblockChat() {
-            console.log("unblockChat → полная разблокировка");
-
-            messageInput.disabled = false;
-            messageInput.placeholder = "Напишите сообщение...";
-            messageInput.style.backgroundColor = "";
-            messageInput.style.color = "";
-
-            sendButton.disabled = false;
-            sendButton.style.opacity = "";
-            fileInput.disabled = false;
-            document.querySelector('label[for="file-input"]').style.opacity = "";
-
-            document.querySelectorAll('.system-block-message, .system-myblock-message, .system-blocked-by-partner')
-                .forEach(el => el.remove());
-
-            const subtitle = document.getElementById('chat-subtitle');
-            if (subtitle) subtitle.textContent = 'Активен недавно';
-
-            scrollToBottom();
-        }
-
-        function clearBlockedNotice() {
-            unblockMessageInput();
-            const notice = document.querySelector('.blocked-chat-notice');
-            if (notice) notice.remove();
-        }
-
         function cacheChatItems() {
             allChatItems = Array.from(chatsList.querySelectorAll('.chat-item'));
-        }
-
-        function updateChatInputState() {
-            const notice = document.getElementById('blocked-notice');
-            const noticeText = document.getElementById('blocked-notice-text');
-            const formContainer = document.getElementById('message-form-container');
-
-            if (!currentChatId || !currentChatInfo) return;
-
-            if (currentChatInfo.type === 'private') {
-                const myUserId = "@Model.UserId";
-                const recipient = currentChatInfo.participants.find(p => p.id !== myUserId);
-
-                if (recipient) {
-                    const iBlockedHim = myBlockedUsers.has(recipient.id);
-                    const heBlockedMe = currentChatInfo.isBlockedByPartner;
-
-                    if (iBlockedHim || heBlockedMe) {
-                        formContainer.classList.add('hidden');
-                        notice.classList.remove('hidden');
-                        noticeText.innerText = iBlockedHim
-                            ? "Вы заблокировали этого пользователя"
-                            : "Пользователь ограничил доступ к переписке";
-                        return;
-                    }
-                }
-            }
-
-            formContainer.classList.remove('hidden');
-            notice.classList.add('hidden');
         }
 
         function filterChats() {
@@ -807,35 +762,54 @@
             filterChats();
         });
 
-        function renderAttachments(attachments = []) {
+        function renderAttachments(attachments = [], isMyMessage = false) {
             if (!attachments?.length) return '';
-            return attachments.map(att => {
-                const fileNameFromUrl = att.url.split('/').pop();
-                const isImage = att.fileType?.startsWith('image/');
-                const displayUrl = `/uploads/${fileNameFromUrl}`;
-                const downloadUrl = `/uploads/${fileNameFromUrl}?download=1`;
 
+            const textColor = isMyMessage ? 'text-blue-100 hover:text-white' : 'text-blue-600 hover:text-blue-800';
+            const bgColor = isMyMessage ? 'bg-blue-500/20' : 'bg-black/5';
+
+            const images = [];
+            const files = [];
+
+            attachments.forEach(att => {
+                const fileNameFromUrl = att.url ? att.url.split('/').pop() : (att.fileName || 'file');
+                const isImage = att.fileType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileNameFromUrl);
+                const displayUrl = att.url?.startsWith('http') ? att.url : `/uploads/${fileNameFromUrl}`;
+                const downloadUrl = `${displayUrl}?download=1`;
                 const size = att.sizeInBytes ? (att.sizeInBytes / 1024).toFixed(1) + ' КБ' : '';
 
                 if (isImage) {
-                    return `
+                    images.push(`
                         <img src="${displayUrl}"
-                             class="image-preview mt-2 cursor-zoom-in"
-                             alt="${att.fileName}"
-                             onclick="openLightbox('${displayUrl}')">
-                    `;
+                                class="image-preview cursor-zoom-in rounded-xl object-cover"
+                                style="max-width: 220px; max-height: 220px;"
+                                alt="${att.fileName || 'Изображение'}"
+                                onclick="openLightbox('${displayUrl}')">
+                    `);
                 } else {
-                    return `
-                        <div class="file-attachment mt-2">
-                            <i data-feather="file"></i>
+                    files.push(`
+                        <div class="file-attachment ${bgColor} mt-1">
+                            <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
                             <a href="${downloadUrl}"
-                               class="text-white-600 hover:underline font-medium">
-                               ${att.fileName} ${size ? `<span class="text-xs opacity-70">(${size})</span>` : ''}
+                                target="_blank"
+                                class="${textColor} hover:underline font-medium truncate max-w-[180px]"
+                                title="${att.fileName || fileNameFromUrl}">
+                                ${att.fileName || fileNameFromUrl}
+                                ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
                             </a>
                         </div>
-                    `;
+                    `);
                 }
-            }).join('');
+            });
+
+            let html = '';
+            if (images.length > 0) {
+                html += `<div class="flex flex-wrap gap-2 mt-2">${images.join('')}</div>`;
+            }
+            if (files.length > 0) {
+                html += `<div class="flex flex-col gap-1.5 mt-2">${files.join('')}</div>`;
+            }
+            return html;
         }
 
         function openLightbox(url) {
@@ -864,36 +838,39 @@
 
             if (displayText && displayText.length > 20 && !displayText.includes(' ') && !displayText.includes('\n') &&
                 /^[A-Za-z0-9+/=]+$/.test(displayText)) {
-
-                if (!displayText || displayText.trim() === "") {
-                    displayText = "[Сообщение]";
-                }
+                displayText = "[Сообщение]";
             }
 
             const isGroupChat = currentChatInfo?.type === 'group';
 
+            appendDateSeparatorIfNeeded(msg.sentAt || msg.sentTime);
+
             const div = document.createElement('div');
-            div.className = `mb-6 flex ${isMyMessage ? 'justify-end' : 'justify-start'}`;
+            div.className = `mb-3 flex ${isMyMessage ? 'justify-end' : 'justify-start'}`;
             if (msg.messageId) div.dataset.mid = msg.messageId;
 
-            const time = formatDateTime(msg.sentAt);
+            const time = formatTimeOnly(msg.sentAt || msg.sentTime);
 
             let senderNameHtml = '';
             if (isGroupChat && !isMyMessage) {
-                senderNameHtml = `<span class="sender-name font-medium text-gray-700 block mb-1">Загрузка...</span>`;
+                senderNameHtml = `<span class="sender-name font-medium text-gray-700 text-xs mb-1 block px-1">Загрузка...</span>`;
             }
 
+            const statusHtml = isMyMessage
+                ? getStatusIconHtml(msg.status || msg.deliveryStatus || 'sent', true)
+                : '';
+
             div.innerHTML = `
-                <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-xs lg:max-w-md">
+                <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[75%] lg:max-w-md">
                     ${senderNameHtml}
-                    <div class="inline-block px-4 py-2.5 rounded-2xl shadow-sm
-                                ${isMyMessage ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}">
-                        ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
-                        ${renderAttachments(msg.attachments || [])}
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1 ${isMyMessage ? 'text-right' : 'text-left'}">
-                        ${time}
-                        ${isGroupChat && isMyMessage ? ' · Вы' : ''}
+                    <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
+                        ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
+                        ${renderAttachments(msg.attachments || [], isMyMessage)}
+                        <div class="text-[11px] mt-1 ${isMyMessage ? 'text-blue-100 text-right' : 'text-gray-500 text-right'} opacity-80 flex items-center justify-end gap-1">
+                            ${time}
+                            ${statusHtml}
+                            ${isGroupChat && isMyMessage ? ' · Вы' : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -970,12 +947,38 @@
             return txt.value;
         }
 
-        function formatDateTime(dateValue) {
-            if (!dateValue) return '—';
+        function getStatusIconHtml(status, isMyMessage) {
+            if (!isMyMessage) return '';
 
-            let date;
+            const s = (status || '').toLowerCase();
 
+            if (s === 'read') {
+                return `<span class="msg-status read" title="Прочитано">
+                            <i data-feather="check" class="w-3.5 h-3.5"></i>
+                            <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                        </span>`;
+            }
+            if (s === 'delivered' || s === 'sent') {
+                return `<span class="msg-status sent" title="Доставлено">
+                            <i data-feather="check" class="w-3.5 h-3.5"></i>
+                        </span>`;
+            }
+            return `<span class="msg-status pending">
+                        <i data-feather="clock" class="w-3 h-3"></i>
+                    </span>`;
+        }
+
+        const MONTHS_RU = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ];
+
+        let lastRenderedDateKey = null;
+
+        function parseMessageDate(dateValue) {
+            if (!dateValue) return null;
             try {
+                let date;
                 if (typeof dateValue === 'string') {
                     let str = dateValue.trim();
                     if (!str.endsWith('Z') && !str.includes('+') && !str.includes('-', 10)) {
@@ -985,24 +988,84 @@
                 } else {
                     date = new Date(dateValue);
                 }
-
-                if (isNaN(date.getTime())) {
-                    console.warn("Не удалось распарсить дату:", dateValue);
-                    return '—';
-                }
-
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const year = date.getFullYear();
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-
-                return `${day}.${month}.${year} ${hours}:${minutes}`;
+                if (isNaN(date.getTime())) return null;
+                return date;
+            } catch {
+                return null;
             }
-            catch (e) {
-                console.error("Ошибка форматирования даты:", dateValue, e);
+        }
+
+        function getDateKey(date) {
+            if (!date) return null;
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateLabel(date) {
+            if (!date) return '';
+
+            const now = new Date();
+            const todayKey = getDateKey(now);
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayKey = getDateKey(yesterday);
+            const key = getDateKey(date);
+
+            if (key === todayKey) return 'Сегодня';
+            if (key === yesterdayKey) return 'Вчера';
+
+            const day = date.getDate();
+            const month = MONTHS_RU[date.getMonth()];
+            const year = date.getFullYear();
+
+            if (year === now.getFullYear()) {
+                return `${day} ${month}`;
+            }
+            return `${day} ${month} ${year}`;
+        }
+
+        function formatTimeOnly(dateValue) {
+            const date = parseMessageDate(dateValue);
+            if (!date) return '—';
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        function formatDateTime(dateValue) {
+            if (!dateValue) return '—';
+
+            const date = parseMessageDate(dateValue);
+            if (!date) {
+                console.warn("Не удалось распарсить дату:", dateValue);
                 return '—';
             }
+
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
+        }
+
+        function appendDateSeparatorIfNeeded(dateValue) {
+            const date = parseMessageDate(dateValue) || new Date();
+            const key = getDateKey(date);
+            if (!key || key === lastRenderedDateKey) return;
+
+            lastRenderedDateKey = key;
+
+            const sep = document.createElement('div');
+            sep.className = 'date-separator';
+            sep.dataset.dateKey = key;
+            sep.innerHTML = `
+                <span>${formatDateLabel(date)}</span>
+            `;
+            messagesContainer.appendChild(sep);
         }
 
         async function sendMessage() {
@@ -1057,6 +1120,35 @@
             fileInput.value = '';
         }
 
+        function updateUnreadBadge(chatId, count) {
+            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (!item) return;
+
+            const badge = item.querySelector('.unread-badge');
+            if (!badge) return;
+
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+                badge.textContent = '';
+            }
+        }
+
+        function incrementUnread(chatId) {
+            if (!chatId) return;
+            const next = (unreadCounts.get(chatId) || 0) + 1;
+            unreadCounts.set(chatId, next);
+            updateUnreadBadge(chatId, next);
+        }
+
+        function clearUnread(chatId) {
+            if (!chatId) return;
+            unreadCounts.set(chatId, 0);
+            updateUnreadBadge(chatId, 0);
+        }
+
         function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false) {
             const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
             if (!chatItem) return;
@@ -1108,20 +1200,45 @@
 
         function appendOptimisticMessage(text, files, tempId) {
             removeEmptyStateIfNeeded();
+            appendDateSeparatorIfNeeded(new Date());
 
             const div = document.createElement('div');
-            div.className = `mb-6 flex justify-end`;
+            div.className = `mb-3 flex justify-end`;
             div.dataset.mid = tempId;
 
-            let content = text
-                ? `<p class="break-words whitespace-pre-wrap">${text.replace(/\n/g, '<br>')}</p>`
-                : `<div class="opacity-70 text-sm">Отправка ${files.length} вложений...</div>`;
+            let content = '';
+
+            if (text) {
+                content += `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${text.replace(/\n/g, '<br>')}</p>`;
+            }
+
+            if (files && files.length > 0) {
+                const previews = files.map(file => {
+                    if (file.type.startsWith('image/')) {
+                        const url = URL.createObjectURL(file);
+                        return `<img src="${url}" class="w-20 h-20 object-cover rounded-lg mt-1" style="max-width:180px;">`;
+                    } else {
+                        return `
+                            <div class="file-attachment bg-blue-500/30 mt-1 text-blue-100">
+                                <i data-feather="file" class="w-4 h-4"></i>
+                                <span class="truncate max-w-[140px]">${file.name}</span>
+                            </div>
+                        `;
+                    }
+                }).join('');
+
+                content += `<div class="flex flex-wrap gap-1.5 mt-1">${previews}</div>`;
+            }
+
+            if (!content) {
+                content = `<div class="opacity-70 text-sm">Отправка ${files.length} вложений...</div>`;
+            }
 
             div.innerHTML = `
-                <div class="flex flex-col items-end max-w-xs lg:max-w-md">
-                    <div class="inline-block px-4 py-2.5 rounded-2xl bg-blue-600 text-white relative">
+                <div class="flex flex-col items-end max-w-[75%] lg:max-w-md">
+                    <div class="message-bubble outgoing px-3.5 py-2 relative">
                         ${content}
-                        <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-xs mt-1.5 opacity-75">
+                        <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-[11px] mt-1.5 text-blue-100 opacity-80 justify-end">
                             <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
                             <span>Отправляется...</span>
                         </div>
@@ -1139,7 +1256,6 @@
                     const statusEl = stillExists.querySelector('.message-status');
                     if (statusEl && statusEl.textContent.includes('Отправляется')) {
                         updateMessageStatus(tempId, 'failed', 'Таймаут подтверждения от сервера');
-                        console.warn(`[Timeout] Сообщение ${tempId} не получило подтверждение`);
                     }
                 }
             }, 15000);
@@ -1161,7 +1277,7 @@
             if (!container) return;
 
             if (status === 'sent') {
-                container.innerHTML = `<span class="text-blue-200">${formatDateTime(new Date())}</span>`;
+                container.innerHTML = `<span class="text-blue-200">${formatTimeOnly(new Date())}</span>`;
             } else if (status === 'failed') {
                 container.className = 'message-status flex items-center gap-1.5 text-xs mt-1.5 text-red-400 font-medium';
                 container.innerHTML = `<i data-feather="alert-triangle" class="w-4 h-4"></i><span>${reason || 'Ошибка'}</span>`;
@@ -1172,17 +1288,17 @@
         function renderAttachedPreviews() {
             attachedFiles.innerHTML = '';
 
-            selectedFiles.forEach((file, currentIndex) => {
+            selectedFiles.forEach((file, index) => {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'preview-attachment relative inline-block';
 
                 const removeBtn = document.createElement('button');
                 removeBtn.type = 'button';
                 removeBtn.innerHTML = '×';
-                removeBtn.className = 'absolute -top-2 -right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xl font-bold shadow-lg z-10 transition';
+                removeBtn.className = 'absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-lg font-bold shadow-lg z-10 transition';
                 removeBtn.onclick = (e) => {
                     e.stopPropagation();
-                    selectedFiles.splice(currentIndex, 1);
+                    selectedFiles.splice(index, 1);
                     renderAttachedPreviews();
                 };
 
@@ -1190,14 +1306,16 @@
                     const img = document.createElement('img');
                     img.src = URL.createObjectURL(file);
                     img.className = 'w-24 h-24 object-cover rounded-xl border-2 border-gray-200 shadow-md';
+                    img.onload = () => URL.revokeObjectURL(img.src);
                     wrapper.appendChild(img);
                 } else {
-                    wrapper.innerHTML = `
-                        <div class="w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-600">
-                            <i data-feather="file-text" class="w-10 h-10 mb-1"></i>
-                            <span class="text-xs px-2 text-center truncate w-full">${file.name.length > 15 ? file.name.slice(0,12)+'...' : file.name}</span>
-                        </div>
+                    const fileDiv = document.createElement('div');
+                    fileDiv.className = 'w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-600 p-1';
+                    fileDiv.innerHTML = `
+                        <i data-feather="file-text" class="w-8 h-8 mb-1"></i>
+                        <span class="text-xs text-center truncate w-full px-1">${file.name.length > 14 ? file.name.slice(0, 11) + '...' : file.name}</span>
                     `;
+                    wrapper.appendChild(fileDiv);
                     feather.replace();
                 }
 
@@ -1237,6 +1355,25 @@
                 })
                 .withAutomaticReconnect([0, 2000, 5000, 10000])
                 .build();
+
+            connection.on('MessagesRead', (data) => {
+                if (!data?.chatId) return;
+
+                if (String(data.chatId) === String(currentChatId) &&
+                    String(data.readerId) !== String(me)) {
+
+                    document.querySelectorAll('.message-bubble.outgoing .msg-status.sent').forEach(el => {
+                        el.classList.remove('sent');
+                        el.classList.add('read');
+                        el.innerHTML = `
+                            <i data-feather="check" class="w-3.5 h-3.5"></i>
+                            <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                        `;
+                        el.title = 'Прочитано';
+                    });
+                    feather.replace();
+                }
+            });
 
             connection.on('ParticipantCountChanged', (data) => {
                 if (!data) return;
@@ -1400,67 +1537,6 @@
                 }
             });
 
-            connection.on("UserBlockStatusChanged", (data) => {
-                console.log("[Chats] UserBlockStatusChanged →", data);
-
-                const actor = (data.actorId || "").toLowerCase();
-                const target = (data.targetId || "").toLowerCase();
-                const isBlocked = !!data.isBlocked;
-                const me = '@HttpContext.Session.GetString("USER_ID")'?.toLowerCase().trim() ||
-                                '@Model.UserId'.toLowerCase().trim();
-
-                console.log("Текущий пользователь (me):", me);
-
-                if (actor === me) {
-                    if (isBlocked) {
-                        myBlockedUsers.add(target);
-                    } else {
-                        myBlockedUsers.delete(target);
-                    }
-
-                    console.log("Обновлён myBlockedUsers:", Array.from(myBlockedUsers));
-
-                    if (currentChatId && currentChatInfo?.type === 'private') {
-                        console.log("Открыт приватный чат → проверяем партнёра");
-
-                        let partner = null;
-                        for (const p of currentChatInfo.participants || []) {
-                            let pid = (p.id || p.userId || "").toString().trim().toLowerCase();
-                            if (pid && pid !== me) {
-                                partner = p;
-                                console.log("Найден партнёр:", p, "pid =", pid);
-                                break;
-                            }
-                        }
-
-                        if (partner) {
-                            const partnerId = (partner.id || partner.userId || "")
-                                .toString().trim().toLowerCase();
-
-                            console.log("partnerId:", partnerId, "target:", target);
-
-                            if (partnerId === target) {
-                                console.log("→ Это текущий собеседник!");
-                                if (isBlocked) {
-                                    blockChatForMe(partner.name || "этот пользователь");
-                                } else {
-                                    unblockChat();
-                                }
-                                refreshBlockStatus();
-                            }
-                        }
-                    } else {
-                        console.log("Чат не открыт или не приватный → просто обновляем список");
-                    }
-
-                    loadMyBlockedList();
-                }
-
-                if (target === me && isBlocked) {
-                    showToast("Вас заблокировали", "warning");
-                }
-            });
-
             connection.on('MessageSendingStatus', (data) => {
                 const msgId = data.MessageId || data.messageId;
                 let status = (data.Status || data.status || '').toLowerCase();
@@ -1494,7 +1570,23 @@
             connection.on('ReceiveMessage', (msg) => {
                 console.log(`[ReceiveMessage] ${msg.messageId} в чате ${msg.chatId}`);
 
-                if (msg.chatId !== currentChatId) return;
+                const isMyMessage = String(msg.senderId) === String(me);
+                const isCurrentChat = String(msg.chatId) === String(currentChatId);
+
+                updateChatLastMessagePreview(
+                    msg.chatId,
+                    msg.messageText || '',
+                    msg.attachments || [],
+                    msg.sentAt || msg.sentTime,
+                    isMyMessage
+                );
+
+                if (!isCurrentChat) {
+                    if (!isMyMessage) {
+                        incrementUnread(msg.chatId);
+                    }
+                    return;
+                }
 
                 const optimisticElements = document.querySelectorAll('[data-mid^="temp-"]');
                 optimisticElements.forEach(el => {
@@ -1509,10 +1601,12 @@
 
                 appendMessage(msg);
 
-                if (String(msg.senderId) === String(me)) {
+                if (isMyMessage) {
                     clearInputAfterSend();
                     console.log(`[ReceiveMessage] Поле ввода очищено`);
                 }
+
+                clearUnread(msg.chatId);
             });
 
             connection.on('MessageDeliveryFailed', data => {
@@ -1530,48 +1624,6 @@
                 }
 
                 showToast('Сообщение не удалось доставить на сервер', 'error');
-            });
-
-            connection.on("YouBlocked", (blockedUserId) => {
-                myBlockedUsers.add(blockedUserId);
-                console.log("Я заблокировал:", blockedUserId);
-
-                if (currentChatId && currentChatInfo?.type === 'private') {
-                    const recipient = currentChatInfo.participants.find(p => p.id === blockedUserId);
-                    if (recipient) {
-                        blockChatForMe(recipient.fullName || recipient.name || "этот контакт");
-                    }
-                }
-            });
-
-            connection.on("YouUnblocked", (unblockedUserId) => {
-                myBlockedUsers.delete(unblockedUserId);
-                console.log("Я разблокировал:", unblockedUserId);
-
-                if (currentChatId && currentChatInfo?.type === 'private') {
-                    const recipient = currentChatInfo.participants.find(p => p.id === unblockedUserId);
-                    if (recipient) {
-                        unblockChat();
-                    }
-                }
-            });
-
-            connection.on('UserBlockedMe', (blockerId, blockTime) => {
-                if (currentChatInfo?.type === 'private' &&
-                    currentChatInfo.participants.some(p => p.id === blockerId)) {
-
-                    const blocker = currentChatInfo.participants.find(p => p.id === blockerId);
-                    const name = blocker?.fullName || blocker?.name || "Этот пользователь";
-
-                    blockChat(name, blockTime);
-                }
-            });
-
-            connection.on('UserUnblockedMe', (unblockerId) => {
-                if (currentChatInfo?.type === 'private' &&
-                    currentChatInfo.participants.some(p => p.id === unblockerId)) {
-                    unblockChat();
-                }
             });
 
             connection.on('ReceiveSearchResults', users => {
@@ -1781,8 +1833,6 @@
 
                 updateConnectionStatus('Онлайн', 'green');
 
-                await loadMyBlockedList();
-
                 setTimeout(async () => {
                     console.log("Запуск joinAllMyChats...");
                     await joinAllMyChats();
@@ -1913,26 +1963,6 @@
             setTimeout(updateCurrentChatSubtitle, 300);
         };
 
-        function updateBlockingUI(isBlocked) {
-            const input = document.getElementById('message-input');
-            const btn = document.getElementById('send-button');
-            const attachBtn = document.querySelector('button[onclick*="fileInput.click"]');
-
-            if (isBlocked) {
-                input.disabled = true;
-                input.placeholder = "Чат заблокирован";
-                input.classList.add('bg-gray-100', 'cursor-not-allowed');
-                btn.classList.add('hidden');
-                if (attachBtn) attachBtn.classList.add('hidden');
-            } else {
-                input.disabled = false;
-                input.placeholder = "Напишите сообщение...";
-                input.classList.remove('bg-gray-100', 'cursor-not-allowed');
-                btn.classList.remove('hidden');
-                if (attachBtn) attachBtn.classList.remove('hidden');
-            }
-        }
-
         function updateAllOnlineIndicators() {
             document.querySelectorAll('.chat-item').forEach(item => {
                 const partnerId = item.dataset.partnerId;
@@ -1986,63 +2016,6 @@
             }
         }
 
-        function applyBlockStatus() {
-            if (!currentChatInfo || currentChatInfo.type !== 'private') {
-                unblockChat();
-                return;
-            }
-
-            const partner = currentChatInfo.participants.find(p =>
-                (p.id || p.userId || "").toString().toLowerCase().trim() !== me
-            );
-
-            if (!partner) return;
-
-            const partnerId = (partner.id || partner.userId || "").toString().toLowerCase().trim();
-
-            const iBlockedHim = myBlockedUsers.has(partnerId);
-
-            const heBlockedMe = !!currentChatInfo.isBlockedByPartner;
-
-            console.log("Применение статуса:", { iBlockedHim, heBlockedMe });
-
-            if (iBlockedHim) {
-                blockChatForMe(partner.name || "этот пользователь");
-            } else if (heBlockedMe) {
-                blockedByPartner(partner.name || "этот пользователь");
-            } else {
-                unblockChat();
-            }
-        }
-
-        function blockedByPartner(blockerName = "Этот пользователь") {
-            console.log("blockedByPartner → вас заблокировали:", blockerName);
-
-            messageInput.disabled = true;
-            messageInput.placeholder = "Отправка сообщений ограничена";
-            messageInput.style.backgroundColor = "#fef2f2";
-            messageInput.style.color = "#991b1b";
-
-            sendButton.disabled = true;
-            sendButton.style.opacity = "0.5";
-            fileInput.disabled = true;
-            document.querySelector('label[for="file-input"]').style.opacity = "0.5";
-
-            document.querySelectorAll('.system-blocked-by-partner').forEach(el => el.remove());
-            const div = document.createElement('div');
-            div.className = 'mb-6 flex justify-center system-blocked-by-partner';
-            div.innerHTML = `
-                <div class="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-2xl text-center max-w-sm">
-                    <i data-feather="slash" class="w-8 h-8 mx-auto mb-2 text-red-600"></i>
-                    <p class="font-semibold text-lg">${blockerName} добавил вас в чёрный список</p>
-                    <p class="text-sm mt-2 opacity-90">Вы не можете отправлять сообщения в этот чат</p>
-                </div>
-            `;
-            messagesContainer.appendChild(div);
-            feather.replace();
-            scrollToBottom();
-        }
-
         function showToast(message, type = 'info', duration = 4000) {
             let toastContainer = document.getElementById('toast-container');
             if (!toastContainer) {
@@ -2091,22 +2064,6 @@
             });
 
             feather.replace();
-        }
-
-        async function loadMyBlockedList() {
-            try {
-                const res = await fetchWithAuth(`${API_BASE}/users/blocked`);
-                if (res?.ok) {
-                    const json = await res.json();
-                    if (json.isSuccess && Array.isArray(json.data)) {
-                        myBlockedUsers = new Set(json.data.map(u => u.id.toLowerCase()));
-                        console.log(`Загружен мой чёрный список: ${myBlockedUsers.size}`);
-                        refreshBlockStatus();
-                    }
-                }
-            } catch (err) {
-                console.warn("Не удалось загрузить мой чёрный список", err);
-            }
         }
 
         function toggleEmptyState() {
@@ -2189,6 +2146,9 @@
 
             currentChatId = chatId;
 
+            clearUnread(chatId);
+            markChatAsRead(chatId);
+
             document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
 
@@ -2203,7 +2163,6 @@
             const avatarEl = item.querySelector('img');
             document.getElementById('chat-info-avatar').src = avatarEl ? avatarEl.src : 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
 
-            unblockChat();
             document.getElementById('message-input').value = '';
             document.getElementById('attached-files').innerHTML = '';
             selectedFiles = [];
@@ -2219,7 +2178,6 @@
                     const json = await res.json();
                     if (json.isSuccess && json.data) {
                         currentChatInfo = json.data;
-                        applyBlockStatus();
 
                         if (currentChatInfo?.type === 'private') {
                             const partner = currentChatInfo.participants?.find(p =>
@@ -2251,6 +2209,32 @@
             }
         }
 
+        async function markChatAsRead(chatId) {
+            if (!chatId) return;
+
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/messages/${chatId}/read`, {
+                    method: 'POST'
+                });
+
+                if (res?.ok) {
+                    clearUnread(chatId);
+                    document.querySelectorAll(`[data-mid]:not([data-mid^="temp-"]) .msg-status.sent`)
+                        .forEach(el => {
+                            el.classList.remove('sent');
+                            el.classList.add('read');
+                            el.innerHTML = `
+                                <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                            `;
+                        });
+                    feather.replace();
+                }
+            } catch (e) {
+                console.warn('Не удалось пометить чат как прочитанный', e);
+            }
+        }
+
         async function requestPartnerStatus(partnerId) {
             if (!connection || connection.state !== 'Connected') return;
             try {
@@ -2263,65 +2247,6 @@
         function loadMessagesAndJoin(chatId) {
             loadMessages(chatId);
             joinChat(chatId);
-        }
-
-        async function checkIfBlockedByUserAsync(userId) {
-            try {
-                const res = await fetch(`${API_BASE}/users/is-blocked-by/${userId}?access_token=${encodeURIComponent(token)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) return false;
-                const data = await res.json();
-                return data.isBlocked === true;
-            } catch (err) {
-                console.warn("Ошибка проверки блокировки", err);
-                return false;
-            }
-        }
-
-        async function checkIfIBlockedUserAsync(userId) {
-            try {
-                const res = await fetchWithAuth(`${API_BASE}/users/blocked`);
-                if (!res?.ok) return false;
-
-                const json = await res.json();
-                if (json.isSuccess && Array.isArray(json.data)) {
-                    myBlockedUsers = new Set(json.data.map(u => u.id));
-                    return myBlockedUsers.has(userId);
-                }
-                return false;
-            } catch (err) {
-                console.warn("Ошибка проверки моего чёрного списка", err);
-                return false;
-            }
-        }
-
-        function blockChatForMe(blockedName = "этот контакт") {
-            messageInput.disabled = true;
-            messageInput.placeholder = `Вы заблокировали ${blockedName}`;
-            messageInput.style.backgroundColor = "#fef3f2";
-            messageInput.style.color = "#991b1b";
-            sendButton.disabled = true;
-            sendButton.style.opacity = "0.5";
-            fileInput.disabled = true;
-            document.querySelector('label[for="file-input"]').style.opacity = "0.5";
-
-            const subtitle = document.getElementById('chat-subtitle');
-            if (subtitle) subtitle.textContent = 'Вы заблокировали этого пользователя';
-
-            document.querySelectorAll('.system-myblock-message').forEach(el => el.remove());
-            const div = document.createElement('div');
-            div.className = 'mb-6 flex justify-center system-myblock-message';
-            div.innerHTML = `
-                <div class="bg-orange-50 border border-orange-200 text-orange-800 px-6 py-4 rounded-2xl text-center max-w-sm">
-                    <i data-feather="user-x" class="w-8 h-8 mx-auto mb-2"></i>
-                    <p class="font-semibold text-lg">Вы заблокировали ${blockedName}</p>
-                    <p class="text-sm mt-2 opacity-90">Отправка сообщений этому контакту невозможна</p>
-                </div>
-            `;
-            messagesContainer.appendChild(div);
-            feather.replace();
-            scrollToBottom();
         }
 
         setTimeout(async () => {
@@ -2381,11 +2306,13 @@
                             <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-medium truncate">${displayName}</h3>
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="font-medium truncate">${displayName}</h3>
+                                <span class="unread-badge hidden flex-shrink-0"></span>
+                            </div>
                             <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
                                 ${renderLastMessagePreview(chat.lastMessage)}
                             </div>
-                            <!-- Индикатор печатает -->
                             <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
                                 <span class="typing-name"></span> печатает...
                             </div>
@@ -2396,6 +2323,12 @@
 
                     div.onclick = () => openChat(div);
                     container.appendChild(div);
+
+                    const unread = chat.unreadCount ?? chat.unreadMessagesCount ?? 0;
+                    if (unread > 0) {
+                        unreadCounts.set(div.dataset.chatId, unread);
+                        updateUnreadBadge(div.dataset.chatId, unread);
+                    }
                 });
 
                 cacheChatItems();
@@ -2413,6 +2346,7 @@
         async function loadMessages(chatId) {
             const container = document.getElementById('messages-container');
             container.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Загрузка сообщений...</div>';
+            lastRenderedDateKey = null;
 
             try {
                 const res = await fetch(`${API_BASE}/messages/${chatId}`, {
@@ -2853,24 +2787,6 @@
         let chatNameChanged = false;
         let removedParticipantIds = [];
         let addedParticipantIds = [];
-
-        async function checkIfBlockedByUser(userId) {
-            try {
-                const res = await fetch(`${API_BASE}/users/is-blocked-by/${userId}?access_token=${encodeURIComponent(token)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!res.ok) return;
-
-                const data = await res.json();
-                if (data.isBlocked === true) {
-                    messagesContainer.innerHTML = '';
-                    blockChat("Вы в чёрном списке этого пользователя");
-                }
-            } catch (err) {
-                console.warn("Не удалось проверить блокировку", err);
-            }
-        }
 
         function removeParticipantFromChat(userId, buttonElement) {
             if (!confirm('Удалить участника из чата?')) return;
