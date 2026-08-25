@@ -1,20 +1,24 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.Core.DTOs.Attachments;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления вложениями
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для управления вложениями")]
+    [Tags("Attachments")]
     public class AttachmentsController : ControllerBase
     {
         private readonly IAttachmentService _attachmentService;
@@ -24,16 +28,19 @@ namespace Messenger.API.Controllers
             _attachmentService = attachmentService;
         }
 
+        /// <summary>
+        /// Получение списка вложений по идентификатору сообщения
+        /// </summary>
         [HttpGet("{messageId}")]
-        [SwaggerOperation(
-            Summary = "Получение списка вложений по идентификатору сообщения",
-            Description = "Возвращает все файлы (вложения), прикреплённые к указанному сообщению. Требуется действительный JWT-токен.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Список вложений успешно получен", typeof(GetAttachmentsSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение с указанным ID не найдено", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetAttachmentsByMessage")]
+        [EndpointSummary("Получение списка вложений по идентификатору сообщения")]
+        [EndpointDescription("Возвращает все файлы (вложения), прикреплённые к указанному сообщению. Требуется действительный JWT-токен.")]
+        [ProducesResponseType(typeof(GetAttachmentsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAttachmentsByMessageAsync(
-            [SwaggerParameter(Description = "Уникальный идентификатор сообщения (GUID)")] Guid messageId,
+            [Description("Уникальный идентификатор сообщения (GUID)")] Guid messageId,
             CancellationToken cancellationToken = default)
         {
             try
@@ -56,22 +63,23 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Добавление нового вложения к сообщению
+        /// </summary>
         [HttpPost("{messageId}")]
-        [SwaggerOperation(
-            Summary = "Добавление нового вложения к сообщению",
-            Description = "Создаёт запись о новом файле (вложении), прикреплённом к сообщению. " +
-                          "Требуется передать данные файла в теле запроса. " +
-                          "Идентификатор вложения генерируется автоматически. Требуется действительный JWT-токен.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Вложение успешно добавлено", typeof(CreateAttachmentSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Сообщение с указанным ID не найдено", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("CreateAttachment")]
+        [EndpointSummary("Добавление нового вложения к сообщению")]
+        [EndpointDescription("Создаёт запись о новом файле (вложении), прикреплённом к сообщению. " +
+            "Требуется передать данные файла в теле запроса. Идентификатор вложения генерируется автоматически. " +
+            "Требуется действительный JWT-токен.")]
+        [ProducesResponseType(typeof(CreateAttachmentSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateAttachmentAsync(
-            [SwaggerParameter(Description = "Уникальный идентификатор сообщения (GUID), к которому добавляется вложение")] 
-            Guid messageId, 
-            [FromBody] [SwaggerParameter(Description = "Данные нового вложения", Required = true)] 
-            CreateAttachmentRequest request, 
+            [Description("Уникальный идентификатор сообщения (GUID), к которому добавляется вложение")] Guid messageId,
+            [FromBody, Description("Данные нового вложения")] CreateAttachmentRequest request,
             CancellationToken cancellationToken = default)
         {
             try

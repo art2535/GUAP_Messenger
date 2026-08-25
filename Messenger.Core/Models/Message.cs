@@ -31,6 +31,9 @@ public partial class Message
     [Column("Delivery_Status")]
     public MessageDeliveryStatus DeliveryStatus { get; set; }
 
+    [Column("Read_Time", TypeName = "timestamp without time zone")]
+    public DateTime? ReadTime { get; set; }
+
     [InverseProperty("Message")]
     [JsonIgnore]
     public virtual ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();

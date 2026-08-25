@@ -7,56 +7,59 @@ namespace Messenger.API.Extensions
 {
     public static class RabbitExtension
     {
-        public static void AddRabbitMQ(this IServiceCollection services, IConfiguration configuration)
+        extension(IServiceCollection services)
         {
-            services.AddMassTransit(x =>
+            public void AddRabbitMQ(IConfiguration configuration)
             {
-                x.SetKebabCaseEndpointNameFormatter();
-
-                x.AddEntityFrameworkOutbox<GuapMessengerContext>(o =>
+                services.AddMassTransit(x =>
                 {
-                    o.UsePostgres();
-                    o.UseBusOutbox(b =>
+                    x.SetKebabCaseEndpointNameFormatter();
+
+                    x.AddEntityFrameworkOutbox<GuapMessengerContext>(o =>
                     {
-                        b.MessageDeliveryLimit = 100;
-                        b.MessageDeliveryTimeout = TimeSpan.FromSeconds(30);
+                        o.UsePostgres();
+                        o.UseBusOutbox(b =>
+                        {
+                            b.MessageDeliveryLimit = 100;
+                            b.MessageDeliveryTimeout = TimeSpan.FromSeconds(30);
+                        });
+
+                        o.QueryDelay = TimeSpan.FromSeconds(3);
+                        o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
                     });
 
-                    o.QueryDelay = TimeSpan.FromSeconds(3);
-                    o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
-                });
+                    x.AddConsumer<ChatMessageSentConsumer>();
 
-                x.AddConsumer<ChatMessageSentConsumer>();
-
-                x.AddConfigureEndpointsCallback((name, cfg) =>
-                {
-                    if (cfg is IRabbitMqReceiveEndpointConfigurator rmq)
+                    x.AddConfigureEndpointsCallback((name, cfg) =>
                     {
-                        rmq.SetQuorumQueue(1);
-                    }
-                });
-
-                x.UsingRabbitMq((context, cfg) =>
-                {
-                    var rabbitConfig = configuration.GetSection("RabbitMQ");
-
-                    cfg.Host(rabbitConfig["Host"], ushort.Parse(rabbitConfig["Port"]), "/", h =>
-                    {
-                        h.Username(rabbitConfig["Username"]);
-                        h.Password(rabbitConfig["Password"]);
+                        if (cfg is IRabbitMqReceiveEndpointConfigurator rmq)
+                        {
+                            rmq.SetQuorumQueue(1);
+                        }
                     });
 
-                    cfg.UseMessageRetry(r =>
+                    x.UsingRabbitMq((context, cfg) =>
                     {
-                        r.Incremental(5, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3));
+                        var rabbitConfig = configuration.GetSection("RabbitMQ");
+
+                        cfg.Host(rabbitConfig["Host"], ushort.Parse(rabbitConfig["Port"]), "/", h =>
+                        {
+                            h.Username(rabbitConfig["Username"]);
+                            h.Password(rabbitConfig["Password"]);
+                        });
+
+                        cfg.UseMessageRetry(r =>
+                        {
+                            r.Incremental(5, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3));
+                        });
+
+                        cfg.UseConcurrencyLimit(30);
+                        cfg.PrefetchCount = 15;
+
+                        cfg.ConfigureEndpoints(context);
                     });
-
-                    cfg.UseConcurrencyLimit(30);
-                    cfg.PrefetchCount = 15;
-
-                    cfg.ConfigureEndpoints(context);
                 });
-            });
+            }
         }
     }
 }

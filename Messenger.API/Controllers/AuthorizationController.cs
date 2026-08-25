@@ -1,16 +1,21 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
+    /// <summary>
+    /// Контроллер для авторизации пользователей через ЕТА ГУАП
+    /// </summary>
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для авторизации пользователей через ЕТА ГУАП")]
+    [Tags("Authorization")]
     public class AuthorizationController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -20,22 +25,25 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// Аутентификация пользователя через ЕТА
+        /// </summary>
         [HttpPost("external/callback")]
-        [SwaggerOperation(
-            Summary = "Аутентификация пользователя через ЕТА",
-            Description = "Выполняет запись входа в базу данных")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Вход выполнен успешно", typeof(LoginEtaResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверные учетные данные", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера")]
-        public async Task<IActionResult> ExternalCallbackAsync([FromBody] ExternalLoginRequest request,
-            CancellationToken cancellationToken = default)
+        [EndpointName("ExternalCallback")]
+        [EndpointSummary("Аутентификация пользователя через ЕТА")]
+        [EndpointDescription("Выполняет запись входа в базу данных. Если пользователь с указанным externalId не найден — создаёт нового.")]
+        [ProducesResponseType(typeof(LoginEtaResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ExternalCallbackAsync(
+            [FromBody, Description("Данные пользователя из ЕТА ГУАП")] ExternalLoginRequest request)
         {
             try
             {
                 var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
 
                 user ??= await _userService.RegisterExternalUserAsync(request.ExternalId, request.Email, request.FirstName,
-                        request.LastName, request.MiddleName);
+                        request.LastName);
 
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));

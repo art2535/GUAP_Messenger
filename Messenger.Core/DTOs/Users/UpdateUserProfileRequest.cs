@@ -13,16 +13,9 @@ namespace Messenger.Core.DTOs.Users
         public string FirstName { get; set; } = string.Empty;
 
         [MaxLength(50)]
-        public string? MiddleName { get; set; } = string.Empty;
-
-        [MaxLength(50)]
         [EmailAddress]
         [Required]
         public string Login { get; set; } = string.Empty;
-
-        [MaxLength(18)]
-        [Required]
-        public string Phone { get; set; } = string.Empty;
 
         public string? Theme { get; set; } = string.Empty;
         public string? Avatar { get; set; } = string.Empty;

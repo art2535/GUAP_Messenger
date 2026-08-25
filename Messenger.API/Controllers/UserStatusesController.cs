@@ -1,21 +1,25 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.API.Services;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Контроллер для управления статусами пользователей
+    /// </summary>
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
-    [SwaggerTag("Контроллер для управления статусами пользователей")]
+    [Tags("UserStatuses")]
     public class UserStatusesController : ControllerBase
     {
         private readonly IUserStatusService _userStatusService;
@@ -27,14 +31,17 @@ namespace Messenger.API.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// Получить статус текущего пользователя
+        /// </summary>
         [HttpGet]
-        [SwaggerOperation(
-            Summary = "Получить статус текущего пользователя",
-            Description = "Возвращает текущий статус авторизованного пользователя: онлайн/офлайн и время последней активности.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно получен", typeof(GetUserStatusSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Статус пользователя не найден", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetUserStatus")]
+        [EndpointSummary("Получить статус текущего пользователя")]
+        [EndpointDescription("Возвращает текущий статус авторизованного пользователя: онлайн/офлайн и время последней активности.")]
+        [ProducesResponseType(typeof(GetUserStatusSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserStatusesAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -72,17 +79,20 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Обновить статус текущего пользователя
+        /// </summary>
         [HttpPut]
-        [SwaggerOperation(
-            Summary = "Обновить статус текущего пользователя",
-            Description = "Обновляет статус онлайн/офлайн для авторизованного пользователя. " +
-                          "Поле LastActivity автоматически устанавливается на текущее время сервера (UTC).")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Статус успешно обновлён", typeof(UpdateUserStatusSuccessResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Некорректные данные запроса", typeof(ErrorResponse))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("UpdateUserStatus")]
+        [EndpointSummary("Обновить статус текущего пользователя")]
+        [EndpointDescription("Обновляет статус онлайн/офлайн для авторизованного пользователя. " +
+            "Поле LastActivity автоматически устанавливается на текущее время сервера.")]
+        [ProducesResponseType(typeof(UpdateUserStatusSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateStatusAsync(
-            [FromBody] [SwaggerParameter(Description = "Новый статус пользователя", Required = true)] UpdateStatusRequest request,
+            [FromBody, Description("Новый статус пользователя")] UpdateStatusRequest request,
             CancellationToken cancellationToken = default)
         {
             try

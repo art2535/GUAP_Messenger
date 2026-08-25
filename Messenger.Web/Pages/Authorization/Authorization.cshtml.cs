@@ -2,12 +2,12 @@ using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Hubs;
+using Messenger.Web.Helpers;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
-using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Claims;
@@ -16,18 +16,15 @@ namespace Messenger.Web.Pages.Authorization
 {
     public class AuthorizationModel : PageModel
     {
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+        private readonly ApiHelper _api;
         private readonly ILogger<AuthorizationModel> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
 
         public string ErrorMessage { get; private set; } = string.Empty;
 
-        public AuthorizationModel(IHttpClientFactory httpClientFactory, IConfiguration configuration,
-            ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
+        public AuthorizationModel(ApiHelper api, ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
         {
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
+            _api = api;
             _logger = logger;
             _hubContext = hubContext;
         }
@@ -45,7 +42,6 @@ namespace Messenger.Web.Pages.Authorization
                 };
 
                 var response = await LoginAsync(loginRequest);
-
                 if (!response.IsSuccessStatusCode)
                 {
                     ErrorMessage = "Ошибка записи входа в аккаунт";
@@ -53,22 +49,9 @@ namespace Messenger.Web.Pages.Authorization
                     return Page();
                 }
 
-                var userStatusRequest = new UpdateStatusRequest
-                {
-                    Online = true
-                };
+                await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
 
-                using var client = new HttpClient
-                {
-                    BaseAddress = new Uri(_configuration["URL:API:HTTPS"]),
-                    Timeout = TimeSpan.FromSeconds(30)
-                };
-
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-                await SendToSignalRAsync(client, userStatusRequest);
-
-                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
                 return RedirectToPage("/Account/Chats", new { tokenSaved = true });
             }
 
@@ -83,6 +66,7 @@ namespace Messenger.Web.Pages.Authorization
         public async Task<IActionResult> OnGetCallbackAsync()
         {
             var externalId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+
             if (string.IsNullOrEmpty(externalId))
             {
                 ErrorMessage = "Нет externalId";
@@ -103,9 +87,6 @@ namespace Messenger.Web.Pages.Authorization
                     return Page();
                 }
 
-                using var httpClient = _httpClientFactory.CreateClient();
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
                 var request = new LoginEtaRequest
                 {
                     ExternalId = externalId,
@@ -117,13 +98,12 @@ namespace Messenger.Web.Pages.Authorization
                     FakePasswordForInternalUse = $"external_{externalId.Substring(0, 8)}"
                 };
 
-                var authResponse = await httpClient.PostAsJsonAsync(
-                    $"{_configuration["URL:API:HTTPS"]}/api/authorization/external/callback", request);
+                var authResponse = await _api.PostRawAsync("authorization/external/callback", request, accessToken);
 
                 if (!authResponse.IsSuccessStatusCode)
                 {
                     var error = await authResponse.Content.ReadAsStringAsync();
-                    _logger.LogError($"Ошибка внешней авторизации: {authResponse.StatusCode} - {error}");
+                    _logger.LogError("Ошибка внешней авторизации: {StatusCode} - {Error}", authResponse.StatusCode, error);
                     ErrorMessage = "Ошибка авторизации в системе";
                     return Page();
                 }
@@ -135,19 +115,14 @@ namespace Messenger.Web.Pages.Authorization
                 };
 
                 var loginResponse = await LoginAsync(loginRequest);
-
                 if (!loginResponse.IsSuccessStatusCode)
                 {
                     var error = await loginResponse.Content.ReadAsStringAsync();
-                    _logger.LogWarning($"Ошибка записи входа: {loginResponse.StatusCode} - {error}");
+                    _logger.LogWarning("Ошибка записи входа: {StatusCode} - {Error}",
+                        loginResponse.StatusCode, error);
                 }
 
-                var userStatusRequest = new UpdateStatusRequest
-                {
-                    Online = true
-                };
-
-                await SendToSignalRAsync(httpClient, userStatusRequest);
+                await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
 
                 HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
             }
@@ -163,53 +138,41 @@ namespace Messenger.Web.Pages.Authorization
 
         public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(_configuration["URL:API:HTTPS"]),
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", request.Token);
-
-            return await client.PostAsJsonAsync("/api/logins", request, token);
+            return await _api.PostRawAsync("logins", request, request.Token, token);
         }
 
-        private async Task SendToSignalRAsync(HttpClient httpClient, UpdateStatusRequest request)
+        private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request)
         {
-            var statusResponse = await httpClient.PutAsJsonAsync(
-                    $"{_configuration["URL:API:HTTPS"]}/api/userstatuses", request);
+            var statusResponse = await _api.PutRawAsync("userstatuses", request, accessToken);
 
-            if (statusResponse.IsSuccessStatusCode)
+            if (!statusResponse.IsSuccessStatusCode)
+                return;
+
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                         ?? User.FindFirst("sub")?.Value;
+
+            if (!Guid.TryParse(userIdStr, out Guid userId))
+                return;
+
+            try
             {
-                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
-
-                if (Guid.TryParse(userIdStr, out Guid userId))
+                var payload = new
                 {
-                    try
-                    {
-                        await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", new
-                        {
-                            userId = userId.ToString(),
-                            isOnline = true,
-                            lastActivity = DateTime.UtcNow
-                        });
+                    userId = userId.ToString(),
+                    isOnline = true,
+                    lastActivity = DateTime.UtcNow
+                };
 
-                        await _hubContext.Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", new
-                        {
-                            userId = userId.ToString(),
-                            isOnline = true,
-                            lastActivity = DateTime.UtcNow
-                        });
+                await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload);
+                await _hubContext.Clients.User(userId.ToString())
+                    .SendAsync("UserOnlineStatusChanged", payload);
 
-                        _logger.LogInformation("SignalR уведомление о входе отправлено для пользователя {UserId}", userId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning("Не удалось отправить SignalR уведомление о входе: {Message}", ex.Message);
-                    }
-                }
+                _logger.LogInformation("SignalR уведомление о входе отправлено для пользователя {UserId}", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "Не удалось отправить SignalR уведомление о входе: {Message}", ex.Message);
             }
         }
 
@@ -217,16 +180,13 @@ namespace Messenger.Web.Pages.Authorization
         {
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
             {
-                if (ni.OperationalStatus == OperationalStatus.Up)
+                if (ni.OperationalStatus != OperationalStatus.Up)
+                    continue;
+
+                foreach (var addr in ni.GetIPProperties().UnicastAddresses)
                 {
-                    var props = ni.GetIPProperties();
-                    foreach (var addr in props.UnicastAddresses)
-                    {
-                        if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
-                        {
-                            return addr.Address.ToString();
-                        }
-                    }
+                    if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                        return addr.Address.ToString();
                 }
             }
 

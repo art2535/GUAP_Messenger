@@ -160,7 +160,6 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.UserId).HasName("Users_pkey");
 
             entity.Property(e => e.UserId).ValueGeneratedNever();
-            entity.Property(e => e.Phone).IsFixedLength();
 
             entity.HasOne(d => d.Account).WithMany(p => p.Users)
                 .HasPrincipalKey(p => p.AccountId)

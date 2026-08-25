@@ -33,23 +33,6 @@ namespace Messenger.Infrastructure.Services
             await _userRepository.AddUserToBlacklistAsync(userId, blockedUserId, token);
         }
 
-        public async Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword, 
-            CancellationToken token = default)
-        {
-            var user = await _userRepository.GetUserByIdAsync(userId, token)
-                ?? throw new UnauthorizedAccessException("Пользователь не найден");
-
-            if (!ValidationService.VerifyPassword(oldPassword, user.Password))
-            {
-                throw new Exception("Старый пароль указан неверно");
-            }
-
-            newPassword = ValidationService.ValidatePassword(newPassword);
-            user.Password = ValidationService.HashPassword(newPassword);
-
-            await _userRepository.UpdateUserAsync(user, token);
-        }
-
         public async Task DeleteAccountAsync(Guid userId, CancellationToken token = default)
         {
             await _userRepository.DeleteUserAsync(userId, token);
@@ -70,7 +53,7 @@ namespace Messenger.Infrastructure.Services
             return await _userRepository.GetUserByIdAsync(id, token);
         }
 
-        public async Task<(string token, Guid userId, string role)> LoginAsync(string login, string password, CancellationToken token = default)
+        public async Task<(string token, Guid userId, string role)> LoginAsync(string login, CancellationToken token = default)
         {
             var user = await _context.Users
                 .AsNoTracking()
@@ -81,10 +64,6 @@ namespace Messenger.Infrastructure.Services
             {
                 Console.WriteLine("External login — пароль пропущен!");
             }
-            else if (!ValidationService.VerifyPassword(password, user.Password))
-            {
-                throw new UnauthorizedAccessException("Неверный логин или пароль");
-            }
 
             string role = await _userRepository.GetRoleByUserIdAsync(user.UserId, token) ?? "Пользователь";
 
@@ -94,9 +73,8 @@ namespace Messenger.Infrastructure.Services
             return (jwtToken, user.UserId, role);
         }
 
-        public async Task<(User? user, string? token, string? role)> RegisterAsync(string login, string password, string firstName, 
-            string? middleName, string lastName, string phone, DateTime birthDate, Guid? roleId = null, 
-            CancellationToken token = default)
+        public async Task<(User? user, string? token, string? role)> RegisterAsync(string login, string firstName, 
+            string lastName, Guid? roleId = null, CancellationToken token = default)
         {
             var existingUser = await _context.Users
                 .Include(u => u.Roles)
@@ -108,19 +86,14 @@ namespace Messenger.Infrastructure.Services
             }
 
             login = ValidationService.ValidateEmail(login);
-            password = ValidationService.ValidatePassword(password);
-            var birthDateOnly = ValidationService.ValidateBirthdate(birthDate);
 
             var userId = Guid.NewGuid();
             var user = new User
             {
                 UserId = userId,
                 Login = login,
-                Password = ValidationService.HashPassword(password),
                 FirstName = firstName,
-                MiddleName = middleName,
                 LastName = lastName,
-                Phone = phone,
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {
@@ -304,9 +277,7 @@ namespace Messenger.Infrastructure.Services
 
             user.FirstName = request.FirstName;
             user.LastName = request.LastName;
-            user.MiddleName = request.MiddleName;
             user.Login = request.Login;
-            user.Phone = request.Phone;
 
             if (!string.IsNullOrEmpty(request.Theme) && user.Account != null)
                 user.Account.Theme = request.Theme;
@@ -330,25 +301,21 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(u => u.ExternalId == externalId);
         }
 
-        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, 
-            string lastName, string? middleName = null)
+        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, string lastName)
         {
             var existing = await GetUserByExternalIdAsync(externalId);
             if (existing != null)
                 return existing;
 
             var userId = Guid.NewGuid();
-            var fakePassword = $"external_{externalId.Substring(0, 8)}";
 
             var user = new User
             {
                 UserId = userId,
                 ExternalId = externalId,
                 Login = email,
-                Password = ValidationService.HashPassword(fakePassword),
                 FirstName = firstName,
                 LastName = lastName,
-                MiddleName = middleName,
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {

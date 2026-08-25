@@ -10,7 +10,7 @@
   <br><br>
 </div>
 
-[![.NET](https://img.shields.io/badge/.NET-9.0-blueviolet)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet)](https://dotnet.microsoft.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-Не%20определена-lightgrey)](LICENSE)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF)](https://github.com/art2535/GUAP_Messenger/actions)
@@ -29,12 +29,14 @@
 - Отправка текстовых сообщений и файлов (с хранением на сервере)
 - Обновления в реальном времени через **SignalR**
 - Индикатор «Печатает…» и онлайн-статус пользователей
-- Аутентификация через **OIDC SSO ГУАП** (Keycloak `sso.guap.ru`)
+- Аутентификация через **OIDC SSO ГУАП**
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
 - Шифрование чувствительных данных (**AES**)
 - **Push-уведомления (VAPID)**
-- **RabbitMQ** (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
+- **RabbitMQ** + MassTransit (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
+- API-версионирование (`/api/v{version}/...`)
+- Документация API через **Scalar UI**
 
 ### В активной разработке
 - Улучшение UI/UX и отзывчивости интерфейса
@@ -48,23 +50,25 @@
 |----------------------|-------------------------------------|---------------------------------------------|
 | **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA | Серверный рендеринг + реальное время |
 | **Real-time**        | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления      |
-| **Backend**          | ASP.NET Core Web API                | REST API + SignalR Hubs                     |
+| **Backend**          | ASP.NET Core Web API (.NET 10)      | REST API + SignalR Hubs + версионирование   |
 | **Архитектура**      | **Clean Architecture**              | Core / Infrastructure / API / Web           |
-| **БД**               | PostgreSQL 17                       | EF Core (Database First)                    |
-| **Messaging**        | RabbitMQ                            | Outbox-паттерн                              |
+| **БД**               | PostgreSQL 17                       | Entity Framework Core 10                 |
+| **Messaging**        | RabbitMQ + MassTransit 8.5          | Outbox-паттерн                              |
+| **API Docs**         | Scalar.AspNetCore                   | Современный UI для OpenAPI                  |
 | **Push**             | VAPID                               | Браузерные push-уведомления                 |
 | **Аутентификация**   | OIDC                                | SSO ГУАП                                    |
 | **Шифрование**       | AES                                 | Мастер-ключ в конфигурации                  |
 | **CI/CD**            | GitHub Actions                      | Сборка, тесты, релиз                        |
-| **Тестирование**     | xUnit                               | Unit-тесты                                  |
+| **Тестирование**     | xUnit v3                            | Unit-тесты                                  |
 
 ## Установка и запуск (локально)
 
 ### Требования
-- .NET SDK 9.0+
+- **.NET SDK 10.0+**
 - PostgreSQL 17
 - RabbitMQ
 - Git
+- Рекомендуемая IDE: Visual Studio 2026
 
 ### Пошаговая инструкция
 
@@ -75,50 +79,58 @@
    ```
 
 2. **Восстановление пакетов**
+
    ```bash
    dotnet restore
    ```
 
 3. **Настройка конфигурации**  
-   Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`.
+Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`  
+(строка подключения к PostgreSQL, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
 
 4. **Применение миграций**
+
    ```bash
    dotnet ef database update --project Messenger.Infrastructure --startup-project Messenger.API
    ```
 
 5. **Запуск**
-   - **Через Visual Studio**: Multiple startup projects → `Messenger.API` + `Messenger.Web`
-   - **Через терминал** (два окна):
-     ```bash
-     # API + SignalR
-     cd Messenger.API && dotnet run
-     
-     # Web-интерфейс
-     cd Messenger.Web && dotnet run
-     ```
 
-Подробная инструкция → **[Инструкции по запуску](https://github.com/art2535/GUAP_Messenger/wiki/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D0%B8)**
+   * **Через Visual Studio**: Multiple startup projects → `Messenger.API` + `Messenger.Web`
+   * **Через терминал** (два окна):
+
+      ```bash
+      # API + SignalR
+      cd Messenger.API && dotnet run
+
+      # Web-интерфейс
+      cd Messenger.Web && dotnet run
+      ```
+
+В режиме Development документация API доступна через **Scalar UI**.
+
+Подробная инструкция → [**Инструкции по запуску**](https://github.com/art2535/GUAP_Messenger/wiki/Инструкции)
 
 ## CI/CD
 
 Настроены **GitHub Actions**:
-- Автоматическая сборка и запуск тестов при push/merge в `main`
-- Поддержка ручного запуска workflow
-- Release workflow (сборка под ОС Windows и Linux)
+
+* Автоматическая сборка и запуск тестов при push/merge в `main`
+* Поддержка ручного запуска workflow
+* Release workflow (сборка под ОС Windows и Linux)
 
 ## Структура проекта
 
-- `Messenger.Core` — доменная модель и бизнес-логика
-- `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ
-- `Messenger.API` — REST API + SignalR Hub
-- `Messenger.Web` — Razor Pages + клиент
-- `Messenger.Tests` — юнит-тесты
-- `Deployment/` — файлы для Windows Installer
+* `Messenger.Core` — доменная модель и бизнес-логика
+* `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit
+* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning
+* `Messenger.Web` — Razor Pages + клиент
+* `Messenger.Tests` — юнит-тесты (xUnit v3)
+* `Deployment/` — файлы для Windows Installer
 
 ## Документация
 
-Полная документация доступна в **[GitHub Wiki](https://github.com/art2535/GUAP_Messenger/wiki)**.
+Полная документация доступна в [**GitHub Wiki**](https://github.com/art2535/GUAP_Messenger/wiki).
 
 ## Как внести вклад
 
@@ -130,7 +142,8 @@
 Ищите задачи с метками `good first issue`, `help wanted`, `ci-cd`, `notifications`.
 
 ## Ведущий разработчик
-**[Артём Петров (art2535)](https://github.com/art2535)** — студент 4 курса ФСПО ГУАП
+
+[**Артём Петров (art2535)**](https://github.com/art2535) — студент 1 курса ГУАП специальности 09.03.04 "Программная инженерия"
 
 ---
 

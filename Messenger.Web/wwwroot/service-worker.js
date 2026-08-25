@@ -1,5 +1,14 @@
 ﻿const CACHE_NAME = 'guap-messenger-v0.3.7';
 
+let API_BASE_URL = null;
+
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SET_CONFIG') {
+        API_BASE_URL = event.data.apiBaseUrl;
+        console.log('[SW] Получен API_BASE_URL:', API_BASE_URL);
+    }
+});
+
 const STATIC_ASSETS = [
     '/',
     '/Authorization/Authorization',
@@ -29,7 +38,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    if (url.pathname.includes('/hub') || url.pathname.includes('/api/')) {
+    if (url.pathname.includes('/hubs/') || url.pathname.includes('/api/')) {
         return;
     }
 

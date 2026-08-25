@@ -1,17 +1,22 @@
-﻿using Messenger.API.Responses;
+﻿using Asp.Versioning;
+using Messenger.API.Responses;
 using Messenger.Core.DTOs.Broadcasts;
+using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 using System.Security.Claims;
-using Swashbuckle.AspNetCore.Annotations;
-using Messenger.Core.Interfaces;
 
 namespace Messenger.API.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
+    /// <summary>
+    /// Контроллер для управления рассылками сообщений
+    /// </summary>
     [Authorize]
-    [SwaggerTag("Контроллер для управления рассылками сообщений")]
+    [ApiController]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
+    [Tags("Broadcasts")]
     public class BroadcastsController : ControllerBase
     {
         private readonly IBroadcastService _service;
@@ -35,16 +40,19 @@ namespace Messenger.API.Controllers
             return user!.UserId;
         }
 
-        [HttpPost]
-        [SwaggerOperation(
-            Summary = "Создать новую рассылку",
-            Description = "Позволяет создать массовую рассылку сообщений пользователям.")]
-        [SwaggerResponse(StatusCodes.Status201Created, "Рассылка успешно создана", typeof(BroadcastCreatedResponse))]
-        [SwaggerResponse(StatusCodes.Status400BadRequest, "Неверные входные данные", typeof(string))]
-        [SwaggerResponse(StatusCodes.Status401Unauthorized, "Пользователь не авторизован")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Внутренняя ошибка сервера", typeof(ErrorResponse))]
+        /// <summary>
+        /// Создать новую рассылку
+        /// </summary>
+        [HttpPost("create")]
+        [EndpointName("CreateBroadcast")]
+        [EndpointSummary("Создать новую рассылку")]
+        [EndpointDescription("Позволяет создать массовую рассылку сообщений пользователям.")]
+        [ProducesResponseType(typeof(BroadcastCreatedResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateBroadcastAsync(
-            [SwaggerParameter(Description = "Данные для создания рассылки")][FromBody] CreateBroadcastRequest? request)
+            [FromBody, Description("Данные для создания рассылки")] CreateBroadcastRequest? request)
         {
             try
             {
@@ -74,16 +82,19 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить статус рассылки
+        /// </summary>
         [HttpGet("{id}")]
-        [SwaggerOperation(
-            Summary = "Получить статус рассылки",
-            Description = "Возвращает детальную информацию о рассылке по её ID.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Информация получена", typeof(BroadcastSummaryDto))]
-        [SwaggerResponse(StatusCodes.Status403Forbidden, "Нет прав для просмотра этой рассылки")]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Рассылка не найдена")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetBroadcastStatus")]
+        [EndpointSummary("Получить статус рассылки")]
+        [EndpointDescription("Возвращает детальную информацию о рассылке по её ID.")]
+        [ProducesResponseType(typeof(BroadcastSummaryDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetBroadcastStatusAsync(
-            [SwaggerParameter(Description = "Уникальный идентификатор рассылки (GUID)")] Guid id)
+            [Description("Уникальный идентификатор рассылки (GUID)")] Guid id)
         {
             try
             {
@@ -111,15 +122,18 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Отметить рассылку как прочитанную
+        /// </summary>
         [HttpPost("{id}/read")]
-        [SwaggerOperation(
-            Summary = "Отметить рассылку как прочитанную",
-            Description = "Устанавливает статус 'Прочитано' для текущего пользователя в конкретной рассылке.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Статус обновлен", typeof(bool))]
-        [SwaggerResponse(StatusCodes.Status404NotFound, "Рассылка не найдена")]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("MarkBroadcastAsRead")]
+        [EndpointSummary("Отметить рассылку как прочитанную")]
+        [EndpointDescription("Устанавливает статус «Прочитано» для текущего пользователя в конкретной рассылке.")]
+        [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> MarkAsReadAsync(
-            [SwaggerParameter(Description = "Уникальный идентификатор рассылки (GUID)")] Guid id)
+            [Description("Уникальный идентификатор рассылки (GUID)")] Guid id)
         {
             try
             {
@@ -141,14 +155,17 @@ namespace Messenger.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Получить список моих рассылок
+        /// </summary>
         [HttpGet("my")]
-        [SwaggerOperation(
-            Summary = "Получить список моих рассылок", 
-            Description = "Возвращает список рассылок, адресованных текущему пользователю.")]
-        [SwaggerResponse(StatusCodes.Status200OK, "Список получен", typeof(IEnumerable<object>))]
-        [SwaggerResponse(StatusCodes.Status500InternalServerError, "Ошибка сервера", typeof(ErrorResponse))]
+        [EndpointName("GetMyBroadcasts")]
+        [EndpointSummary("Получить список моих рассылок")]
+        [EndpointDescription("Возвращает список рассылок, адресованных текущему пользователю.")]
+        [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetMyBroadcastsAsync(
-            [FromQuery][SwaggerParameter("Фильтр: только непрочитанные", Required = false)] bool unreadOnly = true)
+            [FromQuery, Description("Фильтр: только непрочитанные")] bool unreadOnly = true)
         {
             try
             {

@@ -1,5 +1,0 @@
-﻿PS D:\IDE Projects\Visual Studio\Диплом\GUAP_Messenger> cd Messenger.Infrastructure
-PS D:\IDE Projects\Visual Studio\Диплом\GUAP_Messenger\Messenger.Infrastructure> 
-dotnet ef dbcontext scaffold "Host=localhost;Port=5432;Database=GUAP_Messenger;Username=postgres;Password=1234" Npgsql.EntityFrameworkCore.PostgreSQL --output-dir ../Messenger.Core/Models --context-dir Data --context GuapMessengerContext --schema public --data-annotations --force --namespace Messenger.Core.Models --context-namespace Messenger.Infrastructure.Data
-Build started...
-Build succeeded.
