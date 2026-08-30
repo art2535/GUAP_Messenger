@@ -9,18 +9,18 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddEtaApiAuthentication(bool requireHttpsMetadata)
+            public void AddEtaApiAuthentication(IConfiguration configuration, bool requireHttpsMetadata)
             {
                 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .AddJwtBearer(options =>
                     {
-                        options.Authority = "https://sso.guap.ru/realms/master";
+                        options.Authority = $"{configuration["AzureAd:Instance"]?.TrimEnd('/')}/{configuration["AzureAd:TenantId"]}";
                         options.RequireHttpsMetadata = requireHttpsMetadata;
 
                         options.TokenValidationParameters = new TokenValidationParameters
                         {
                             ValidateIssuer = true,
-                            ValidIssuer = "https://sso.guap.ru/realms/master",
+                            ValidIssuer = $"{configuration["AzureAd:Instance"]?.TrimEnd('/')}/{configuration["AzureAd:TenantId"]}",
 
                             ValidateAudience = true,
                             ValidAudiences = ["messager", "account"],
@@ -65,7 +65,7 @@ namespace Messenger.API.Extensions
                 })
                 .AddOpenIdConnect(options =>
                 {
-                    options.Authority = "https://sso.guap.ru/realms/master";
+                    options.Authority = $"{configuration["AzureAd:Instance"]?.TrimEnd('/')}/{configuration["AzureAd:TenantId"]}";
                     options.ClientId = configuration["AzureAd:ClientId"];
                     options.ClientSecret = configuration["AzureAd:ClientSecret"];
                     options.CallbackPath = configuration["AzureAd:CallbackPath"];

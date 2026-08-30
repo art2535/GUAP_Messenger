@@ -13,7 +13,7 @@ namespace Messenger.API
             builder.Services.AddControllers();
             builder.Services.AddValidation();
             builder.Services.AddSignalRService();
-            builder.Services.AddScalarApi();
+            builder.Services.AddScalarApi(builder.Configuration);
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRepositories();
             builder.Services.AddServices();
@@ -21,7 +21,7 @@ namespace Messenger.API
             builder.Services.AddLogging();
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
-            builder.Services.AddEtaApiAuthentication(!builder.Environment.IsDevelopment());
+            builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
 
             builder.Services.AddCors(options =>
             {
@@ -41,7 +41,7 @@ namespace Messenger.API
 
             if (app.Environment.IsDevelopment())
             {
-                app.MapScalarApi();
+                app.MapScalarApi(app.Configuration);
             }
 
             var apiVersion = builder.Configuration["URL:API:Version"] ?? "1.0";
