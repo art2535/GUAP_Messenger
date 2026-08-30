@@ -1,4 +1,4 @@
-using Messenger.API.Extensions;
+п»їusing Messenger.API.Extensions;
 using Messenger.Core.Hubs;
 
 namespace Messenger.API
@@ -28,7 +28,7 @@ namespace Messenger.API
                 options.AddPolicy("AllowWebApp", policy =>
                 {
                     var webUrl = builder.Configuration.GetValue<string>("URL:Web:HTTPS")
-                        ?? throw new InvalidOperationException("URL не прописан в appsettings.Development.json");
+                        ?? throw new InvalidOperationException("URL РЅРµ РїСЂРѕРїРёСЃР°РЅ РІ appsettings.Development.json");
 
                     policy.WithOrigins(webUrl)
                         .AllowAnyHeader()
