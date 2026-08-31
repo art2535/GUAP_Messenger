@@ -94,14 +94,14 @@ namespace Messenger.Infrastructure.Services
             return await _repository.GetMessagesByChatIdAsync(chatId, token);
         }
 
-        public async Task<ServiceResult<Message>> SendMessageAsync(Guid chatId, Guid senderId,
+        public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
             string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default)
         {
             try
             {
                 var message = new Message
                 {
-                    MessageId = Guid.NewGuid(),
+                    MessageId = messageId,
                     ChatId = chatId,
                     SenderId = senderId,
                     MessageText = content ?? string.Empty,
