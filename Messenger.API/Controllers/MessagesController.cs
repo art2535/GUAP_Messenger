@@ -378,7 +378,15 @@ namespace Messenger.API.Controllers
                     MessageText = string.IsNullOrEmpty(m.MessageText) ? null
                         : _encryptionService.TryDecryptSafe(m.MessageText),
                     SentAt = m.SendTime,
-                    Status = "Read",
+                    Status = m.DeliveryStatus switch
+                    {
+                        MessageDeliveryStatus.Pending => "Pending",
+                        MessageDeliveryStatus.Sent => "Sent",
+                        MessageDeliveryStatus.Delivered => "Delivered",
+                        MessageDeliveryStatus.Read => "Read",
+                        MessageDeliveryStatus.Failed => "Failed",
+                        _ => "Invalid status"
+                    },
                     Attachments = m.Attachments.Select(a => new AttachmentDto
                     {
                         AttachmentId = a.AttachmentId,
@@ -502,7 +510,7 @@ namespace Messenger.API.Controllers
                     return Forbid(); 
                 }
 
-                message.MessageText = request.MessageText;
+                message.MessageText = _encryptionService.Encrypt(request.MessageText);
                 await _messageService.UpdateMessageAsync(message, ct);
 
                 await _hubContext.Clients.Group(request.ChatId.ToString())

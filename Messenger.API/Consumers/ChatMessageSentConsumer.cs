@@ -40,13 +40,8 @@ namespace Messenger.API.Consumers
 
             try
             {
-                var serviceResult = await _messageService.SendMessageAsync(
-                    chatId: msg.ChatId,
-                    senderId: msg.SenderId,
-                    content: msg.MessageText,
-                    hasAttachments: msg.HasAttachments,
-                    files: null,
-                    token: context.CancellationToken);
+                var serviceResult = await _messageService.SendMessageAsync(msg.MessageId, msg.ChatId, msg.SenderId,
+                    msg.MessageText, msg.HasAttachments, null, context.CancellationToken);
 
                 if (!serviceResult.isSuccess || serviceResult.data == null)
                     throw new Exception(serviceResult.error ?? "Unknown error");
