@@ -1,6 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -8,7 +7,7 @@ using System.Security.Claims;
 
 namespace Messenger.Core.Hubs
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize]
     public class ChatHub : Hub
     {
         private readonly IUserService _userService;
