@@ -12,7 +12,7 @@ namespace Messenger.API
             builder.EnsureSharedDevelopmentEncryptionKey();
             builder.Services.AddControllers();
             builder.Services.AddValidation();
-            builder.Services.AddSignalRService();
+            builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScalarApi(builder.Configuration);
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddRepositories();
@@ -22,6 +22,7 @@ namespace Messenger.API
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
+            builder.Services.AddMessengerRateLimiting();
 
             builder.Services.AddCors(options =>
             {
@@ -67,9 +68,10 @@ namespace Messenger.API
             app.UseUploads();
             app.UseCors("AllowWebApp");
             app.UseHttpsRedirection();
+            app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
-            app.MapControllers();
+            app.MapControllers().RequireRateLimiting("api");
 
             app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat");
             app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus");
