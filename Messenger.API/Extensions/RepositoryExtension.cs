@@ -6,7 +6,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddRepositories()
+            public IServiceCollection AddRepositories()
             {
                 services.AddScoped<UserRepository>();
                 services.AddScoped<MessageRepository>();
@@ -18,6 +18,8 @@ namespace Messenger.API.Extensions
                 services.AddScoped<UserStatusRepository>();
                 services.AddScoped<BroadcastRepository>();
                 services.AddScoped<PushSubscriptionRepository>();
+
+                return services;
             }
         }
     }

@@ -9,7 +9,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddRabbitMQ(IConfiguration configuration)
+            public IServiceCollection AddRabbitMQ(IConfiguration configuration)
             {
                 services.AddMassTransit(x =>
                 {
@@ -59,6 +59,8 @@ namespace Messenger.API.Extensions
                         cfg.ConfigureEndpoints(context);
                     });
                 });
+
+                return services;
             }
         }
     }

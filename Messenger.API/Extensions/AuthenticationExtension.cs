@@ -9,7 +9,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddEtaApiAuthentication(IConfiguration configuration, bool requireHttpsMetadata)
+            public IServiceCollection AddEtaApiAuthentication(IConfiguration configuration, bool requireHttpsMetadata)
             {
                 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .AddJwtBearer(options =>
@@ -36,9 +36,11 @@ namespace Messenger.API.Extensions
 
                         options.MapInboundClaims = false;
                     });
+
+                return services;
             }
 
-            public void AddEtaWebAuthentication(IConfiguration configuration)
+            public IServiceCollection AddEtaWebAuthentication(IConfiguration configuration)
             {
                 services.AddAuthentication(options =>
                 {
@@ -84,6 +86,8 @@ namespace Messenger.API.Extensions
 
                     options.UseTokenLifetime = true;
                 });
+
+                return services;
             }
         }
     }
