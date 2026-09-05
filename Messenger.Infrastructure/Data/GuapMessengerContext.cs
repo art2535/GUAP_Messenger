@@ -121,6 +121,16 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.MessageId).ValueGeneratedNever();
 
+            entity.HasIndex(e => new { e.ChatId, e.SequenceNumber })
+                .IsUnique()
+                .HasDatabaseName("IX_Messages_ChatId_SequenceNumber");
+
+            entity.HasIndex(e => new { e.ChatId, e.SendTime })
+                .HasDatabaseName("IX_Messages_ChatId_SendTime");
+
+            entity.HasIndex(e => new { e.ChatId, e.ReadTime })
+                .HasDatabaseName("IX_Messages_ChatId_ReadTime");
+
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
 
             entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
