@@ -10,6 +10,8 @@ namespace Messenger.Core.Interfaces
         Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
             string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default);
         Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default);
+        Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(Guid chatId, long? beforeSequence = null,
+            int limit = 50, CancellationToken token = default);
         Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default);
         Task DeleteMessageAsync(Guid messageId, CancellationToken token = default);
         Task UpdateMessageAsync(Message message, CancellationToken token = default);
