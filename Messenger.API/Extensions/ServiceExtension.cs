@@ -2,6 +2,7 @@
 using Messenger.Core.Interfaces;
 using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
 using WebPush;
 
 namespace Messenger.API.Extensions
@@ -10,7 +11,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddServices()
+            public IServiceCollection AddServices()
             {
                 services.AddScoped<IUserService, UserService>();
                 services.AddScoped<IChatService, ChatService>();
@@ -23,18 +24,42 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
+
+                return services;
             }
 
-            public void AddSignalRService()
+            public IServiceCollection AddSignalRService(IConfiguration configuration)
             {
-                services.AddSignalR();
+                var redisCs = configuration["Redis:ConnectionString"];
+                var channelPrefix = configuration["Redis:ChannelPrefix"] ?? "Messenger";
+
+                var signalR = services.AddSignalR(options =>
+                {
+                    options.MaximumReceiveMessageSize = 64 * 1024;
+                    options.EnableDetailedErrors = configuration.GetValue("SignalR:EnableDetailedErrors", false);
+                    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+                    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+                });
+
+                if (!string.IsNullOrWhiteSpace(redisCs))
+                {
+                    signalR.AddStackExchangeRedis(redisCs, options =>
+                    {
+                        options.Configuration.ChannelPrefix = RedisChannel.Literal(channelPrefix);
+                    });
+                }
+
                 services.AddSingleton<IUserIdProvider, NameUserIdProvider>();
+
+                return services;
             }
 
-            public void AddEncryption(IConfiguration configuration)
+            public IServiceCollection AddEncryption(IConfiguration configuration)
             {
                 services.Configure<AesGcmEncryptionOptions>(configuration.GetSection("Encryption"));
                 services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
+
+                return services;
             }
         }
     }

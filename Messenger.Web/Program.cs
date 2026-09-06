@@ -15,7 +15,7 @@ namespace Messenger.Web
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
             builder.Services.AddLogging();
             builder.Services.AddAuthorization();
-            builder.Services.AddSignalRService();
+            builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScoped<ApiHelper>();
             builder.Services.AddApiVersioning()
                 .AddApiExplorer(options =>

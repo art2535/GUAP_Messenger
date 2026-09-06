@@ -7,7 +7,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddPostgreSQL(IConfiguration? configuration = null)
+            public IServiceCollection AddPostgreSQL(IConfiguration? configuration = null)
             {
                 var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString",
                     EnvironmentVariableTarget.Machine) ?? string.Empty;
@@ -26,8 +26,9 @@ namespace Messenger.API.Extensions
                     connectionString = configuration.GetConnectionString("DefaultConnection");
                 }
 
-                services.AddDbContext<GuapMessengerContext>(options =>
-                    options.UseNpgsql(connectionString));
+                services.AddDbContext<GuapMessengerContext>(options => options.UseNpgsql(connectionString));
+
+                return services;
             }
         }
 

@@ -28,7 +28,6 @@ namespace Messenger.API.Controllers
     {
         private readonly IMessageService _messageService;
         private readonly IConfiguration _configuration;
-        private readonly IReactionService _reactionService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
@@ -38,13 +37,12 @@ namespace Messenger.API.Controllers
         private readonly GuapMessengerContext _context;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
-            IReactionService reactionService, IHubContext<ChatHub> hubContext, IChatService chatService, 
-            IUserService userService, IEncryptionService encryptionService, ILogger<MessagesController> logger,
+            IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
+            IEncryptionService encryptionService, ILogger<MessagesController> logger,
             IPublishEndpoint publishEndpoint, GuapMessengerContext context)
         {
             _messageService = messageService;
             _configuration = configuration;
-            _reactionService = reactionService;
             _hubContext = hubContext;
             _chatService = chatService;
             _userService = userService;
@@ -216,15 +214,13 @@ namespace Messenger.API.Controllers
                 }
 
                 var messageId = Guid.NewGuid();
+                var encryptedText = string.IsNullOrWhiteSpace(messageText)
+                    ? null
+                    : _encryptionService.Encrypt(messageText.Trim());
 
                 await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-
                 try
                 {
-                    var encryptedText = string.IsNullOrWhiteSpace(messageText)
-                        ? null
-                        : _encryptionService.Encrypt(messageText.Trim());
-
                     await _publishEndpoint.Publish(new ChatMessageSent
                     {
                         MessageId = messageId,
@@ -238,17 +234,38 @@ namespace Messenger.API.Controllers
                     }, cancellationToken);
 
                     await _context.SaveChangesAsync(cancellationToken);
-
                     await transaction.CommitAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                    }
+                    catch (Exception rbEx)
+                    {
+                        _logger.LogWarning(rbEx, "Rollback не выполнен (транзакция уже завершена)");
+                    }
 
-                    var decryptedText = string.IsNullOrEmpty(encryptedText) ? null
+                    _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
+                    return StatusCode(500, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Внутренняя ошибка сервера при отправке сообщения"
+                    });
+                }
+
+                try
+                {
+                    var decryptedText = string.IsNullOrEmpty(encryptedText)
+                        ? null
                         : _encryptionService.TryDecryptSafe(encryptedText);
 
                     var finalMessageDto = new MessageDto
                     {
                         MessageId = messageId,
                         ChatId = chatId,
-                        SenderId = user.UserId,
+                        SenderId = user!.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = decryptedText,
                         SentAt = DateTime.UtcNow,
@@ -257,8 +274,7 @@ namespace Messenger.API.Controllers
                     };
 
                     await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("ReceiveMessage", finalMessageDto);
-
+                        .SendAsync("ReceiveMessage", finalMessageDto, cancellationToken);
                     await _hubContext.Clients.Group(chatId.ToString())
                         .SendAsync("MessageSendingStatus", new
                         {
@@ -266,9 +282,14 @@ namespace Messenger.API.Controllers
                             ChatId = chatId,
                             Status = "Sent",
                             Timestamp = DateTimeOffset.UtcNow
-                        });
+                        }, cancellationToken);
 
-                    _logger.LogInformation("Сообщение {MessageId} отправлено через SignalR из контроллера", messageId);
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        var userGroup = $"User_{participant.UserId}";
+                        await _hubContext.Clients.Group(userGroup)
+                            .SendAsync("ReceiveMessage", finalMessageDto, cancellationToken);
+                    }
 
                     return Ok(new SendMessageSuccessResponse
                     {
@@ -278,13 +299,21 @@ namespace Messenger.API.Controllers
                 }
                 catch (Exception ex)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
-                    _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
-
-                    return StatusCode(500, new ErrorResponse
+                    _logger.LogError(ex, "Сообщение {MessageId} сохранено, но SignalR/ответ не удались", messageId);
+                    return Ok(new SendMessageSuccessResponse
                     {
-                        IsSuccess = false,
-                        Error = "Внутренняя ошибка сервера при отправке сообщения"
+                        IsSuccess = true,
+                        Data = new MessageDto
+                        {
+                            MessageId = messageId,
+                            ChatId = chatId,
+                            SenderId = user!.UserId,
+                            SenderName = $"{user.FirstName} {user.LastName}".Trim(),
+                            MessageText = string.IsNullOrEmpty(encryptedText) ? null : _encryptionService.TryDecryptSafe(encryptedText),
+                            SentAt = DateTime.UtcNow,
+                            Status = "Sent",
+                            Attachments = attachmentDtos
+                        }
                     });
                 }
             }
@@ -304,6 +333,7 @@ namespace Messenger.API.Controllers
         /// </summary>
         [HttpPost("{chatId}/read")]
         [EndpointName("MarkChatAsRead")]
+        [EndpointSummary("Пометить все сообщения чата как прочитанные")]
         [EndpointDescription("Обновляет статус сообщения на прочитанный")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -317,10 +347,12 @@ namespace Messenger.API.Controllers
             try
             {
                 var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null) return error;
+                if (error != null)
+                    return error;
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null) return NotFound(new ErrorResponse { Error = "Чат не найден" });
+                if (chat == null) 
+                    return NotFound(new ErrorResponse { Error = "Чат не найден" });
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
                     return Forbid();
@@ -329,13 +361,21 @@ namespace Messenger.API.Controllers
 
                 if (updated > 0)
                 {
+                    var readPayload = new
+                    {
+                        chatId,
+                        readerId = user.UserId,
+                        readAt = DateTime.UtcNow
+                    };
+
                     await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessagesRead", new
-                        {
-                            chatId,
-                            readerId = user.UserId,
-                            readAt = DateTime.UtcNow
-                        }, ct);
+                        .SendAsync("MessagesRead", readPayload, ct);
+
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                            .SendAsync("MessagesRead", readPayload, ct);
+                    }
                 }
 
                 return Ok(new { IsSuccess = true, UpdatedCount = updated });
@@ -356,16 +396,21 @@ namespace Messenger.API.Controllers
         [HttpGet("{chatId}")]
         [EndpointName("GetMessagesByChat")]
         [EndpointSummary("Получить сообщения чата")]
-        [EndpointDescription("Возвращает список всех сообщений в чате с вложениями и информацией об отправителе.")]
+        [EndpointDescription(
+            "Возвращает страницу сообщений. Параметр beforeSequence — SequenceNumber самого старого уже загруженного сообщения " +
+            "(для подгрузки истории). Без параметра возвращаются последние limit сообщений.")]
         [ProducesResponseType(typeof(GetMessagesSuccessResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetMessagesByChatAsync([Description("Идентификатор чата (GUID)")] Guid chatId, 
+        public async Task<IActionResult> GetMessagesByChatAsync([Description("Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery, Description("Загрузить сообщения старше этого SequenceNumber")] long? beforeSequence = null,
+            [FromQuery, Description("Размер страницы (1–200, по умолчанию 50)")] int limit = 50,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var messages = await _messageService.GetMessagesAsync(chatId, cancellationToken);
+                var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
+                    chatId, beforeSequence, limit, cancellationToken);
 
                 var dtos = messages.Select(m => new MessageDto
                 {
@@ -378,6 +423,7 @@ namespace Messenger.API.Controllers
                     MessageText = string.IsNullOrEmpty(m.MessageText) ? null
                         : _encryptionService.TryDecryptSafe(m.MessageText),
                     SentAt = m.SendTime,
+                    SequenceNumber = m.SequenceNumber,
                     Status = m.DeliveryStatus switch
                     {
                         MessageDeliveryStatus.Pending => "Pending",
@@ -400,55 +446,9 @@ namespace Messenger.API.Controllers
                 return Ok(new GetMessagesSuccessResponse
                 {
                     IsSuccess = true,
-                    Data = dtos
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
-            }
-        }
-
-        /// <summary>
-        /// Добавить реакцию на сообщение
-        /// </summary>
-        [HttpPost("{messageId}/reaction")]
-        [EndpointName("AddMessageReaction")]
-        [EndpointSummary("Добавить реакцию на сообщение")]
-        [EndpointDescription("Добавляет эмодзи-реакцию к сообщению от имени текущего пользователя.")]
-        [ProducesResponseType(typeof(AddReactionSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> AddReactionAsync(
-            [Description("Идентификатор сообщения")] Guid messageId,
-            [FromBody, Description("Тип реакции (эмодзи)")] AddReactionRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
-
-                var reaction = new Reaction
-                {
-                    ReactionId = Guid.NewGuid(),
-                    MessageId = messageId,
-                    UserId = user!.UserId,
-                    ReactionType = request.ReactionType
-                };
-                await _reactionService.AddReactionAsync(reaction, cancellationToken);
-
-                return Ok(new AddReactionSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Реакция на сообщения успешно добавлена"
+                    Data = dtos,
+                    HasMore = hasMore,
+                    NextBeforeSequence = dtos.Count > 0 ? dtos.Min(d => d.SequenceNumber) : (long?)null
                 });
             }
             catch (Exception ex)
@@ -525,39 +525,6 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
-            }
-        }
-
-        /// <summary>
-        /// Получить реакции на сообщение
-        /// </summary>
-        [HttpGet("{messageId}/reactions")]
-        [EndpointName("GetMessageReactions")]
-        [EndpointSummary("Получить реакции на сообщение")]
-        [EndpointDescription("Возвращает все реакции (эмодзи) на указанное сообщение.")]
-        [ProducesResponseType(typeof(GetReactionsSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetReactionsAsync([Description("Идентификатор сообщения")] Guid messageId, 
-            CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, cancellationToken);
-
-                return Ok(new GetReactionsSuccessResponse
-                {
-                    IsSuccess = true,
-                    Data = reactions
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
             }
         }
 

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Messenger.API.Extensions
 {
-    public static class DevelopmentEncryptionKeyExtension
+    public static class EncryptionKeyExtension
     {
         extension(WebApplicationBuilder builder)
         {

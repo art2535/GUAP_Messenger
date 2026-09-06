@@ -8,7 +8,7 @@ namespace Messenger.API.Extensions
     {
         extension(IServiceCollection services)
         {
-            public void AddScalarApi(IConfiguration configuration)
+            public IServiceCollection AddScalarApi(IConfiguration configuration)
             {
                 services.AddApiVersioning()
                     .AddApiExplorer(options =>
@@ -77,12 +77,14 @@ namespace Messenger.API.Extensions
                 }
 
                 AddOpenApiVersion("v1", "Messenger API", "API для управления мессенджером ГУАП");
+
+                return services;
             }
         }
 
         extension(WebApplication app)
         {
-            public void MapScalarApi(IConfiguration configuration)
+            public IApplicationBuilder MapScalarApi(IConfiguration configuration)
             {
                 app.MapOpenApi("/openapi/{documentName}.json");
 
@@ -105,6 +107,8 @@ namespace Messenger.API.Extensions
                         })
                         .AddHttpAuthentication("Bearer", _ => { });
                 });
+
+                return app;
             }
         }
     }

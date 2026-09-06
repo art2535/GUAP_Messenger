@@ -5,12 +5,11 @@
         public Guid MessageId { get; set; }
         public Guid ChatId { get; set; }
         public Guid SenderId { get; set; }
-
         public string? SenderName { get; set; }
-
         public string? MessageText { get; set; }
         public DateTime SentAt { get; set; }
         public string Status { get; set; } = "Sent";
+        public long SequenceNumber { get; set; }
         public List<AttachmentDto> Attachments { get; set; } = new();
     }
 

@@ -6,7 +6,7 @@ namespace Messenger.API.Extensions
     {
         extension(WebApplication app)
         {
-            public void UseUploads()
+            public IApplicationBuilder UseUploads()
             {
                 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
 
@@ -49,6 +49,8 @@ namespace Messenger.API.Extensions
                     FileProvider = new PhysicalFileProvider(avatarsPath),
                     RequestPath = "/avatars"
                 });
+
+                return app;
             }
         }
     }

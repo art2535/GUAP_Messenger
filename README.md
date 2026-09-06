@@ -1,13 +1,13 @@
 # Мессенджер для ГУАП
 
 <div align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/3/3e/GUAP_logo.svg" alt="Логотип ГУАП" width="180">
-  <br><br>
-  <strong>GUAP Messenger</strong> — корпоративный мессенджер<br>
-  для студентов, преподавателей и сотрудников ГУАП
-  <br><br>
-  <strong>Реальное время · Защищённая аутентификация · Только для университета</strong>
-  <br><br>
+<img src="https://upload.wikimedia.org/wikipedia/commons/3/3e/GUAP_logo.svg" alt="Логотип ГУАП" width="180">
+<br><br>
+<strong>GUAP Messenger</strong> — корпоративный мессенджер<br>
+для студентов, преподавателей и сотрудников ГУАП
+<br><br>
+<strong>Реальное время · Защищённая аутентификация · Только для университета</strong>
+<br><br>
 </div>
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet)](https://dotnet.microsoft.com/)
@@ -29,6 +29,7 @@
 - Отправка текстовых сообщений и файлов (с хранением на сервере)
 - Обновления в реальном времени через **SignalR**
 - Индикатор «Печатает…» и онлайн-статус пользователей
+- Автоматическое прочтение сообщений в открытом чате
 - Аутентификация через **OIDC SSO ГУАП**
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
@@ -37,6 +38,10 @@
 - **RabbitMQ** + MassTransit (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
 - API-версионирование (`/api/v{version}/...`)
 - Документация API через **Scalar UI**
+- **Пагинация сообщений** (cursor-based по `SequenceNumber`)
+- **Индексы БД** для быстрой выборки сообщений по чату
+- **Rate Limiting** (защита API, отправки сообщений и typing)
+- **Redis backplane** для SignalR (горизонтальное масштабирование)
 
 ### В активной разработке
 - Улучшение UI/UX и отзывчивости интерфейса
@@ -46,20 +51,22 @@
 
 ## Технологический стек
 
-| Компонент            | Технология                          | Описание                                    |
-|----------------------|-------------------------------------|---------------------------------------------|
-| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA | Серверный рендеринг + реальное время |
-| **Real-time**        | ASP.NET Core SignalR                | Сообщения, typing, online, уведомления      |
-| **Backend**          | ASP.NET Core Web API (.NET 10)      | REST API + SignalR Hubs + версионирование   |
-| **Архитектура**      | **Clean Architecture**              | Core / Infrastructure / API / Web           |
-| **БД**               | PostgreSQL 17                       | Entity Framework Core 10                 |
-| **Messaging**        | RabbitMQ + MassTransit 8.5          | Outbox-паттерн                              |
-| **API Docs**         | Scalar.AspNetCore                   | Современный UI для OpenAPI                  |
-| **Push**             | VAPID                               | Браузерные push-уведомления                 |
-| **Аутентификация**   | OIDC                                | SSO ГУАП                                    |
-| **Шифрование**       | AES                                 | Мастер-ключ в конфигурации                  |
-| **CI/CD**            | GitHub Actions                      | Сборка, тесты, релиз                        |
-| **Тестирование**     | xUnit v3                            | Unit-тесты                                  |
+| Компонент            | Технология                                      | Описание                                          |
+|----------------------|-------------------------------------------------|---------------------------------------------------|
+| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA      | Серверный рендеринг + реальное время              |
+| **Real-time**        | ASP.NET Core SignalR + Redis backplane          | Сообщения, typing, online, уведомления            |
+| **Backend**          | ASP.NET Core Web API (.NET 10)                  | REST API + SignalR Hubs + версионирование         |
+| **Архитектура**      | **Clean Architecture**                          | Core / Infrastructure / API / Web                 |
+| **БД**               | PostgreSQL 17                                   | Entity Framework Core 10 + индексы                |
+| **Messaging**        | RabbitMQ + MassTransit 8.5                      | Outbox-паттерн                                    |
+| **Кэш / Scale-out**  | Redis (StackExchange.Redis)                     | SignalR backplane                                 |
+| **Rate Limiting**    | ASP.NET Core Rate Limiting                      | Fixed-window лимиты для API и хабов               |
+| **API Docs**         | Scalar.AspNetCore                               | Современный UI для OpenAPI                        |
+| **Push**             | VAPID                                           | Браузерные push-уведомления                       |
+| **Аутентификация**   | OIDC                                            | SSO ГУАП                                          |
+| **Шифрование**       | AES                                             | Мастер-ключ в конфигурации                        |
+| **CI/CD**            | GitHub Actions                                  | Сборка, тесты, релиз                              |
+| **Тестирование**     | xUnit v3                                        | Unit-тесты                                        |
 
 ## Установка и запуск (локально)
 
@@ -67,6 +74,7 @@
 - **.NET SDK 10.0+**
 - PostgreSQL 17
 - RabbitMQ
+- Redis (опционально, для SignalR backplane в multi-instance режиме)
 - Git
 - Рекомендуемая IDE: Visual Studio 2026
 
@@ -86,7 +94,7 @@
 
 3. **Настройка конфигурации**  
 Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`  
-(строка подключения к PostgreSQL, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
+(строка подключения к PostgreSQL, Redis, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
 
 4. **Применение миграций**
 
@@ -123,7 +131,7 @@
 
 * `Messenger.Core` — доменная модель и бизнес-логика
 * `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit
-* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning
+* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting
 * `Messenger.Web` — Razor Pages + клиент
 * `Messenger.Tests` — юнит-тесты (xUnit v3)
 * `Deployment/` — файлы для Windows Installer
@@ -143,7 +151,7 @@
 
 ## Ведущий разработчик
 
-[**Артём Петров (art2535)**](https://github.com/art2535) — студент 1 курса ГУАП специальности 09.03.04 "Программная инженерия"
+[**Артём Петров**](https://github.com/art2535) — студент 1 курса ГУАП специальности 09.03.04 "Программная инженерия"
 
 ---
 

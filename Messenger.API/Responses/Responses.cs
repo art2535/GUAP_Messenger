@@ -119,6 +119,8 @@ namespace Messenger.API.Responses
     {
         public bool IsSuccess { get; set; }
         public List<MessageDto>? Data { get; set; }
+        public bool HasMore { get; set; }
+        public long? NextBeforeSequence { get; set; }
     }
 
     public class UpdateMessageStatusSuccessResponse

@@ -2,7 +2,6 @@
 using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
-using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Repositories;
@@ -14,15 +13,12 @@ namespace Messenger.Infrastructure.Services
     public class MessageService : IMessageService
     {
         private readonly MessageRepository _repository;
-        private readonly IPublishEndpoint _publishEndpoint;
         private readonly GuapMessengerContext _context;
         private readonly IEncryptionService _encryptionService;
 
-        public MessageService(MessageRepository repository, IPublishEndpoint publishEndpoint,
-            GuapMessengerContext context, IEncryptionService encryptionService)
+        public MessageService(MessageRepository repository, GuapMessengerContext context, IEncryptionService encryptionService)
         {
             _repository = repository;
-            _publishEndpoint = publishEndpoint;
             _context = context;
             _encryptionService = encryptionService;
         }
@@ -34,7 +30,7 @@ namespace Messenger.Infrastructure.Services
 
             query = query.Trim().ToLowerInvariant();
 
-            var messages = await _repository.GetMessagesByChatIdAsync(chatId, token);
+            var (messages, _) = await _repository.GetMessagesByChatIdPagedAsync(chatId, beforeSequence: null, limit: 300, token);
 
             var filtered = new List<MessageDto>();
 
@@ -44,26 +40,7 @@ namespace Messenger.Infrastructure.Services
 
                 if (decryptedText.ToLowerInvariant().Contains(query))
                 {
-                    filtered.Add(new MessageDto
-                    {
-                        MessageId = m.MessageId,
-                        ChatId = m.ChatId,
-                        SenderId = m.SenderId,
-                        SenderName = m.Sender != null
-                            ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
-                            : "Пользователь",
-                        MessageText = decryptedText,
-                        SentAt = m.SendTime,
-                        Status = m.DeliveryStatus.ToString(),
-                        Attachments = m.Attachments?.Select(a => new AttachmentDto
-                        {
-                            AttachmentId = a.AttachmentId,
-                            FileName = a.FileName,
-                            FileType = a.FileType,
-                            SizeInBytes = a.SizeInBytes ?? 0,
-                            Url = a.Url
-                        }).ToList() ?? new List<AttachmentDto>()
-                    });
+                    filtered.Add(MapToDto(m, decryptedText));
                 }
             }
 
@@ -91,7 +68,14 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
         {
-            return await _repository.GetMessagesByChatIdAsync(chatId, token);
+            var (items, _) = await _repository.GetMessagesByChatIdPagedAsync(chatId, null, 100, token);
+            return items;
+        }
+
+        public async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(
+            Guid chatId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
+        {
+            return await _repository.GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
         }
 
         public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
@@ -137,6 +121,31 @@ namespace Messenger.Infrastructure.Services
         public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
         {
             await _repository.UpdateMessageAsync(message, token);
+        }
+
+        private static MessageDto MapToDto(Message m, string decryptedText)
+        {
+            return new MessageDto
+            {
+                MessageId = m.MessageId,
+                ChatId = m.ChatId,
+                SenderId = m.SenderId,
+                SenderName = m.Sender != null
+                    ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
+                    : "Пользователь",
+                MessageText = decryptedText,
+                SentAt = m.SendTime,
+                SequenceNumber = m.SequenceNumber,
+                Status = m.DeliveryStatus.ToString(),
+                Attachments = m.Attachments?.Select(a => new AttachmentDto
+                {
+                    AttachmentId = a.AttachmentId,
+                    FileName = a.FileName,
+                    FileType = a.FileType,
+                    SizeInBytes = a.SizeInBytes ?? 0,
+                    Url = a.Url
+                }).ToList() ?? new List<AttachmentDto>()
+            };
         }
     }
 }
