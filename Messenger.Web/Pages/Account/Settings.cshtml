@@ -187,6 +187,12 @@
         @if (TempData["SuccessMessage"] != null)
         {
             <script>
+                window.__profileJustSaved = true;
+                window.__savedAvatarUrl = @Html.Raw(hasAvatar && !string.IsNullOrEmpty(avatarUrl)
+                    ? $"'{avatarUrl.Replace("'", "\\'")}'"
+                    : "null");
+                window.__savedDisplayName = @Html.Raw($"'{fullName.Replace("'", "\\'")}'");
+
                 document.addEventListener('DOMContentLoaded', () => {
                     showToast('@TempData["SuccessMessage"]', 'success');
                 });
@@ -497,25 +503,48 @@
                 .configureLogging(signalR.LogLevel.Warning)
                 .build();
 
+            const myUserId = '@(Model.CurrentUser?.UserId ?? "")';
+            const myDisplayName = '@fullName'.replace(/&#x27;/g, "'");
+
             connection.on('UserBlockStatusChanged', (data) => {
-                const me = '@Model.CurrentUser?.UserId'.toLowerCase();
+                const me = myUserId.toLowerCase();
                 if (data.targetId?.toLowerCase() === me) {
                     showToast(data.isBlocked ? "Вас добавили в чёрный список" : "Вас убрали из чёрного списка",
                         data.isBlocked ? "warning" : "info");
                 }
             });
 
-            connection.on("ProfileUpdated", (data) => {
-                if (data.userId.toLowerCase() === '@(Model.CurrentUser?.UserId ?? "")'.toLowerCase()) {
-                    updateAvatarDisplay(data.avatarUrl);
-                    hasOriginalAvatar = !!data.avatarUrl;
+            function applyProfileUpdate(data) {
+                if (!data?.userId) return;
+                if (String(data.userId).toLowerCase() !== myUserId.toLowerCase()) return;
+
+                const url = data.avatarUrl ?? data.AvatarUrl ?? null;
+                updateAvatarDisplay(url);
+                hasOriginalAvatar = !!url;
+                if (deleteAvatarTrigger) {
                     deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
                 }
-            });
+            }
+
+            connection.on("ProfileUpdated", applyProfileUpdate);
+            connection.on("AvatarUpdated", applyProfileUpdate);
 
             try {
                 await connection.start();
                 console.log("SignalR успешно подключён!");
+
+                if (window.__profileJustSaved) {
+                    const avatarUrl = window.__savedAvatarUrl || null;
+                    const displayName = window.__savedDisplayName || myDisplayName;
+                    try {
+                        await connection.invoke("NotifyProfileUpdated", myUserId, avatarUrl, displayName);
+                        await connection.invoke("NotifyAvatarUpdated", myUserId, avatarUrl || "");
+                        console.log("ProfileUpdated/AvatarUpdated разосланы через SignalR");
+                    } catch (e) {
+                        console.warn("Не удалось разослать ProfileUpdated:", e);
+                    }
+                    window.__profileJustSaved = false;
+                }
             } catch (err) {
                 console.error("SignalR НЕ подключился:", err);
             }
