@@ -284,6 +284,13 @@ namespace Messenger.API.Controllers
                             Timestamp = DateTimeOffset.UtcNow
                         }, cancellationToken);
 
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        var userGroup = $"User_{participant.UserId}";
+                        await _hubContext.Clients.Group(userGroup)
+                            .SendAsync("ReceiveMessage", finalMessageDto, cancellationToken);
+                    }
+
                     return Ok(new SendMessageSuccessResponse
                     {
                         IsSuccess = true,
@@ -340,10 +347,12 @@ namespace Messenger.API.Controllers
             try
             {
                 var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null) return error;
+                if (error != null)
+                    return error;
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null) return NotFound(new ErrorResponse { Error = "Чат не найден" });
+                if (chat == null) 
+                    return NotFound(new ErrorResponse { Error = "Чат не найден" });
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
                     return Forbid();
@@ -352,13 +361,21 @@ namespace Messenger.API.Controllers
 
                 if (updated > 0)
                 {
+                    var readPayload = new
+                    {
+                        chatId,
+                        readerId = user.UserId,
+                        readAt = DateTime.UtcNow
+                    };
+
                     await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessagesRead", new
-                        {
-                            chatId,
-                            readerId = user.UserId,
-                            readAt = DateTime.UtcNow
-                        }, ct);
+                        .SendAsync("MessagesRead", readPayload, ct);
+
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                            .SendAsync("MessagesRead", readPayload, ct);
+                    }
                 }
 
                 return Ok(new { IsSuccess = true, UpdatedCount = updated });

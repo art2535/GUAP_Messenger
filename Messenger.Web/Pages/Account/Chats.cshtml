@@ -1504,79 +1504,139 @@
                     updateTypingInChatList(data.chatId, typingUserId, data.isTyping);
                 });
 
-                connection.on("ProfileUpdated", function(data) {
-                    if (data.userId !== "@Model.UserId") return;
+                function normId(id) {
+                    return String(id || '').toLowerCase().replace(/[{}]/g, '').trim();
+                }
 
-                    const avatarContainer = document.querySelector(".relative.w-10.h-10");
-                    if (!avatarContainer) return;
+                function participantUserId(p) {
+                    if (!p) return '';
+                    return p.id || p.Id || p.userId || p.UserId
+                        || p.user?.id || p.user?.userId || p.User?.Id || '';
+                }
 
-                    const displayNameElement = avatarContainer.parentElement.querySelector("p.font-medium");
-                    if (displayNameElement) {
-                        displayNameElement.textContent = data.displayName || "Пользователь";
+                function toAbsoluteAvatarUrl(url) {
+                    if (!url) return null;
+                    const u = String(url).trim();
+                    if (!u) return null;
+                    if (/^(https?:|data:)/i.test(u)) return u;
+                    const base = (window.API_BASE_URL || '').replace(/\/api\/?$/i, '').replace(/\/$/, '');
+                    if (u.startsWith('/') && base) return base + u;
+                    if (u.startsWith('/')) return window.location.origin + u;
+                    return u;
+                }
+
+                function applyUserAvatarUpdate(data) {
+                    console.log('[Profile/AvatarUpdated] raw', data);
+                    if (!data) return;
+
+                    const uid = normId(data.userId ?? data.UserId);
+                    if (!uid) return;
+
+                    const meId = normId(me || '@Model.UserId');
+                    const absUrl = toAbsoluteAvatarUrl(data.avatarUrl ?? data.AvatarUrl ?? '');
+                    const displayName = data.displayName ?? data.DisplayName ?? null;
+                    const cacheBust = absUrl
+                        ? (absUrl + (absUrl.includes('?') ? '&' : '?') + 't=' + Date.now())
+                        : null;
+                    const fallbackAvatar = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
+                    const finalSrc = cacheBust || fallbackAvatar;
+
+                    const allPartnerIds = Array.from(document.querySelectorAll('.chat-item'))
+                        .map(el => ({ chatId: el.dataset.chatId, partnerId: el.dataset.partnerId || null }));
+                    console.log('[Profile/AvatarUpdated] chat-items', allPartnerIds);
+
+                    if (uid === meId) {
+                        const avatarContainer = document.querySelector('.relative.w-10.h-10');
+                        if (avatarContainer) {
+                            if (displayName) {
+                                const nameEl = avatarContainer.parentElement?.querySelector('p.font-medium');
+                                if (nameEl) nameEl.textContent = displayName;
+                            }
+                            if (cacheBust) {
+                                let img = document.getElementById('current-user-avatar');
+                                if (!img) {
+                                    document.getElementById('current-user-avatar-placeholder')?.remove();
+                                    img = document.createElement('img');
+                                    img.id = 'current-user-avatar';
+                                    img.className = 'w-10 h-10 rounded-full object-cover shadow-md';
+                                    img.alt = 'Аватар';
+                                    avatarContainer.appendChild(img);
+                                }
+                                img.src = cacheBust;
+                            }
+                        }
                     }
 
-                    if (data.avatarUrl && data.avatarUrl.trim() !== "") {
-                        let img = document.getElementById("current-user-avatar");
-                        if (!img) {
-                            const placeholder = document.getElementById("current-user-avatar-placeholder");
-                            if (placeholder) placeholder.remove();
-
-                            img = document.createElement("img");
-                            img.id = "current-user-avatar";
-                            img.className = "w-10 h-10 rounded-full object-cover shadow-md";
-                            img.alt = "Аватар";
-                            avatarContainer.appendChild(img);
+                    let updatedList = 0;
+                    document.querySelectorAll('.chat-item').forEach(item => {
+                        if (normId(item.dataset.partnerId) !== uid) return;
+                        const img = item.querySelector('img');
+                        if (img) img.src = finalSrc;
+                        if (displayName) {
+                            const h3 = item.querySelector('h3');
+                            if (h3) h3.textContent = displayName;
                         }
-                        img.src = data.avatarUrl + "?t=" + new Date().getTime();
-                    } else {
-                        let placeholder = document.getElementById("current-user-avatar-placeholder");
-                        const img = document.getElementById("current-user-avatar");
+                        updatedList++;
+                    });
 
-                        if (img) img.remove();
+                    if (Array.isArray(allChats)) {
+                        allChats.forEach(chat => {
+                            const chatId = String(chat.chatId || chat.ChatId || chat.id || chat.Id || '');
+                            const participants = chat.participants || chat.Participants || [];
+                            const type = (chat.type || chat.Type || '').toLowerCase();
+                            const isPrivate = type === 'private' || chat.isPrivate === true;
 
-                        if (!placeholder) {
-                            placeholder = document.createElement("div");
-                            placeholder.id = "current-user-avatar-placeholder";
-                            placeholder.className = "guap-gradient w-10 h-10 rounded-full flex items-center justify-center shadow-md";
-                            placeholder.innerHTML = '<i data-feather="user" class="w-5 h-5 text-white"></i>';
-                            avatarContainer.appendChild(placeholder);
-                            feather.replace();
+                            if (!participants.some(p => normId(participantUserId(p)) === uid)) return;
+
+                            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                            if (!item) return;
+
+                            if (isPrivate) item.dataset.partnerId = uid;
+
+                            const img = item.querySelector('img');
+                            if (img) img.src = finalSrc;
+                            if (displayName && isPrivate) {
+                                const h3 = item.querySelector('h3');
+                                if (h3) h3.textContent = displayName;
+                            }
+                            updatedList++;
+                        });
+                    }
+
+                    if (currentChatInfo) {
+                        const parts = currentChatInfo.participants || currentChatInfo.Participants || [];
+                        const type = (currentChatInfo.type || currentChatInfo.Type || '').toLowerCase();
+                        const partner = parts.find(p => normId(participantUserId(p)) === uid);
+
+                        if (partner || (type === 'private' && uid !== meId)) {
+                            const headerAvatar = document.getElementById('chat-info-avatar');
+                            if (headerAvatar) headerAvatar.src = finalSrc;
+                            if (displayName) {
+                                const title = document.getElementById('chat-title');
+                                if (title) title.textContent = displayName;
+                            }
+                            if (partner) {
+                                partner.fullName = displayName || partner.fullName;
+                                partner.avatar = absUrl || null;
+                            }
                         }
                     }
-                });
 
-                connection.on("AvatarUpdated", function(data) {
-                    if (data.userId !== '@Model.UserId') return;
-
-                    const container = document.querySelector('.relative.w-10.h-10');
-                    if (!container) return;
-
-                    const currentImg = document.getElementById('current-user-avatar');
-                    const placeholder = document.getElementById('current-user-avatar-placeholder');
-
-                    if (data.avatarUrl && data.avatarUrl.trim() !== '') {
-                        if (currentImg) {
-                            currentImg.src = data.avatarUrl + '?t=' + new Date().getTime();
-                        } else {
-                            const img = document.createElement('img');
-                            img.id = 'current-user-avatar';
-                            img.className = 'w-10 h-10 rounded-full object-cover shadow-md';
-                            img.alt = 'Аватар';
-                            img.src = data.avatarUrl + '?t=' + new Date().getTime();
-                            container.innerHTML = '';
-                            container.appendChild(img);
+                    document.querySelectorAll('#participants-list [data-user-id]').forEach(row => {
+                        if (normId(row.dataset.userId) !== uid) return;
+                        const img = row.querySelector('img');
+                        if (img) img.src = finalSrc;
+                        if (displayName) {
+                            const nameP = row.querySelector('p.font-semibold');
+                            if (nameP) nameP.textContent = displayName;
                         }
-                        if (placeholder) placeholder.remove();
-                    } else {
-                        container.innerHTML = `
-                                    <div id="current-user-avatar-placeholder"
-                                         class="guap-gradient w-10 h-10 rounded-full flex items-center justify-center shadow-md">
-                                        <i data-feather="user" class="w-5 h-5 text-white"></i>
-                                    </div>
-                                `;
-                        feather.replace();
-                    }
-                });
+                    });
+
+                    console.log(`[Profile/AvatarUpdated] uid=${uid} me=${meId} listUpdated=${updatedList} url=${absUrl || '(none)'}`);
+                }
+
+                connection.on('ProfileUpdated', applyUserAvatarUpdate);
+                connection.on('AvatarUpdated', applyUserAvatarUpdate);
 
                 connection.on('MessageSendingStatus', (data) => {
                     const msgId = data.MessageId || data.messageId;
@@ -1608,8 +1668,23 @@
                     }
                 });
 
+                const seenMessageIds = window.__seenMessageIds || (window.__seenMessageIds = new Set());
+
                 connection.on('ReceiveMessage', (msg) => {
-                    console.log(`[ReceiveMessage] ${msg.messageId} в чате ${msg.chatId}`);
+                    if (!msg?.messageId) return;
+
+                    const mid = String(msg.messageId);
+                    if (seenMessageIds.has(mid)) {
+                        console.log(`[ReceiveMessage] дубль ${mid} — пропускаем`);
+                        return;
+                    }
+                    seenMessageIds.add(mid);
+                    if (seenMessageIds.size > 500) {
+                        const first = seenMessageIds.values().next().value;
+                        seenMessageIds.delete(first);
+                    }
+
+                    console.log(`[ReceiveMessage] ${mid} в чате ${msg.chatId}`);
 
                     const isMyMessage = String(msg.senderId) === String(me);
                     const isCurrentChat = String(msg.chatId) === String(currentChatId);
@@ -1629,9 +1704,13 @@
                         return;
                     }
 
+                    if (!isMyMessage) {
+                        setTimeout(() => markChatAsRead(msg.chatId), 300);
+                    }
+
                     let removedOptimistic = false;
                     for (const [tempId, meta] of pendingMessages.entries()) {
-                        if (meta.serverMessageId && String(meta.serverMessageId) === String(msg.messageId)) {
+                        if (meta.serverMessageId && String(meta.serverMessageId) === mid) {
                             const el = document.querySelector(`[data-mid="${tempId}"]`);
                             if (el) el.remove();
                             pendingMessages.delete(tempId);
@@ -1647,8 +1726,8 @@
                         }
                     }
 
-                    if (document.querySelector(`[data-mid="${msg.messageId}"]`)) {
-                        console.log(`[ReceiveMessage] Сообщение ${msg.messageId} уже показано`);
+                    if (document.querySelector(`[data-mid="${mid}"]`)) {
+                        console.log(`[ReceiveMessage] Сообщение ${mid} уже показано`);
                         return;
                     }
 
@@ -2277,7 +2356,7 @@
                 }
             }
 
-            async function markChatAsRead(chatId) {
+            async function markChatAsRead(chatId, attempt = 0) {
                 if (!chatId) return;
 
                 try {
@@ -2285,21 +2364,40 @@
                         method: 'POST'
                     });
 
-                    if (res?.ok) {
+                    if (!res) return;
+
+                    let updatedCount = 0;
+                    try {
+                        const json = await res.clone().json();
+                        updatedCount = json?.updatedCount ?? json?.UpdatedCount ?? 0;
+                    } catch { /* ignore */ }
+
+                    if (res.ok) {
                         clearUnread(chatId);
                         document.querySelectorAll(`[data-mid]:not([data-mid^="temp-"]) .msg-status.sent`)
                             .forEach(el => {
                                 el.classList.remove('sent');
                                 el.classList.add('read');
                                 el.innerHTML = `
-                                            <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                            <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                        `;
+                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                                `;
                             });
                         feather.replace();
                     }
+
+                    if (updatedCount === 0 && attempt < 2) {
+                        const delay = 400 * (attempt + 1);
+                        console.log(`[markChatAsRead] updatedCount=0, retry #${attempt + 1} через ${delay}ms`);
+                        setTimeout(() => markChatAsRead(chatId, attempt + 1), delay);
+                    } else {
+                        console.log(`[markChatAsRead] chat=${chatId} updated=${updatedCount}`);
+                    }
                 } catch (e) {
                     console.warn('Не удалось пометить чат как прочитанный', e);
+                    if (attempt < 2) {
+                        setTimeout(() => markChatAsRead(chatId, attempt + 1), 500);
+                    }
                 }
             }
 
@@ -2316,7 +2414,6 @@
                 }
             }
 
-            /** Request online status for all private chat partners visible in the list */
             function refreshVisiblePresence() {
                 document.querySelectorAll('.chat-item[data-partner-id]').forEach(el => {
                     const pid = el.dataset.partnerId;
